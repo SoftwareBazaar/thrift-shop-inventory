@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { useAuth } from '../contexts/MockAuthContext';
 
 interface FeedbackMessage {
   feedback_id: number;
@@ -37,8 +36,34 @@ const Feedback: React.FC = () => {
 
   const fetchFeedbacks = async () => {
     try {
-      const response = await axios.get(`/api/feedback?filter=${filter}`);
-      setFeedbacks(response.data.feedbacks || []);
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Mock feedback data
+      const mockFeedbacks = [
+        {
+          feedback_id: 1,
+          customer_name: 'John Doe',
+          customer_phone: '+254712345678',
+          message: 'Great service and quality products!',
+          rating: 5,
+          feedback_type: 'compliment' as const,
+          status: 'new' as const,
+          created_date: '2024-01-20T10:30:00Z'
+        },
+        {
+          feedback_id: 2,
+          customer_name: 'Jane Smith',
+          customer_phone: '+254723456789',
+          message: 'Could you add more vintage items?',
+          rating: 4,
+          feedback_type: 'suggestion' as const,
+          status: 'in_progress' as const,
+          created_date: '2024-01-19T14:20:00Z'
+        }
+      ];
+      
+      setFeedbacks(mockFeedbacks);
     } catch (error) {
       console.error('Error fetching feedbacks:', error);
     } finally {
@@ -57,7 +82,8 @@ const Feedback: React.FC = () => {
         feedback_type: feedbackType
       };
 
-      await axios.post('/api/feedback', feedbackData);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Reset form
       setCustomerName('');
@@ -76,10 +102,8 @@ const Feedback: React.FC = () => {
 
   const handleRespondToFeedback = async (feedbackId: number) => {
     try {
-      await axios.put(`/api/feedback/${feedbackId}/respond`, {
-        response,
-        status: 'resolved'
-      });
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       setResponse('');
       setSelectedFeedback(null);

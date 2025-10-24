@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { useAuth } from '../contexts/MockAuthContext';
+import { mockApi } from '../services/mockData';
 
 interface SaleItem {
   item_id: number;
@@ -42,15 +42,15 @@ const UserDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       // Fetch items for this user's stall
-      const itemsResponse = await axios.get('/api/inventory');
-      const allItems = itemsResponse.data.items || [];
+      const itemsResponse = await mockApi.getInventory();
+      const allItems = itemsResponse.items || [];
       
       // Filter items for user's stall (in real system, this would be filtered by stall_id)
       setItems(allItems);
 
       // Fetch today's sales
-      const salesResponse = await axios.get('/api/sales');
-      const allSales = salesResponse.data.sales || [];
+      const salesResponse = await mockApi.getSales();
+      const allSales = salesResponse.sales || [];
       
       // Filter today's sales for this user
       const today = new Date().toISOString().split('T')[0];
@@ -94,7 +94,8 @@ const UserDashboard: React.FC = () => {
         customer_name: customerName || null
       };
 
-      await axios.post('/api/sales', saleData);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Update local state
       const newSale: Sale = {

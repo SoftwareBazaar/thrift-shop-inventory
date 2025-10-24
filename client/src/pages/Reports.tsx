@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { useAuth } from '../contexts/MockAuthContext';
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
@@ -24,17 +23,15 @@ const Reports: React.FC = () => {
   const handleExport = async (reportType: string, format: 'excel' | 'pdf') => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        format,
-        ...dateRange
-      });
-
-      const response = await axios.get(`/api/reports/${reportType}?${params}`, {
-        responseType: 'blob'
-      });
-
+      // Simulate export delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Create mock export data
+      const mockData = `Mock ${reportType} report data for ${dateRange.start_date} to ${dateRange.end_date}`;
+      const blob = new Blob([mockData], { type: 'text/plain' });
+      
       // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       
@@ -44,6 +41,8 @@ const Reports: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      
+      alert(`${reportType} report exported successfully as ${format.toUpperCase()}`);
     } catch (error) {
       console.error('Export error:', error);
       alert('Failed to export report');

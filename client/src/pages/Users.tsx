@@ -66,10 +66,8 @@ const Users: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/auth/register', {
-        ...newUser,
-        stall_id: newUser.stall_id ? parseInt(newUser.stall_id) : null
-      });
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       setShowAddModal(false);
       setNewUser({ username: '', password: '', full_name: '', role: 'user', stall_id: '' });
       fetchUsers();
@@ -81,10 +79,8 @@ const Users: React.FC = () => {
   const handleCreateStall = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/users/stalls', {
-        ...newStall,
-        user_id: newStall.user_id ? parseInt(newStall.user_id) : null
-      });
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       setShowStallModal(false);
       setNewStall({ stall_name: '', user_id: '' });
       fetchStalls();
@@ -95,9 +91,8 @@ const Users: React.FC = () => {
 
   const toggleUserStatus = async (userId: number, currentStatus: string) => {
     try {
-      await axios.put(`/api/users/${userId}`, {
-        status: currentStatus === 'active' ? 'inactive' : 'active'
-      });
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       fetchUsers();
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to update user status');

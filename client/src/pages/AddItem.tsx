@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { mockApi } from '../services/mockData';
 
 interface Stall {
   stall_id: number;
@@ -33,8 +33,8 @@ const AddItem: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await axios.get('/api/stalls');
-      setStalls(response.data.stalls);
+      const response = await mockApi.getStalls();
+      setStalls(response.stalls);
     } catch (err) {
       console.error('Error fetching stalls:', err);
       setError('Failed to load stalls.');
@@ -80,7 +80,8 @@ const AddItem: React.FC = () => {
         stall_id: formData.selectedStall ? parseInt(formData.selectedStall) : null
       };
 
-      await axios.post('/api/inventory', newItem);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       setSuccessMessage('Item added successfully!');
       
       // Clear form
