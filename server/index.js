@@ -30,7 +30,9 @@ app.use(cors({
     'http://localhost:3001',
     'http://197.248.249.141:3000',
     'http://197.248.249.141:3001',
-    'http://197.248.249.141:8080'
+    'http://197.248.249.141:8080',
+    'https://thriftshopchuka.netlify.app',
+    'https://*.netlify.app'
   ],
   credentials: true
 }));
@@ -39,17 +41,21 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Thrift Shop API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
