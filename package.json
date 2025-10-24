@@ -1,0 +1,37 @@
+{
+  "name": "thrift-shop-inventory",
+  "version": "1.0.0",
+  "description": "Multi-Stall Inventory Management System for Thrift Shop",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server/index.js",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "install-all": "npm install && cd client && npm install",
+    "public": "node server/public-server.js",
+    "share": "concurrently \"npm run server\" \"npm run client\" \"npm run public\""
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "multer": "^2.0.0-rc.4",
+    "xlsx": "^0.18.5",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["inventory", "management", "thrift-shop", "multi-stall"],
+  "author": "Thrift Shop Development Team",
+  "license": "MIT"
+}

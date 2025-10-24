@@ -1,0 +1,417 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+
+interface User {
+  user_id: number;
+  username: string;
+  full_name: string;
+  role: string;
+  stall_id?: number;
+  status: string;
+}
+
+interface Stall {
+  stall_id: number;
+  stall_name: string;
+  user_id: number;
+  location: string;
+  manager: string;
+  status: string;
+}
+
+interface Sale {
+  sale_id: number;
+  item_name: string;
+  quantity_sold: number;
+  unit_price: number;
+  total_amount: number;
+  sale_type: string;
+  date_time: string;
+  recorded_by: number;
+  recorded_by_name: string;
+  stall_name: string;
+}
+
+interface Analytics {
+  totalRevenue: number;
+  totalSales: number;
+  totalUnits: number;
+  averageSale: number;
+  topSellingItems: Array<{item_name: string; total_sold: number; revenue: number}>;
+  userPerformance: Array<{user_name: string; sales: number; revenue: number}>;
+  dailySales: Array<{date: string; sales: number; revenue: number}>;
+  commissionData: Array<{user_name: string; sales: number; commission: number}>;
+}
+
+const AdminDashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [stalls, setStalls] = useState<Stall[]>([]);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState('today');
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+
+  useEffect(() => {
+    fetchAdminData();
+  }, [selectedPeriod]);
+
+  const fetchAdminData = async () => {
+    try {
+      // Fetch users
+      const usersResponse = await axios.get('/api/users');
+      setUsers(usersResponse.data.users || []);
+
+      // Fetch stalls
+      const stallsResponse = await axios.get('/api/stalls');
+      setStalls(stallsResponse.data.stalls || []);
+
+      // Fetch sales data
+      const salesResponse = await axios.get(`/api/sales/summary?period=${selectedPeriod}`);
+      const salesData = salesResponse.data;
+
+      // Fetch recent sales
+      const recentSalesResponse = await axios.get('/api/sales?limit=10');
+      setRecentSales(recentSalesResponse.data.sales || []);
+
+      // Calculate analytics
+      const analyticsData: Analytics = {
+        totalRevenue: salesData.summary?.total_revenue || 0,
+        totalSales: salesData.summary?.total_sales || 0,
+        totalUnits: salesData.summary?.total_units_sold || 0,
+        averageSale: salesData.summary?.average_sale_value || 0,
+        topSellingItems: salesData.top_items || [],
+        userPerformance: salesData.user_performance || [],
+        dailySales: salesData.daily_sales || [],
+        commissionData: calculateCommissions(salesData.user_performance || [])
+      };
+
+      setAnalytics(analyticsData);
+
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateCommissions = (userPerformance: any[]) => {
+    const commissionRate = 0.05; // 5% commission
+    return userPerformance.map(user => ({
+      user_name: user.user_name,
+      sales: user.sales,
+      commission: user.revenue * commissionRate
+    }));
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const downloadReport = async (type: 'pdf' | 'excel') => {
+    try {
+      const response = await axios.get(`/api/reports/analytics?format=${type}&period=${selectedPeriod}`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `analytics-report-${selectedPeriod}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Error downloading report:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">Loading admin dashboard...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-primary text-white p-6 rounded-lg">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+            <p className="text-blue-100">System Overview & Analytics - {new Date().toLocaleDateString()}</p>
+          </div>
+          <div className="flex space-x-4">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="bg-white text-gray-900 px-4 py-2 rounded-lg"
+            >
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="year">This Year</option>
+            </select>
+            <button
+              onClick={() => downloadReport('pdf')}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-medium"
+            >
+              📄 PDF Report
+            </button>
+            <button
+              onClick={() => downloadReport('excel')}
+              className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium"
+            >
+              📊 Excel Report
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">💰</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
+              <p className="text-2xl font-bold text-blue-600">
+                {formatCurrency(analytics?.totalRevenue || 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">📈</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Total Sales</h3>
+              <p className="text-2xl font-bold text-green-600">{analytics?.totalSales || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">📦</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Units Sold</h3>
+              <p className="text-2xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">📊</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Avg Sale</h3>
+              <p className="text-2xl font-bold text-orange-600">
+                {formatCurrency(analytics?.averageSale || 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* User Performance & Commission */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">User Performance</h2>
+              <button
+                onClick={() => setShowCommissionModal(true)}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              >
+                💰 Commission Report
+              </button>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              {analytics?.userPerformance.map((user, index) => (
+                <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{user.user_name}</h3>
+                    <p className="text-sm text-gray-600">{user.sales} sales</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
+                    <p className="text-sm text-gray-600">Commission: {formatCurrency(user.revenue * 0.05)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900">Top Selling Items</h2>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              {analytics?.topSellingItems.map((item, index) => (
+                <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{item.item_name}</h3>
+                    <p className="text-sm text-gray-600">{item.total_sold} units sold</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-blue-600">{formatCurrency(item.revenue)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stalls Management */}
+      <div className="bg-white rounded-lg shadow-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Stalls Overview</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stalls.map((stall) => (
+              <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-900">{stall.stall_name}</h3>
+                <p className="text-sm text-gray-600">Manager: {stall.manager}</p>
+                <p className="text-sm text-gray-600">Location: {stall.location}</p>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  stall.status === 'active' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {stall.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Sales */}
+      <div className="bg-white rounded-lg shadow-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Recent Sales Activity</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stall</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {recentSales.map((sale) => (
+                <tr key={sale.sale_id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {sale.item_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {sale.quantity_sold}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatCurrency(sale.total_amount)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      sale.sale_type === 'cash' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {sale.sale_type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {sale.recorded_by_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {sale.stall_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(sale.date_time).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Commission Modal */}
+      {showCommissionModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Commission Report</h3>
+              <div className="space-y-4">
+                {analytics?.commissionData.map((user, index) => (
+                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h4 className="font-medium text-gray-900">{user.user_name}</h4>
+                      <p className="text-sm text-gray-600">{user.sales} sales</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-green-600">{formatCurrency(user.commission)}</p>
+                    </div>
+                  </div>
+                ))}
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-gray-900">Total Commission</h4>
+                    <p className="font-bold text-green-600">
+                      {formatCurrency(analytics?.commissionData.reduce((sum, user) => sum + user.commission, 0) || 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex space-x-3">
+                <button
+                  onClick={() => setShowCommissionModal(false)}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => downloadReport('pdf')}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium"
+                >
+                  Download PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminDashboard;
