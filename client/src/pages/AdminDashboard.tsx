@@ -114,11 +114,14 @@ const AdminDashboard: React.FC = () => {
 
   const downloadReport = async (type: 'pdf' | 'excel') => {
     try {
-      const response = await axios.get(`/api/reports/analytics?format=${type}&period=${selectedPeriod}`, {
-        responseType: 'blob'
-      });
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Create mock report data
+      const mockData = `Mock analytics report for ${selectedPeriod} in ${type.toUpperCase()} format`;
+      const blob = new Blob([mockData], { type: 'text/plain' });
+      
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `analytics-report-${selectedPeriod}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
