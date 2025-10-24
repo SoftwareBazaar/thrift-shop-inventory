@@ -3,9 +3,10 @@ export interface User {
   user_id: number;
   username: string;
   full_name: string;
-  role: string;
+  role: 'admin' | 'user';
   stall_id?: number;
   status: string;
+  created_date: string;
 }
 
 export interface Stall {
@@ -20,10 +21,11 @@ export interface Stall {
 export interface Sale {
   sale_id: number;
   item_name: string;
+  category: string;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: string;
+  sale_type: 'cash' | 'credit';
   date_time: string;
   recorded_by: number;
   recorded_by_name: string;
@@ -61,7 +63,8 @@ export const mockUsers: User[] = [
     username: 'admin',
     full_name: 'System Administrator',
     role: 'admin',
-    status: 'active'
+    status: 'active',
+    created_date: '2024-01-01'
   },
   {
     user_id: 2,
@@ -69,7 +72,8 @@ export const mockUsers: User[] = [
     full_name: 'John - Stall Manager',
     role: 'user',
     stall_id: 1,
-    status: 'active'
+    status: 'active',
+    created_date: '2024-01-02'
   },
   {
     user_id: 3,
@@ -77,7 +81,8 @@ export const mockUsers: User[] = [
     full_name: 'Geoffrey - Sales Associate',
     role: 'user',
     stall_id: 2,
-    status: 'active'
+    status: 'active',
+    created_date: '2024-01-03'
   }
 ];
 
@@ -158,6 +163,7 @@ export const mockSales: Sale[] = [
   {
     sale_id: 1,
     item_name: 'Vintage Jeans',
+    category: 'Clothing',
     quantity_sold: 2,
     unit_price: 25.00,
     total_amount: 50.00,
@@ -170,6 +176,7 @@ export const mockSales: Sale[] = [
   {
     sale_id: 2,
     item_name: 'Classic T-Shirt',
+    category: 'Clothing',
     quantity_sold: 1,
     unit_price: 15.00,
     total_amount: 15.00,
@@ -182,6 +189,7 @@ export const mockSales: Sale[] = [
   {
     sale_id: 3,
     item_name: 'Designer Handbag',
+    category: 'Accessories',
     quantity_sold: 1,
     unit_price: 45.00,
     total_amount: 45.00,
@@ -194,6 +202,7 @@ export const mockSales: Sale[] = [
   {
     sale_id: 4,
     item_name: 'Vintage Watch',
+    category: 'Accessories',
     quantity_sold: 1,
     unit_price: 80.00,
     total_amount: 80.00,

@@ -8,7 +8,6 @@ interface SaleItem {
   current_stock: number;
   unit_price: number;
   category: string;
-  quantity: number;
 }
 
 interface Sale {
