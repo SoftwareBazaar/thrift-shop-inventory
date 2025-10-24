@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { mockApi } from '../services/mockData';
 
 interface User {
   user_id: number;
@@ -45,8 +45,8 @@ const Users: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get('/api/users');
-      setUsers(response.data.users);
+      const response = await mockApi.getUsers();
+      setUsers(response.users);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -56,8 +56,8 @@ const Users: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await axios.get('/api/users/stalls/list');
-      setStalls(response.data.stalls);
+      const response = await mockApi.getStalls();
+      setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
     }

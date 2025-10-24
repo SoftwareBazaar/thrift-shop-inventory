@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { mockApi } from '../services/mockData';
 
 interface Item {
   item_id: number;
@@ -51,8 +51,8 @@ const Inventory: React.FC = () => {
 
   const fetchItems = async () => {
     try {
-      const response = await axios.get('/api/inventory');
-      setItems(response.data.items);
+      const response = await mockApi.getInventory();
+      setItems(response.items);
     } catch (error) {
       console.error('Error fetching items:', error);
     } finally {
@@ -62,8 +62,10 @@ const Inventory: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/inventory/categories/list');
-      setCategories(response.data.categories);
+      // Mock categories from inventory data
+      const response = await mockApi.getInventory();
+      const categories = [...new Set(response.items.map(item => item.category))];
+      setCategories(categories);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -71,8 +73,8 @@ const Inventory: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await axios.get('/api/stalls');
-      setStalls(response.data.stalls);
+      const response = await mockApi.getStalls();
+      setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
     }

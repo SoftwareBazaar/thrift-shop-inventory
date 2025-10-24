@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { useAuth } from '../contexts/MockAuthContext';
+import { mockApi } from '../services/mockData';
 
 interface User {
   user_id: number;
@@ -61,31 +61,30 @@ const AdminDashboard: React.FC = () => {
   const fetchAdminData = async () => {
     try {
       // Fetch users
-      const usersResponse = await axios.get('/api/users');
-      setUsers(usersResponse.data.users || []);
+      const usersResponse = await mockApi.getUsers();
+      setUsers(usersResponse.users || []);
 
       // Fetch stalls
-      const stallsResponse = await axios.get('/api/stalls');
-      setStalls(stallsResponse.data.stalls || []);
+      const stallsResponse = await mockApi.getStalls();
+      setStalls(stallsResponse.stalls || []);
 
       // Fetch sales data
-      const salesResponse = await axios.get(`/api/sales/summary?period=${selectedPeriod}`);
-      const salesData = salesResponse.data;
+      const salesData = await mockApi.getSalesSummary(selectedPeriod);
 
       // Fetch recent sales
-      const recentSalesResponse = await axios.get('/api/sales?limit=10');
-      setRecentSales(recentSalesResponse.data.sales || []);
+      const recentSalesResponse = await mockApi.getSales();
+      setRecentSales(recentSalesResponse.sales.slice(0, 10) || []);
 
-      // Calculate analytics
+      // Use analytics data directly
       const analyticsData: Analytics = {
-        totalRevenue: salesData.summary?.total_revenue || 0,
-        totalSales: salesData.summary?.total_sales || 0,
-        totalUnits: salesData.summary?.total_units_sold || 0,
-        averageSale: salesData.summary?.average_sale_value || 0,
-        topSellingItems: salesData.top_items || [],
-        userPerformance: salesData.user_performance || [],
-        dailySales: salesData.daily_sales || [],
-        commissionData: calculateCommissions(salesData.user_performance || [])
+        totalRevenue: salesData.totalRevenue,
+        totalSales: salesData.totalSales,
+        totalUnits: salesData.totalUnits,
+        averageSale: salesData.averageSale,
+        topSellingItems: salesData.topSellingItems,
+        userPerformance: salesData.userPerformance,
+        dailySales: salesData.dailySales,
+        commissionData: salesData.commissionData
       };
 
       setAnalytics(analyticsData);

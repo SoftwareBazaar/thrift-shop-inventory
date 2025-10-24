@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { useAuth } from '../contexts/MockAuthContext';
+import { mockApi } from '../services/mockData';
 
 interface Sale {
   sale_id: number;
@@ -42,8 +42,8 @@ const Sales: React.FC = () => {
 
   const fetchSales = async () => {
     try {
-      const response = await axios.get('/api/sales');
-      setSales(response.data.sales);
+      const response = await mockApi.getSales();
+      setSales(response.sales);
     } catch (error) {
       console.error('Error fetching sales:', error);
     } finally {
@@ -53,8 +53,8 @@ const Sales: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await axios.get('/api/stalls');
-      setStalls(response.data.stalls);
+      const response = await mockApi.getStalls();
+      setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
     }
