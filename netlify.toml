@@ -1,7 +1,7 @@
 [build]
   # Build settings for Netlify
   base = "client"
-  command = "npm run build"
+  command = "npm install && npm run build"
   publish = "build"
 
 [build.environment]
