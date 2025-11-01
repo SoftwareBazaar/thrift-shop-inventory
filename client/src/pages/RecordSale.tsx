@@ -103,9 +103,17 @@ const RecordSale: React.FC = () => {
         return;
       }
 
-      // In a real app, this would call an API
-      // For now, we'll just simulate it
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Record the sale
+      await mockApi.createSale({
+        item_id: formData.item_id,
+        stall_id: formData.stall_id,
+        quantity_sold: parseInt(formData.quantity_sold),
+        unit_price: parseFloat(formData.unit_price),
+        sale_type: formData.sale_type,
+        recorded_by: user?.user_id || 0,
+        customer_name: formData.customer_name || undefined,
+        customer_contact: formData.customer_contact || undefined
+      });
       
       setSuccessMessage('Sale recorded successfully!');
       
@@ -129,7 +137,7 @@ const RecordSale: React.FC = () => {
 
     } catch (err: any) {
       console.error('Error recording sale:', err);
-      setError(err.response?.data?.message || 'Failed to record sale.');
+      setError(err.response?.data?.message || err.message || 'Failed to record sale.');
     } finally {
       setLoading(false);
     }

@@ -36,6 +36,20 @@ export interface Sale {
   balance_due?: number;
 }
 
+export interface SaleInput {
+  item_id: number | string;
+  stall_id: number | string;
+  quantity_sold: number;
+  unit_price: number;
+  sale_type: 'cash' | 'credit' | 'mobile';
+  recorded_by: number;
+  total_amount?: number;
+  customer_name?: string;
+  customer_contact?: string;
+  payment_status?: string;
+  balance_due?: number;
+}
+
 export interface InventoryItem {
   item_id: number;
   item_name: string;
@@ -60,7 +74,7 @@ export interface Analytics {
   commissionData: Array<{user_name: string; sales: number; commission: number}>;
 }
 
-// Mock Users Data
+// Mock Users Data - Start with only admin user
 export const mockUsers: User[] = [
   {
     user_id: 1,
@@ -69,180 +83,28 @@ export const mockUsers: User[] = [
     role: 'admin',
     status: 'active',
     created_date: '2024-01-01'
-  },
-  {
-    user_id: 2,
-    username: 'john',
-    full_name: 'John - Stall Manager',
-    role: 'user',
-    stall_id: 1,
-    status: 'active',
-    created_date: '2024-01-02'
-  },
-  {
-    user_id: 3,
-    username: 'geoffrey',
-    full_name: 'Geoffrey - Sales Associate',
-    role: 'user',
-    stall_id: 2,
-    status: 'active',
-    created_date: '2024-01-03'
   }
 ];
 
-// Mock Stalls Data
-export const mockStalls: Stall[] = [
-  {
-    stall_id: 1,
-    stall_name: 'Chuka Town',
-    user_id: 2,
-    location: 'Chuka Town Center',
-    manager: 'John - Stall Manager',
-    status: 'active'
-  },
-  {
-    stall_id: 2,
-    stall_name: 'Ndagani',
-    user_id: 3,
-    location: 'Ndagani Market',
-    manager: 'Geoffrey - Sales Associate',
-    status: 'active'
-  }
-];
+// Mock Stalls Data - Empty for fresh start
+export const mockStalls: Stall[] = [];
 
-// Mock Inventory Data
-export const mockInventory: InventoryItem[] = [
-  {
-    item_id: 1,
-    item_name: 'Vintage Jeans',
-    category: 'Clothing',
-    initial_stock: 50,
-    current_stock: 35,
-    unit_price: 25.00,
-    date_added: '2024-01-15',
-    sku: 'VJ001',
-    total_allocated: 15,
-    total_added: 0
-  },
-  {
-    item_id: 2,
-    item_name: 'Classic T-Shirt',
-    category: 'Clothing',
-    initial_stock: 30,
-    current_stock: 18,
-    unit_price: 15.00,
-    date_added: '2024-01-16',
-    sku: 'CT001',
-    total_allocated: 12,
-    total_added: 0
-  },
-  {
-    item_id: 3,
-    item_name: 'Designer Handbag',
-    category: 'Accessories',
-    initial_stock: 20,
-    current_stock: 8,
-    unit_price: 45.00,
-    date_added: '2024-01-17',
-    sku: 'DH001',
-    total_allocated: 12,
-    total_added: 0
-  },
-  {
-    item_id: 4,
-    item_name: 'Vintage Watch',
-    category: 'Accessories',
-    initial_stock: 15,
-    current_stock: 5,
-    unit_price: 80.00,
-    date_added: '2024-01-18',
-    sku: 'VW001',
-    total_allocated: 10,
-    total_added: 0
-  }
-];
+// Mock Inventory Data - Empty for fresh start
+export const mockInventory: InventoryItem[] = [];
 
-// Mock Sales Data
-export const mockSales: Sale[] = [
-  {
-    sale_id: 1,
-    item_name: 'Vintage Jeans',
-    category: 'Clothing',
-    quantity_sold: 2,
-    unit_price: 25.00,
-    total_amount: 50.00,
-    sale_type: 'cash',
-    date_time: '2024-01-20T10:30:00Z',
-    recorded_by: 2,
-    recorded_by_name: 'John - Stall Manager',
-    stall_name: 'Chuka Town'
-  },
-  {
-    sale_id: 2,
-    item_name: 'Classic T-Shirt',
-    category: 'Clothing',
-    quantity_sold: 1,
-    unit_price: 15.00,
-    total_amount: 15.00,
-    sale_type: 'cash',
-    date_time: '2024-01-20T11:15:00Z',
-    recorded_by: 2,
-    recorded_by_name: 'John - Stall Manager',
-    stall_name: 'Chuka Town'
-  },
-  {
-    sale_id: 3,
-    item_name: 'Designer Handbag',
-    category: 'Accessories',
-    quantity_sold: 1,
-    unit_price: 45.00,
-    total_amount: 45.00,
-    sale_type: 'credit',
-    date_time: '2024-01-20T14:20:00Z',
-    recorded_by: 3,
-    recorded_by_name: 'Geoffrey - Sales Associate',
-    stall_name: 'Ndagani'
-  },
-  {
-    sale_id: 4,
-    item_name: 'Vintage Watch',
-    category: 'Accessories',
-    quantity_sold: 1,
-    unit_price: 80.00,
-    total_amount: 80.00,
-    sale_type: 'cash',
-    date_time: '2024-01-20T16:45:00Z',
-    recorded_by: 3,
-    recorded_by_name: 'Geoffrey - Sales Associate',
-    stall_name: 'Ndagani'
-  }
-];
+// Mock Sales Data - Empty for fresh start
+export const mockSales: Sale[] = [];
 
-// Mock Analytics Data
+// Mock Analytics Data - Empty for fresh start
 export const mockAnalytics: Analytics = {
-  totalRevenue: 190.00,
-  totalSales: 4,
-  totalUnits: 5,
-  averageSale: 47.50,
-  topSellingItems: [
-    { item_name: 'Vintage Jeans', total_sold: 2, revenue: 50.00 },
-    { item_name: 'Vintage Watch', total_sold: 1, revenue: 80.00 },
-    { item_name: 'Designer Handbag', total_sold: 1, revenue: 45.00 },
-    { item_name: 'Classic T-Shirt', total_sold: 1, revenue: 15.00 }
-  ],
-  userPerformance: [
-    { user_name: 'John - Stall Manager', sales: 2, revenue: 65.00 },
-    { user_name: 'Geoffrey - Sales Associate', sales: 2, revenue: 125.00 }
-  ],
-  dailySales: [
-    { date: '2024-01-20', sales: 4, revenue: 190.00 },
-    { date: '2024-01-19', sales: 3, revenue: 120.00 },
-    { date: '2024-01-18', sales: 2, revenue: 85.00 }
-  ],
-  commissionData: [
-    { user_name: 'John - Stall Manager', sales: 2, commission: 3.25 },
-    { user_name: 'Geoffrey - Sales Associate', sales: 2, commission: 6.25 }
-  ]
+  totalRevenue: 0,
+  totalSales: 0,
+  totalUnits: 0,
+  averageSale: 0,
+  topSellingItems: [],
+  userPerformance: [],
+  dailySales: [],
+  commissionData: []
 };
 
 // Helper functions to manage localStorage data
@@ -304,6 +166,18 @@ export const mockApi = {
     return { user: newUser };
   },
 
+  updateUser: async (userId: number, userData: Partial<User>): Promise<{ user: User }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const users = getStorageData<User[]>('users', mockUsers);
+    const userIndex = users.findIndex(u => u.user_id === userId);
+    if (userIndex === -1) {
+      throw new Error('User not found');
+    }
+    users[userIndex] = { ...users[userIndex], ...userData };
+    setStorageData('users', users);
+    return { user: users[userIndex] };
+  },
+
   // Stalls API
   getStalls: async (): Promise<{ stalls: Stall[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -321,6 +195,18 @@ export const mockApi = {
     stalls.push(newStall);
     setStorageData('stalls', stalls);
     return { stall: newStall };
+  },
+
+  updateStall: async (stallId: number, stallData: Partial<Stall>): Promise<{ stall: Stall }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    const stallIndex = stalls.findIndex(s => s.stall_id === stallId);
+    if (stallIndex === -1) {
+      throw new Error('Stall not found');
+    }
+    stalls[stallIndex] = { ...stalls[stallIndex], ...stallData };
+    setStorageData('stalls', stalls);
+    return { stall: stalls[stallIndex] };
   },
 
   // Inventory API
@@ -350,6 +236,56 @@ export const mockApi = {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);
     return { sales };
+  },
+
+  createSale: async (saleData: SaleInput): Promise<{ sale: Sale }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const sales = getStorageData<Sale[]>('sales', mockSales);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    
+    // Find the item to get its details
+    const item = items.find(i => i.item_id === parseInt(saleData.item_id));
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    // Get user info for recorded_by_name
+    const users = getStorageData<User[]>('users', mockUsers);
+    const user = users.find(u => u.user_id === saleData.recorded_by);
+    
+    // Get stall info
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    const stall = stalls.find(s => s.stall_id === saleData.stall_id);
+    
+    const newSale: Sale = {
+      sale_id: Math.max(...sales.map(s => s.sale_id), 0) + 1,
+      item_name: item.item_name,
+      category: item.category,
+      quantity_sold: saleData.quantity_sold,
+      unit_price: saleData.unit_price,
+      total_amount: saleData.quantity_sold * saleData.unit_price,
+      sale_type: saleData.sale_type,
+      date_time: new Date().toISOString(),
+      recorded_by: saleData.recorded_by,
+      recorded_by_name: user ? user.full_name : 'Unknown',
+      stall_name: stall ? stall.stall_name : 'Unknown',
+      customer_name: saleData.customer_name,
+      customer_contact: saleData.customer_contact,
+      payment_status: saleData.sale_type === 'credit' ? 'unpaid' : undefined,
+      balance_due: saleData.sale_type === 'credit' ? saleData.total_amount : undefined
+    };
+    
+    sales.push(newSale);
+    setStorageData('sales', sales);
+    
+    // Update item stock
+    item.current_stock -= saleData.quantity_sold;
+    if (item.current_stock < 0) item.current_stock = 0;
+    const allItems = getStorageData<InventoryItem[]>('items', mockInventory);
+    const updatedItems = allItems.map(i => i.item_id === item.item_id ? item : i);
+    setStorageData('items', updatedItems);
+    
+    return { sale: newSale };
   },
 
   getSalesSummary: async (period: string): Promise<Analytics> => {
