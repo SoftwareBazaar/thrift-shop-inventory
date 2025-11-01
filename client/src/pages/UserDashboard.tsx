@@ -29,7 +29,7 @@ const UserDashboard: React.FC = () => {
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SaleItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
-  const [saleType, setSaleType] = useState<'cash' | 'credit'>('cash');
+  const [saleType, setSaleType] = useState<'cash' | 'credit' | 'mobile'>('cash');
   const [customerName, setCustomerName] = useState('');
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
@@ -322,40 +322,76 @@ const UserDashboard: React.FC = () => {
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Record Sale</h3>
               <form onSubmit={handleSaleSubmit} className="space-y-4">
+                {!selectedItem && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Item *</label>
+                    <select
+                      onChange={(e) => {
+                        const item = items.find(i => i.item_id === parseInt(e.target.value));
+                        setSelectedItem(item || null);
+                        if (item) {
+                          setSaleQuantity(1);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      <option value="">-- Select an item --</option>
+                      {items.map((item) => (
+                        <option key={item.item_id} value={item.item_id}>
+                          {item.item_name} ({item.current_stock} in stock)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {selectedItem && (
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-medium text-gray-900">{selectedItem.item_name}</h4>
                     <p className="text-sm text-gray-600">Available: {selectedItem.current_stock} units</p>
                     <p className="text-sm text-gray-600">Price: {formatCurrency(selectedItem.unit_price)} each</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItem(null)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Change Item
+                    </button>
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={selectedItem?.current_stock || 1}
-                    value={saleQuantity}
-                    onChange={(e) => setSaleQuantity(parseInt(e.target.value))}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
+                {selectedItem && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Quantity</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={selectedItem.current_stock}
+                        value={saleQuantity}
+                        onChange={(e) => setSaleQuantity(parseInt(e.target.value))}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Sale Type</label>
-                  <select
-                    value={saleType}
-                    onChange={(e) => setSaleType(e.target.value as 'cash' | 'credit')}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="credit">Credit</option>
-                  </select>
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Sale Type</label>
+                      <select
+                        value={saleType}
+                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'credit' | 'mobile')}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="mobile">Mobile</option>
+                        <option value="credit">Credit</option>
+                      </select>
+                    </div>
+                  </>
+                )}
 
-                {saleType === 'credit' && (
+                {selectedItem && saleType === 'credit' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Customer Name</label>
                     <input
@@ -368,16 +404,19 @@ const UserDashboard: React.FC = () => {
                   </div>
                 )}
 
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    <strong>Total: {formatCurrency((selectedItem?.unit_price || 0) * saleQuantity)}</strong>
-                  </p>
-                </div>
+                {selectedItem && (
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Total: {formatCurrency((selectedItem.unit_price * saleQuantity))}</strong>
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex space-x-3">
                   <button
                     type="submit"
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium"
+                    disabled={!selectedItem}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     Record Sale
                   </button>
