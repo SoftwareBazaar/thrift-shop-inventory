@@ -11,6 +11,8 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Layout from './components/Layout';
 import AddItem from './pages/AddItem';
+import RecordSale from './pages/RecordSale';
+import CreditSales from './pages/CreditSales';
 import './App.css';
 
 function App() {
@@ -30,6 +32,8 @@ function App() {
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/add-item" element={<AddItem />} />
               <Route path="/sales" element={<Sales />} />
+              <Route path="/record-sale" element={<RecordSale />} />
+              <Route path="/credit-sales" element={<CreditSales />} />
               <Route path="/feedback" element={<Feedback />} />
               <Route path="/reports" element={<ProtectedRoute requireAdmin><Reports /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />

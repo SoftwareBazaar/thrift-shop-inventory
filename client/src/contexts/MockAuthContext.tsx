@@ -80,8 +80,8 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Simple password check (for demo purposes)
       const validPasswords: { [key: string]: string } = {
         'admin': 'admin123',
-        'john': 'john123',
-        'geoffrey': 'geoffrey123'
+        'john': 'admin123',
+        'geoffrey': 'admin123'
       };
       
       if (validPasswords[username] !== password) {

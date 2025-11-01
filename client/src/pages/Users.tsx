@@ -35,6 +35,7 @@ const Users: React.FC = () => {
   });
   const [newStall, setNewStall] = useState({
     stall_name: '',
+    location: '',
     user_id: ''
   });
 
@@ -66,11 +67,19 @@ const Users: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const stallId = newUser.stall_id ? parseInt(newUser.stall_id as any) : undefined;
+      await mockApi.createUser({
+        username: newUser.username,
+        password: newUser.password,
+        full_name: newUser.full_name,
+        role: newUser.role,
+        stall_id: stallId,
+        status: 'active'
+      });
       setShowAddModal(false);
       setNewUser({ username: '', password: '', full_name: '', role: 'user', stall_id: '' });
       fetchUsers();
+      alert('User created successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to create user');
     }
@@ -79,11 +88,19 @@ const Users: React.FC = () => {
   const handleCreateStall = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Find assigned user details
+      const assignedUser = newStall.user_id ? users.find(u => u.user_id === parseInt(newStall.user_id as any)) : null;
+      await mockApi.createStall({
+        stall_name: newStall.stall_name,
+        user_id: newStall.user_id ? parseInt(newStall.user_id as any) : 0,
+        location: newStall.location,
+        manager: assignedUser ? assignedUser.full_name : '',
+        status: 'active'
+      });
       setShowStallModal(false);
-      setNewStall({ stall_name: '', user_id: '' });
+      setNewStall({ stall_name: '', location: '', user_id: '' });
       fetchStalls();
+      alert('Stall created successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to create stall');
     }
@@ -354,6 +371,17 @@ const Users: React.FC = () => {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  required
+                  value={newStall.location}
+                  onChange={(e) => setNewStall(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Chuka Town Center, Ndagani Market"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Assign User (Optional)</label>
                 <select
                   value={newStall.user_id}
@@ -361,8 +389,8 @@ const Users: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">No user assigned</option>
-                  {users.filter(u => u.role === 'user' && !u.stall_id).map(user => (
-                    <option key={user.user_id} value={user.user_id}>{user.full_name}</option>
+                  {users.filter(u => u.role === 'user').map(user => (
+                    <option key={user.user_id} value={user.user_id}>{user.full_name} ({user.stall_id ? 'Currently assigned' : 'Available'})</option>
                   ))}
                 </select>
               </div>

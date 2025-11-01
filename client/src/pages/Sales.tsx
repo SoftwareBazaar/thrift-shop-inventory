@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
 import { mockApi } from '../services/mockData';
 
@@ -9,7 +10,7 @@ interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit';
+  sale_type: 'cash' | 'credit' | 'mobile';
   date_time: string;
   stall_name: string;
   recorded_by_name: string;
@@ -27,6 +28,7 @@ interface Stall {
 }
 
 const Sales: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,14 +107,14 @@ const Sales: React.FC = () => {
             </div>
         <div className="flex space-x-3">
           <button
-            onClick={() => alert('Record Sale functionality will be implemented soon!')}
+            onClick={() => navigate('/record-sale')}
             className="btn-primary"
           >
             Record Sale
           </button>
           {user?.role === 'admin' && (
             <button
-              onClick={() => alert('Manage Credit Sales functionality will be implemented soon!')}
+              onClick={() => navigate('/credit-sales')}
               className="btn-accent"
             >
               Manage Credit Sales
@@ -122,7 +124,7 @@ const Sales: React.FC = () => {
       </div>
 
       {/* Sales Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-lg shadow">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg">
@@ -165,6 +167,20 @@ const Sales: React.FC = () => {
 
         <div className="bg-white p-4 rounded-lg shadow">
           <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <span className="text-xl">📱</span>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-gray-600">Mobile Sales</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {sales.filter(sale => sale.sale_type === 'mobile').length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="flex items-center">
             <div className="p-2 bg-red-100 rounded-lg">
               <span className="text-xl">💳</span>
             </div>
@@ -177,6 +193,73 @@ const Sales: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* User Sales Summary */}
+      {user?.role === 'admin' && (
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales by User</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cash</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {(() => {
+                  const userSalesMap = sales.reduce((acc, sale) => {
+                    const userName = sale.recorded_by_name;
+                    if (!acc[userName]) {
+                      acc[userName] = {
+                        name: userName,
+                        totalSales: 0,
+                        totalRevenue: 0,
+                        cash: 0,
+                        mobile: 0,
+                        credit: 0
+                      };
+                    }
+                    acc[userName].totalSales += 1;
+                    acc[userName].totalRevenue += sale.total_amount;
+                    if (sale.sale_type === 'cash') acc[userName].cash += 1;
+                    if (sale.sale_type === 'mobile') acc[userName].mobile += 1;
+                    if (sale.sale_type === 'credit') acc[userName].credit += 1;
+                    return acc;
+                  }, {} as any);
+
+                  return Object.values(userSalesMap).map((userSales: any) => (
+                    <tr key={userSales.name} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {userSales.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {userSales.totalSales}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {formatCurrency(userSales.totalRevenue)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {userSales.cash}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {userSales.mobile}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {userSales.credit}
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
@@ -204,6 +287,7 @@ const Sales: React.FC = () => {
             >
               <option value="">All Types</option>
               <option value="cash">Cash Sales</option>
+              <option value="mobile">Mobile Sales</option>
               <option value="credit">Credit Sales</option>
             </select>
           </div>
@@ -282,6 +366,8 @@ const Sales: React.FC = () => {
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       sale.sale_type === 'cash' 
                         ? 'bg-green-100 text-green-800' 
+                        : sale.sale_type === 'mobile'
+                        ? 'bg-purple-100 text-purple-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {sale.sale_type}

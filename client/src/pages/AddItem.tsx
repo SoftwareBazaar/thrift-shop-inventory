@@ -69,19 +69,15 @@ const AddItem: React.FC = () => {
     }
 
     try {
-      const newItem = {
+      await mockApi.createItem({
         item_name: formData.item_name,
         category: formData.category,
         initial_stock: parseInt(formData.initial_stock),
         current_stock: parseInt(formData.initial_stock),
         unit_price: parseFloat(formData.unit_price),
-        sku: formData.sku,
-        description: formData.description,
-        stall_id: formData.selectedStall ? parseInt(formData.selectedStall) : null
-      };
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+        sku: formData.sku
+      });
+      
       setSuccessMessage('Item added successfully!');
       
       // Clear form

@@ -25,11 +25,15 @@ export interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit';
+  sale_type: 'cash' | 'credit' | 'mobile';
   date_time: string;
   recorded_by: number;
   recorded_by_name: string;
   stall_name: string;
+  customer_name?: string;
+  customer_contact?: string;
+  payment_status?: string;
+  balance_due?: number;
 }
 
 export interface InventoryItem {
@@ -241,30 +245,111 @@ export const mockAnalytics: Analytics = {
   ]
 };
 
+// Helper functions to manage localStorage data
+const getStorageData = <T>(key: string, defaultData: T): T => {
+  try {
+    const stored = localStorage.getItem(`thrift_shop_${key}`);
+    return stored ? JSON.parse(stored) : defaultData;
+  } catch {
+    return defaultData;
+  }
+};
+
+const setStorageData = <T>(key: string, data: T): void => {
+  try {
+    localStorage.setItem(`thrift_shop_${key}`, JSON.stringify(data));
+  } catch (error) {
+    console.error(`Error saving to localStorage:`, error);
+  }
+};
+
+// Initialize data in localStorage if not present
+const initStorage = () => {
+  if (!localStorage.getItem('thrift_shop_users')) {
+    setStorageData('users', mockUsers);
+  }
+  if (!localStorage.getItem('thrift_shop_stalls')) {
+    setStorageData('stalls', mockStalls);
+  }
+  if (!localStorage.getItem('thrift_shop_items')) {
+    setStorageData('items', mockInventory);
+  }
+  if (!localStorage.getItem('thrift_shop_sales')) {
+    setStorageData('sales', mockSales);
+  }
+};
+
+// Initialize on module load
+initStorage();
+
 // Mock API functions
 export const mockApi = {
   // Users API
   getUsers: async (): Promise<{ users: User[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
-    return { users: mockUsers };
+    const users = getStorageData<User[]>('users', mockUsers);
+    return { users };
+  },
+
+  createUser: async (userData: Omit<User, 'user_id' | 'created_date'> & { password: string }): Promise<{ user: User }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const users = getStorageData<User[]>('users', mockUsers);
+    const newUser: User = {
+      user_id: Math.max(...users.map(u => u.user_id), 0) + 1,
+      ...userData,
+      created_date: new Date().toISOString()
+    };
+    users.push(newUser);
+    setStorageData('users', users);
+    return { user: newUser };
   },
 
   // Stalls API
   getStalls: async (): Promise<{ stalls: Stall[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    return { stalls: mockStalls };
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    return { stalls };
+  },
+
+  createStall: async (stallData: Omit<Stall, 'stall_id'>): Promise<{ stall: Stall }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    const newStall: Stall = {
+      stall_id: Math.max(...stalls.map(s => s.stall_id), 0) + 1,
+      ...stallData
+    };
+    stalls.push(newStall);
+    setStorageData('stalls', stalls);
+    return { stall: newStall };
   },
 
   // Inventory API
   getInventory: async (): Promise<{ items: InventoryItem[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    return { items: mockInventory };
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    return { items };
+  },
+
+  createItem: async (itemData: Omit<InventoryItem, 'item_id' | 'date_added' | 'total_allocated' | 'total_added'>): Promise<{ item: InventoryItem }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const newItem: InventoryItem = {
+      item_id: Math.max(...items.map(i => i.item_id), 0) + 1,
+      ...itemData,
+      total_allocated: 0,
+      total_added: 0,
+      date_added: new Date().toISOString()
+    };
+    items.push(newItem);
+    setStorageData('items', items);
+    return { item: newItem };
   },
 
   // Sales API
   getSales: async (): Promise<{ sales: Sale[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    return { sales: mockSales };
+    const sales = getStorageData<Sale[]>('sales', mockSales);
+    return { sales };
   },
 
   getSalesSummary: async (period: string): Promise<Analytics> => {
