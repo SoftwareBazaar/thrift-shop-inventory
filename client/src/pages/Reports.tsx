@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
+import { mockApi } from '../services/mockData';
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
@@ -16,9 +17,86 @@ const Reports: React.FC = () => {
     ...(user?.role === 'admin' ? [
       { id: 'stall-performance', name: 'Stall Performance', icon: '📊' },
       { id: 'top-sellers', name: 'Top Sellers', icon: '🏆' },
-      { id: 'credit-sales', name: 'Credit Sales', icon: '💳' }
+      { id: 'credit-sales', name: 'Credit Sales', icon: '💳' },
+      { id: 'backup', name: 'Data Backup', icon: '💾' }
     ] : [])
   ];
+
+  // Data Backup & Restore
+  const handleBackupAll = async () => {
+    setLoading(true);
+    try {
+      const [usersResponse, itemsResponse, salesResponse, stallsResponse] = await Promise.all([
+        mockApi.getUsers(),
+        mockApi.getInventory(),
+        mockApi.getSales(),
+        mockApi.getStalls()
+      ]);
+
+      const backupData = {
+        users: usersResponse.users,
+        items: itemsResponse.items,
+        sales: salesResponse.sales,
+        stalls: stallsResponse.stalls,
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      };
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `thrift-shop-backup-${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      alert('✅ Complete backup exported successfully! Save this file securely.');
+    } catch (error) {
+      console.error('Backup error:', error);
+      alert('❌ Failed to create backup');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const backupData = JSON.parse(text);
+        
+        if (!backupData.users || !backupData.items || !backupData.sales || !backupData.stalls) {
+          alert('❌ Invalid backup file format');
+          return;
+        }
+
+        if (!confirm('⚠️ WARNING: This will replace ALL current data. Continue?')) {
+          return;
+        }
+
+        // Restore all data
+        localStorage.setItem('thrift_shop_users', JSON.stringify(backupData.users));
+        localStorage.setItem('thrift_shop_items', JSON.stringify(backupData.items));
+        localStorage.setItem('thrift_shop_sales', JSON.stringify(backupData.sales));
+        localStorage.setItem('thrift_shop_stalls', JSON.stringify(backupData.stalls));
+        
+        alert('✅ Data restored successfully! Refreshing page...');
+        window.location.reload();
+      } catch (error) {
+        console.error('Restore error:', error);
+        alert('❌ Failed to restore backup');
+      }
+    };
+    input.click();
+  };
 
   const handleExport = async (reportType: string, format: 'excel' | 'pdf') => {
     setLoading(true);
@@ -263,6 +341,89 @@ const Reports: React.FC = () => {
               <p className="text-gray-600">
                 Track all credit sales and outstanding balances.
               </p>
+            </div>
+          )}
+
+          {/* Data Backup & Restore */}
+          {activeTab === 'backup' && user?.role === 'admin' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Data Backup & Restore</h3>
+                <p className="text-gray-600 mb-6">
+                  Protect your business data with automatic backups. Download a complete backup or restore from a previous backup file.
+                </p>
+              </div>
+
+              {/* Backup Section */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4">
+                <div className="flex items-start">
+                  <span className="text-3xl mr-3">💾</span>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-semibold text-blue-900 mb-2">Download Complete Backup</h4>
+                    <p className="text-blue-700 text-sm mb-4">
+                      Export all your data (users, items, sales, stalls) to a single JSON file. This file can be restored later or transferred to another device.
+                    </p>
+                    <button
+                      onClick={handleBackupAll}
+                      disabled={loading}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? 'Creating Backup...' : '💾 Download Backup Now'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Restore Section */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-6 space-y-4">
+                <div className="flex items-start">
+                  <span className="text-3xl mr-3">🔄</span>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-semibold text-green-900 mb-2">Restore from Backup</h4>
+                    <p className="text-green-700 text-sm mb-4">
+                      Restore all your data from a previously downloaded backup file. This will replace all current data.
+                    </p>
+                    <button
+                      onClick={handleRestore}
+                      disabled={loading}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      🔄 Restore from Backup
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Important Notes */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-yellow-900 mb-3">⚠️ Important Notes</h4>
+                <ul className="space-y-2 text-yellow-800 text-sm">
+                  <li>• <strong>Backup regularly:</strong> Create backups at least once per day</li>
+                  <li>• <strong>Save securely:</strong> Keep backup files in a safe location (cloud storage recommended)</li>
+                  <li>• <strong>Multiple backups:</strong> Keep multiple backup copies for redundancy</li>
+                  <li>• <strong>Test restore:</strong> Periodically test that your backups work by restoring</li>
+                  <li>• <strong>Data loss warning:</strong> Restore will REPLACE all existing data</li>
+                </ul>
+              </div>
+
+              {/* Recommended Backup Schedule */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">📅 Recommended Backup Schedule</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="font-semibold text-gray-900 mb-2">Daily</div>
+                    <div className="text-gray-600">Critical business data</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="font-semibold text-gray-900 mb-2">Weekly</div>
+                    <div className="text-gray-600">Comprehensive backup</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="font-semibold text-gray-900 mb-2">Monthly</div>
+                    <div className="text-gray-600">Long-term archive</div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
