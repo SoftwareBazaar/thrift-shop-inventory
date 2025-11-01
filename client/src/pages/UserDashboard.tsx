@@ -16,7 +16,7 @@ interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit';
+  sale_type: 'cash' | 'credit' | 'mobile';
   date_time: string;
   customer_name?: string;
 }
@@ -298,6 +298,8 @@ const UserDashboard: React.FC = () => {
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       sale.sale_type === 'cash' 
                         ? 'bg-green-100 text-green-800' 
+                        : sale.sale_type === 'mobile'
+                        ? 'bg-purple-100 text-purple-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {sale.sale_type}
