@@ -258,28 +258,13 @@ const Users: React.FC = () => {
                     {new Date(userItem.created_date).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={() => openEditUserModal(userItem)}
-                        className="text-blue-600 hover:text-blue-900"
-                        style={{ color: 'var(--primary-600)' }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => toggleUserStatus(userItem.user_id, userItem.status)}
-                        className={`hover:opacity-70 ${
-                          userItem.status === 'active' 
-                            ? 'text-red-600 hover:text-red-900' 
-                            : 'text-green-600 hover:text-green-900'
-                        }`}
-                        style={{
-                          color: userItem.status === 'active' ? 'var(--error)' : 'var(--success)'
-                        }}
-                      >
-                        {userItem.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => openEditUserModal(userItem)}
+                      className="text-blue-600 hover:text-blue-900"
+                      style={{ color: 'var(--primary-600)' }}
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}
