@@ -162,17 +162,32 @@ const setStorageData = <T>(key: string, data: T): void => {
 
 // Initialize data in localStorage if not present
 const initStorage = () => {
-  if (!localStorage.getItem('thrift_shop_users')) {
-    setStorageData('users', mockUsers);
-  }
-  if (!localStorage.getItem('thrift_shop_stalls')) {
-    setStorageData('stalls', mockStalls);
-  }
-  if (!localStorage.getItem('thrift_shop_items')) {
-    setStorageData('items', mockInventory);
-  }
-  if (!localStorage.getItem('thrift_shop_sales')) {
-    setStorageData('sales', mockSales);
+  try {
+    // Always ensure users and stalls are initialized (these are system data)
+    const existingUsers = localStorage.getItem('thrift_shop_users');
+    if (!existingUsers || JSON.parse(existingUsers).length === 0) {
+      localStorage.setItem('thrift_shop_users', JSON.stringify(mockUsers));
+    }
+    
+    const existingStalls = localStorage.getItem('thrift_shop_stalls');
+    if (!existingStalls || JSON.parse(existingStalls).length === 0) {
+      localStorage.setItem('thrift_shop_stalls', JSON.stringify(mockStalls));
+    }
+    
+    // Only initialize empty if not present
+    if (!localStorage.getItem('thrift_shop_items')) {
+      localStorage.setItem('thrift_shop_items', JSON.stringify(mockInventory));
+    }
+    if (!localStorage.getItem('thrift_shop_sales')) {
+      localStorage.setItem('thrift_shop_sales', JSON.stringify(mockSales));
+    }
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+    // Force reset on error
+    localStorage.setItem('thrift_shop_users', JSON.stringify(mockUsers));
+    localStorage.setItem('thrift_shop_stalls', JSON.stringify(mockStalls));
+    localStorage.setItem('thrift_shop_items', JSON.stringify(mockInventory));
+    localStorage.setItem('thrift_shop_sales', JSON.stringify(mockSales));
   }
 };
 
