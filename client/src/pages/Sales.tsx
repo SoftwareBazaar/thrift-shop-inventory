@@ -12,8 +12,9 @@ interface Sale {
   total_amount: number;
   sale_type: 'cash' | 'credit' | 'mobile';
   date_time: string;
-  stall_name: string;
+  recorded_by: number;
   recorded_by_name: string;
+  stall_name: string;
   customer_name?: string;
   customer_contact?: string;
   payment_status?: string;
@@ -71,6 +72,11 @@ const Sales: React.FC = () => {
 
   // Filtering logic
   const filteredSales = sales.filter(sale => {
+    // Non-admin users can only see their own sales
+    if (user?.role !== 'admin' && sale.recorded_by !== user?.user_id) {
+      return false;
+    }
+    
     // Filter by date range
     if (dateRange.startDate) {
       const saleDate = new Date(sale.date_time).toISOString().split('T')[0];
@@ -128,14 +134,12 @@ const Sales: React.FC = () => {
               <p style={{color: 'var(--neutral-600)'}}>View and manage sales records</p>
             </div>
         <div className="flex space-x-3">
-          {user?.role !== 'admin' && (
-            <button
-              onClick={() => navigate('/record-sale')}
-              className="btn-primary"
-            >
-              Record Sale
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/record-sale')}
+            className="btn-primary"
+          >
+            Record Sale
+          </button>
           {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/credit-sales')}

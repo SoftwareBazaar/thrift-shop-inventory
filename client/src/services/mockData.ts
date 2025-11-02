@@ -74,13 +74,31 @@ export interface Analytics {
   commissionData: Array<{user_name: string; sales: number; commission: number}>;
 }
 
-// Mock Users Data - Start with only admin user
+// Mock Users Data - Start with admin and assigned users
 export const mockUsers: User[] = [
   {
     user_id: 1,
     username: 'admin',
     full_name: 'System Administrator',
     role: 'admin',
+    status: 'active',
+    created_date: '2024-01-01'
+  },
+  {
+    user_id: 2,
+    username: 'kelvin',
+    full_name: 'Kelvin',
+    role: 'user',
+    stall_id: 316,
+    status: 'active',
+    created_date: '2024-01-01'
+  },
+  {
+    user_id: 3,
+    username: 'manuel',
+    full_name: 'Manuel',
+    role: 'user',
+    stall_id: 309,
     status: 'active',
     created_date: '2024-01-01'
   }

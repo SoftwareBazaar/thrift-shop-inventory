@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
-import { mockApi, InventoryItem, Stall } from '../services/mockData';
+import { mockApi, InventoryItem, Stall, User } from '../services/mockData';
 
 const RecordSale: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [stalls, setStalls] = useState<Stall[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -15,6 +16,7 @@ const RecordSale: React.FC = () => {
   const [formData, setFormData] = useState({
     item_id: '',
     stall_id: '',
+    served_by: '',
     quantity_sold: '',
     unit_price: '',
     sale_type: 'cash' as 'cash' | 'mobile' | 'credit',
@@ -30,12 +32,14 @@ const RecordSale: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [itemsResponse, stallsResponse] = await Promise.all([
+      const [itemsResponse, stallsResponse, usersResponse] = await Promise.all([
         mockApi.getInventory(),
-        mockApi.getStalls()
+        mockApi.getStalls(),
+        mockApi.getUsers()
       ]);
       setItems(itemsResponse.items);
       setStalls(stallsResponse.stalls);
+      setUsers(usersResponse.users);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load data.');
@@ -110,6 +114,11 @@ const RecordSale: React.FC = () => {
         return;
       }
 
+      // Determine who recorded the sale
+      const recordedBy = user?.role === 'admin' && formData.served_by 
+        ? parseInt(formData.served_by)
+        : (user?.user_id || 0);
+
       // Record the sale
       await mockApi.createSale({
         item_id: formData.item_id,
@@ -117,7 +126,7 @@ const RecordSale: React.FC = () => {
         quantity_sold: parseInt(formData.quantity_sold),
         unit_price: parseFloat(formData.unit_price),
         sale_type: formData.sale_type,
-        recorded_by: user?.user_id || 0,
+        recorded_by: recordedBy,
         customer_name: formData.customer_name || undefined,
         customer_contact: formData.customer_contact || undefined
       });
@@ -128,6 +137,7 @@ const RecordSale: React.FC = () => {
       setFormData({
         item_id: '',
         stall_id: user?.stall_id?.toString() || '',
+        served_by: '',
         quantity_sold: '',
         unit_price: '',
         sale_type: 'cash',
@@ -220,6 +230,32 @@ const RecordSale: React.FC = () => {
               </select>
               {user?.stall_id && <p className="mt-1 text-xs text-gray-500">You are recording for your assigned stall</p>}
             </div>
+
+            {/* Served By (Admin only) */}
+            {user?.role === 'admin' && (
+              <div>
+                <label htmlFor="served_by" className="block text-sm font-medium text-gray-700 mb-2">
+                  Served By *
+                </label>
+                <select
+                  id="served_by"
+                  name="served_by"
+                  value={formData.served_by}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={loading}
+                >
+                  <option value="">-- Select user --</option>
+                  {users.filter(u => u.role === 'user').map((userItem) => (
+                    <option key={userItem.user_id} value={userItem.user_id}>
+                      {userItem.full_name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Select the user who served this sale</p>
+              </div>
+            )}
 
             {/* Quantity */}
             <div>

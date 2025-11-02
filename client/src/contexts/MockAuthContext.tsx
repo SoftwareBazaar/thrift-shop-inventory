@@ -1,13 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  user_id: number;
-  username: string;
-  full_name: string;
-  role: 'admin' | 'user';
-  stall_id?: number;
-  status: string;
-}
+import { mockApi, User } from '../services/mockData';
 
 interface AuthContextType {
   user: User | null;
@@ -19,32 +11,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers: User[] = [
-  {
-    user_id: 1,
-    username: 'admin',
-    full_name: 'System Administrator',
-    role: 'admin',
-    status: 'active'
-  },
-  {
-    user_id: 2,
-    username: 'john',
-    full_name: 'John - Stall Manager',
-    role: 'user',
-    stall_id: 1,
-    status: 'active'
-  },
-  {
-    user_id: 3,
-    username: 'geoffrey',
-    full_name: 'Geoffrey - Sales Associate',
-    role: 'user',
-    stall_id: 2,
-    status: 'active'
-  }
-];
+// Helper functions for password management
+const getPasswordsStorage = (): { [key: string]: string } => {
+  const stored = localStorage.getItem('user_passwords');
+  return stored ? JSON.parse(stored) : {};
+};
+
+const setPasswordForUser = (username: string, password: string) => {
+  const passwords = getPasswordsStorage();
+  passwords[username] = password;
+  localStorage.setItem('user_passwords', JSON.stringify(passwords));
+};
+
+const getPasswordForUser = (username: string): string | null => {
+  const passwords = getPasswordsStorage();
+  return passwords[username] || null;
+};
 
 export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -68,23 +50,25 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     
     try {
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Find user in mock data
-      const foundUser = mockUsers.find(u => u.username === username);
+      // Get users from mockApi (includes localStorage sync)
+      const usersResponse = await mockApi.getUsers();
+      const foundUser = usersResponse.users.find(u => u.username.toLowerCase() === username.toLowerCase());
       
       if (!foundUser) {
         throw new Error('User not found');
       }
-      
-      // Simple password check (for demo purposes)
-      const validPasswords: { [key: string]: string } = {
-        'admin': 'admin123',
-        'john': 'admin123',
-        'geoffrey': 'admin123'
-      };
-      
-      if (validPasswords[username] !== password) {
+
+      // Check password
+      const storedPassword = getPasswordForUser(username);
+      if (!storedPassword) {
+        // First-time login - set default password
+        setPasswordForUser(username, 'admin123');
+        if (password !== 'admin123') {
+          throw new Error('Invalid password');
+        }
+      } else if (storedPassword !== password) {
         throw new Error('Invalid password');
       }
       
