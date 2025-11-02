@@ -62,10 +62,9 @@ const Layout: React.FC = () => {
       } lg:translate-x-0`}>
         <div className="flex items-center justify-center h-20 border-b" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
-            src="/G thrifts.jpg" 
+            src="/G_thrifts-removebg-preview.png" 
             alt="G Thrifts Logo" 
-            className="h-16 w-auto object-contain drop-shadow-sm"
-            style={{background: 'transparent'}}
+            className="h-20 w-auto object-contain"
           />
           <button
             onClick={() => setSidebarOpen(false)}
