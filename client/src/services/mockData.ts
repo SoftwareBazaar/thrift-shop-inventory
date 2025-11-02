@@ -305,6 +305,18 @@ export const mockApi = {
     return { sale: newSale };
   },
 
+  updateSale: async (saleId: number, saleData: Partial<Sale>): Promise<{ sale: Sale }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const sales = getStorageData<Sale[]>('sales', mockSales);
+    const saleIndex = sales.findIndex(s => s.sale_id === saleId);
+    if (saleIndex === -1) {
+      throw new Error('Sale not found');
+    }
+    sales[saleIndex] = { ...sales[saleIndex], ...saleData };
+    setStorageData('sales', sales);
+    return { sale: sales[saleIndex] };
+  },
+
   getSalesSummary: async (period: string): Promise<Analytics> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return mockAnalytics;

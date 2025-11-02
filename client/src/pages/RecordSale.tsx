@@ -95,6 +95,13 @@ const RecordSale: React.FC = () => {
       return;
     }
 
+    // For mobile sales, customer contact is required
+    if (formData.sale_type === 'mobile' && !formData.customer_contact) {
+      setError('Customer mobile number is required for mobile sales.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const selectedItem = items.find(item => item.item_id === parseInt(formData.item_id));
       if (selectedItem && selectedItem.current_stock < parseInt(formData.quantity_sold)) {
@@ -235,7 +242,7 @@ const RecordSale: React.FC = () => {
             {/* Unit Price */}
             <div>
               <label htmlFor="unit_price" className="block text-sm font-medium text-gray-700 mb-2">
-                Unit Price (KES) *</label>
+                Price Paid (KES) *</label>
               <input
                 type="number"
                 id="unit_price"
@@ -243,12 +250,13 @@ const RecordSale: React.FC = () => {
                 value={formData.unit_price}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter unit price"
+                placeholder="Enter negotiated price"
                 min="0.01"
                 step="0.01"
                 required
                 disabled={loading}
               />
+              <p className="mt-1 text-xs text-gray-500">Items are negotiable - enter the final agreed price</p>
             </div>
 
             {/* Payment Type */}
@@ -292,30 +300,33 @@ const RecordSale: React.FC = () => {
             </div>
           </div>
 
-          {/* Customer Details (for credit sales) */}
-          {formData.sale_type === 'credit' && (
+          {/* Customer Details (for credit and mobile sales) */}
+          {(formData.sale_type === 'credit' || formData.sale_type === 'mobile') && (
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer Name *</label>
-                  <input
-                    type="text"
-                    id="customer_name"
-                    name="customer_name"
-                    value={formData.customer_name}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter customer name"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                {formData.sale_type === 'credit' && (
+                  <div>
+                    <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-2">
+                      Customer Name *</label>
+                    <input
+                      type="text"
+                      id="customer_name"
+                      name="customer_name"
+                      value={formData.customer_name}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter customer name"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer Contact *</label>
+                    {formData.sale_type === 'credit' ? 'Customer Contact *' : 'Customer Mobile Number *'}
+                  </label>
                   <input
                     type="text"
                     id="customer_contact"
@@ -329,35 +340,39 @@ const RecordSale: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="due_date" className="block text-sm font-medium text-gray-700 mb-2">
-                    Due Date</label>
-                  <input
-                    type="date"
-                    id="due_date"
-                    name="due_date"
-                    value={formData.due_date}
+                {formData.sale_type === 'credit' && (
+                  <div>
+                    <label htmlFor="due_date" className="block text-sm font-medium text-gray-700 mb-2">
+                      Due Date</label>
+                    <input
+                      type="date"
+                      id="due_date"
+                      name="due_date"
+                      value={formData.due_date}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {formData.sale_type === 'credit' && (
+                <div className="mt-4">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes</label>
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    value={formData.notes}
                     onChange={handleInputChange}
+                    rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Additional notes (optional)"
                     disabled={loading}
                   />
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes</label>
-                <textarea
-                  id="notes"
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Additional notes (optional)"
-                  disabled={loading}
-                />
-              </div>
+              )}
             </div>
           )}
 

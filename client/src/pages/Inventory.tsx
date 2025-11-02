@@ -36,6 +36,7 @@ const Inventory: React.FC = () => {
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [showDistributeModal, setShowDistributeModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [salesData, setSalesData] = useState<any[]>([]);
   const [distributionData, setDistributionData] = useState({
     item_id: 0,
     stall_id: '',
@@ -47,6 +48,7 @@ const Inventory: React.FC = () => {
     fetchItems();
     fetchCategories();
     fetchStalls();
+    fetchSales();
   }, []);
 
   const fetchItems = async () => {
@@ -57,6 +59,15 @@ const Inventory: React.FC = () => {
       console.error('Error fetching items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSales = async () => {
+    try {
+      const response = await mockApi.getSales();
+      setSalesData(response.sales);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
     }
   };
 
@@ -105,6 +116,12 @@ const Inventory: React.FC = () => {
     
     return matchesSearch && matchesCategory && matchesLowStock;
   });
+
+  const getItemsSold = (itemName: string) => {
+    return salesData
+      .filter(sale => sale.item_name === itemName)
+      .reduce((total, sale) => total + sale.quantity_sold, 0);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -207,39 +224,42 @@ const Inventory: React.FC = () => {
       </div>
 
       {/* Items Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Item
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Category
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Stock
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                  Items Sold
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Price
                 </th>
                 {user?.role === 'admin' && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Value
                   </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Status
                 </th>
                 {user?.role === 'admin' && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Actions
                   </th>
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item) => {
                 const stockStatus = getStockStatus(item.current_stock);
                 return (
@@ -257,6 +277,9 @@ const Inventory: React.FC = () => {
                       <div className="text-xs text-gray-500">
                         New Stock: {item.initial_stock} | Added: {item.total_added}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getItemsSold(item.item_name)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(item.unit_price)}

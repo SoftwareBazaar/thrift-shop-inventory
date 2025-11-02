@@ -106,12 +106,14 @@ const Sales: React.FC = () => {
               <p style={{color: 'var(--neutral-600)'}}>View and manage sales records</p>
             </div>
         <div className="flex space-x-3">
-          <button
-            onClick={() => navigate('/record-sale')}
-            className="btn-primary"
-          >
-            Record Sale
-          </button>
+          {user?.role !== 'admin' && (
+            <button
+              onClick={() => navigate('/record-sale')}
+              className="btn-primary"
+            >
+              Record Sale
+            </button>
+          )}
           {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/credit-sales')}

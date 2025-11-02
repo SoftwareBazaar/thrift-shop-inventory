@@ -8,6 +8,12 @@ const CreditSales: React.FC = () => {
   const { user } = useAuth();
   const [creditSales, setCreditSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [editData, setEditData] = useState({
+    payment_status: 'unpaid',
+    balance_due: 0
+  });
 
   useEffect(() => {
     fetchCreditSales();
@@ -150,6 +156,9 @@ const CreditSales: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Recorded By
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -187,12 +196,107 @@ const CreditSales: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.recorded_by_name}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setEditingSale(sale);
+                        setEditData({
+                          payment_status: sale.payment_status || 'unpaid',
+                          balance_due: sale.balance_due || sale.total_amount
+                        });
+                        setShowEditModal(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Edit Status
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Edit Payment Status Modal */}
+      {showEditModal && editingSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Payment Status</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await mockApi.updateSale(editingSale.sale_id, {
+                  payment_status: editData.payment_status,
+                  balance_due: editData.balance_due
+                });
+                const updatedSales = creditSales.map(sale => 
+                  sale.sale_id === editingSale.sale_id 
+                    ? { ...sale, payment_status: editData.payment_status, balance_due: editData.balance_due }
+                    : sale
+                );
+                setCreditSales(updatedSales);
+                setShowEditModal(false);
+                setEditingSale(null);
+                alert('Payment status updated successfully!');
+              } catch (error: any) {
+                alert(error.message || 'Failed to update payment status');
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Status *
+                </label>
+                <select
+                  value={editData.payment_status}
+                  onChange={(e) => setEditData(prev => ({ ...prev, payment_status: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="partially_paid">Partially Paid</option>
+                  <option value="fully_paid">Fully Paid</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Balance Due (KES)
+                </label>
+                <input
+                  type="number"
+                  value={editData.balance_due}
+                  onChange={(e) => setEditData(prev => ({ ...prev, balance_due: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="0.01"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Original Amount: {formatCurrency(editingSale.total_amount)}
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditModal(false); setEditingSale(null); }}
+                  className="px-4 py-2 hover:opacity-70"
+                  style={{color: 'var(--neutral-600)'}}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {creditSales.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg shadow">

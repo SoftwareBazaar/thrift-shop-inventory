@@ -211,32 +211,32 @@ const Users: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className="table-enhanced">
+      <div className="table-enhanced bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y" style={{borderColor: 'var(--neutral-200)'}}>
-            <thead>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Stall
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-100">
               {users.map((userItem) => (
                 <tr key={userItem.user_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -301,29 +301,29 @@ const Users: React.FC = () => {
       </div>
 
       {/* Stalls Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Stalls</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Stall Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Assigned User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-100">
               {stalls.map((stall) => (
                 <tr key={stall.stall_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">

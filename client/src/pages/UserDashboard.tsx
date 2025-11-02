@@ -29,7 +29,7 @@ const UserDashboard: React.FC = () => {
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SaleItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
-  const [saleType, setSaleType] = useState<'cash' | 'credit' | 'mobile'>('cash');
+  const [saleType, setSaleType] = useState<'cash' | 'mobile'>('cash');
   const [customerName, setCustomerName] = useState('');
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
@@ -380,26 +380,25 @@ const UserDashboard: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700">Sale Type</label>
                       <select
                         value={saleType}
-                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'credit' | 'mobile')}
+                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'mobile')}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="cash">Cash</option>
                         <option value="mobile">Mobile</option>
-                        <option value="credit">Credit</option>
                       </select>
                     </div>
                   </>
                 )}
 
-                {selectedItem && saleType === 'credit' && (
+                {selectedItem && saleType === 'mobile' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Customer Name</label>
+                    <label className="block text-sm font-medium text-gray-700">Customer Mobile Number</label>
                     <input
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter customer name"
+                      placeholder="Enter customer phone number"
                     />
                   </div>
                 )}
