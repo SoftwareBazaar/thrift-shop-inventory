@@ -22,7 +22,6 @@ const AddItem: React.FC = () => {
     category: '',
     initial_stock: '',
     unit_price: '',
-    sku: '',
     description: '',
     selectedStall: ''
   });
@@ -56,7 +55,7 @@ const AddItem: React.FC = () => {
     setLoading(true);
 
     // Validation
-    if (!formData.item_name || !formData.category || !formData.initial_stock || !formData.unit_price || !formData.sku) {
+    if (!formData.item_name || !formData.category || !formData.initial_stock || !formData.unit_price) {
       setError('Please fill in all required fields.');
       setLoading(false);
       return;
@@ -74,8 +73,7 @@ const AddItem: React.FC = () => {
         category: formData.category,
         initial_stock: parseInt(formData.initial_stock),
         current_stock: parseInt(formData.initial_stock),
-        unit_price: parseFloat(formData.unit_price),
-        sku: formData.sku
+        unit_price: parseFloat(formData.unit_price)
       });
       
       setSuccessMessage('Item added successfully!');
@@ -86,7 +84,6 @@ const AddItem: React.FC = () => {
         category: '',
         initial_stock: '',
         unit_price: '',
-        sku: '',
         description: '',
         selectedStall: ''
       });
@@ -197,23 +194,6 @@ const AddItem: React.FC = () => {
               />
             </div>
 
-            {/* SKU */}
-            <div>
-              <label htmlFor="sku" className="block text-sm font-medium text-gray-700 mb-2">
-                SKU (Stock Keeping Unit) *
-              </label>
-              <input
-                type="text"
-                id="sku"
-                name="sku"
-                value={formData.sku}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., BJ001, RT001"
-                required
-                disabled={loading}
-              />
-            </div>
 
             {/* Stall Assignment */}
             <div>
