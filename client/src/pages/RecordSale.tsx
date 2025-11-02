@@ -168,6 +168,13 @@ const RecordSale: React.FC = () => {
     return ['cash', 'mobile'];
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -202,7 +209,7 @@ const RecordSale: React.FC = () => {
                 <option value="">-- Select an item --</option>
                 {items.map((item) => (
                   <option key={item.item_id} value={item.item_id}>
-                    {item.item_name} ({item.current_stock} in stock)
+                    {item.item_name} - {formatCurrency(item.unit_price)} ({item.current_stock} in stock)
                   </option>
                 ))}
               </select>

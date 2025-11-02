@@ -6,6 +6,7 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  changePassword: (username: string, oldPassword: string, newPassword: string) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -97,11 +98,26 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     setUser(null);
   };
 
+  const changePassword = async (username: string, oldPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const storedPassword = getPasswordForUser(username);
+      if (!storedPassword || storedPassword !== oldPassword) {
+        return false;
+      }
+      setPasswordForUser(username, newPassword);
+      return true;
+    } catch (error) {
+      console.error('Change password error:', error);
+      return false;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     token,
     login,
     logout,
+    changePassword,
     loading
   };
 

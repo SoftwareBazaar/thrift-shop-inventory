@@ -4,7 +4,11 @@ import { useAuth } from '../contexts/MockAuthContext';
 
 const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const { user, logout, changePassword } = useAuth();
   const location = useLocation();
 
   const navigation = [
@@ -19,6 +23,36 @@ const Layout: React.FC = () => {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!user) return;
+
+    const success = await changePassword(user.username, passwordForm.oldPassword, passwordForm.newPassword);
+    if (success) {
+      setPasswordSuccess(true);
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setPasswordSuccess(false);
+      }, 2000);
+    } else {
+      setPasswordError('Incorrect current password');
+    }
+  };
 
   return (
     <div className="min-h-screen" style={{background: 'linear-gradient(135deg, var(--primary-50) 0%, var(--neutral-50) 100%)'}}>
@@ -59,16 +93,93 @@ const Layout: React.FC = () => {
               <p className="text-sm font-medium text-gray-900">{user?.full_name}</p>
               <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
             </div>
-            <button
-              onClick={logout}
-              className="ml-2 p-2 text-gray-400 hover:text-gray-600"
-              title="Logout"
-            >
-              🚪
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="p-2 text-gray-400 hover:text-gray-600"
+                title="Change Password"
+              >
+                🔒
+              </button>
+              <button
+                onClick={logout}
+                className="p-2 text-gray-400 hover:text-gray-600"
+                title="Logout"
+              >
+                🚪
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Change Password</h2>
+            
+            {passwordSuccess ? (
+              <div className="text-green-600 mb-4">✓ Password changed successfully!</div>
+            ) : (
+              <form onSubmit={handlePasswordChange}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.oldPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                {passwordError && (
+                  <div className="text-red-600 mb-4 text-sm">{passwordError}</div>
+                )}
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                      setPasswordError('');
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Change Password
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
