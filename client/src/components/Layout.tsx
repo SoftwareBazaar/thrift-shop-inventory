@@ -61,7 +61,11 @@ const Layout: React.FC = () => {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         <div className="flex items-center justify-between h-16 px-4 border-b" style={{borderColor: 'var(--neutral-200)'}}>
-          <h1 className="text-xl font-bold" style={{color: 'var(--primary-800)'}}>Thrift Shop</h1>
+          <img 
+            src="/G thrifts.jpg" 
+            alt="G Thrifts Logo" 
+            className="h-12 w-auto object-contain"
+          />
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden hover:opacity-70"
