@@ -141,10 +141,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
       title={isListening ? 'Listening... Click to stop' : 'Click to speak'}
     >
-      <span className="text-lg mr-2">{isListening ? '🛑' : '🎤'}</span>
-      <span className="font-medium">
-        {isListening ? 'Listening...' : 'Voice Input'}
-      </span>
+      <span className="text-lg">{isListening ? '🛑' : '🎤'}</span>
       {isListening && (
         <span className="ml-2 animate-bounce">●</span>
       )}
