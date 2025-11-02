@@ -50,6 +50,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [allSales, setAllSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [showCommissionModal, setShowCommissionModal] = useState(false);
@@ -73,6 +74,7 @@ const AdminDashboard: React.FC = () => {
 
       // Fetch recent sales
       const recentSalesResponse = await mockApi.getSales();
+      setAllSales(recentSalesResponse.sales || []);
       setRecentSales(recentSalesResponse.sales.slice(0, 10) || []);
 
       // Use analytics data directly
@@ -110,6 +112,13 @@ const AdminDashboard: React.FC = () => {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const getStallSalesSummary = (stallName: string) => {
+    const stallSales = allSales.filter(sale => sale.stall_name === stallName);
+    const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
+    const count = stallSales.length;
+    return { revenue, count };
   };
 
   const downloadReport = async (type: 'pdf' | 'excel') => {
@@ -294,20 +303,27 @@ const AdminDashboard: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {stalls.map((stall) => (
-              <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-medium text-gray-900">{stall.stall_name}</h3>
-                <p className="text-sm text-gray-600">Manager: {stall.manager}</p>
-                <p className="text-sm text-gray-600">Location: {stall.location}</p>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  stall.status === 'active' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {stall.status}
-                </span>
-              </div>
-            ))}
+            {stalls.map((stall) => {
+              const summary = getStallSalesSummary(stall.stall_name);
+              return (
+                <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-900">{stall.stall_name}</h3>
+                  <p className="text-sm text-gray-600">Manager: {stall.manager}</p>
+                  <p className="text-sm text-gray-600">Location: {stall.location}</p>
+                  <div className="mt-2 pt-2 border-t border-gray-300">
+                    <p className="text-xs text-gray-600">Sales: {summary.count}</p>
+                    <p className="text-sm font-semibold text-blue-600">{formatCurrency(summary.revenue)}</p>
+                  </div>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    stall.status === 'active' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {stall.status}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -346,6 +362,8 @@ const AdminDashboard: React.FC = () => {
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       sale.sale_type === 'cash' 
                         ? 'bg-green-100 text-green-800' 
+                        : sale.sale_type === 'mobile'
+                        ? 'bg-purple-100 text-purple-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {sale.sale_type}

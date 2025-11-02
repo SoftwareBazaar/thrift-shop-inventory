@@ -35,7 +35,7 @@ const Sales: React.FC = () => {
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('');
-  // Modal states removed as they're not currently implemented
+  const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
 
   useEffect(() => {
     fetchSales();
@@ -69,7 +69,29 @@ const Sales: React.FC = () => {
     }).format(amount);
   };
 
-  // Filtering logic can be implemented later if needed
+  // Filtering logic
+  const filteredSales = sales.filter(sale => {
+    // Filter by date range
+    if (dateRange.startDate) {
+      const saleDate = new Date(sale.date_time).toISOString().split('T')[0];
+      if (saleDate < dateRange.startDate) return false;
+    }
+    if (dateRange.endDate) {
+      const saleDate = new Date(sale.date_time).toISOString().split('T')[0];
+      if (saleDate > dateRange.endDate) return false;
+    }
+    
+    // Filter by stall
+    if (selectedStall !== '') {
+      const stall = stalls.find(s => s.stall_id === selectedStall);
+      if (!stall || sale.stall_name !== stall.stall_name) return false;
+    }
+    
+    // Filter by sale type
+    if (saleTypeFilter && sale.sale_type !== saleTypeFilter) return false;
+    
+    return true;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
@@ -134,7 +156,7 @@ const Sales: React.FC = () => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-gray-600">Total Sales</p>
-              <p className="text-lg font-semibold text-gray-900">{sales.length}</p>
+              <p className="text-lg font-semibold text-gray-900">{filteredSales.length}</p>
             </div>
           </div>
         </div>
@@ -147,7 +169,7 @@ const Sales: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm text-gray-600">Total Revenue</p>
               <p className="text-lg font-semibold text-gray-900">
-                {formatCurrency(sales.reduce((sum, sale) => sum + sale.total_amount, 0))}
+                {formatCurrency(filteredSales.reduce((sum, sale) => sum + sale.total_amount, 0))}
               </p>
             </div>
           </div>
@@ -161,7 +183,7 @@ const Sales: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm text-gray-600">Cash Sales</p>
               <p className="text-lg font-semibold text-gray-900">
-                {sales.filter(sale => sale.sale_type === 'cash').length}
+                {filteredSales.filter(sale => sale.sale_type === 'cash').length}
               </p>
             </div>
           </div>
@@ -175,7 +197,7 @@ const Sales: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm text-gray-600">Mobile Sales</p>
               <p className="text-lg font-semibold text-gray-900">
-                {sales.filter(sale => sale.sale_type === 'mobile').length}
+                {filteredSales.filter(sale => sale.sale_type === 'mobile').length}
               </p>
             </div>
           </div>
@@ -189,7 +211,7 @@ const Sales: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm text-gray-600">Credit Sales</p>
               <p className="text-lg font-semibold text-gray-900">
-                {sales.filter(sale => sale.sale_type === 'credit').length}
+                {filteredSales.filter(sale => sale.sale_type === 'credit').length}
               </p>
             </div>
           </div>
@@ -265,7 +287,27 @@ const Sales: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input
+              type="date"
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Stall</label>
             <select
@@ -299,6 +341,7 @@ const Sales: React.FC = () => {
               onClick={() => {
                 setSelectedStall('');
                 setSaleTypeFilter('');
+                setDateRange({ startDate: '', endDate: '' });
               }}
               className="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
             >
@@ -344,7 +387,7 @@ const Sales: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {sales.map((sale) => (
+              {filteredSales.map((sale) => (
                 <tr key={sale.sale_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatDate(sale.date_time)}

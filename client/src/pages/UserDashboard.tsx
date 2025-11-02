@@ -81,43 +81,23 @@ const UserDashboard: React.FC = () => {
 
   const handleSaleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem) return;
+    if (!selectedItem || !user) return;
 
     try {
-      const saleData = {
+      // Use mockApi to persist the sale
+      await mockApi.createSale({
         item_id: selectedItem.item_id,
+        stall_id: user.stall_id || 0,
         quantity_sold: saleQuantity,
         unit_price: selectedItem.unit_price,
-        total_amount: selectedItem.unit_price * saleQuantity,
         sale_type: saleType,
-        customer_name: customerName || null
-      };
+        recorded_by: user.user_id,
+        customer_name: saleType === 'mobile' ? customerName : undefined,
+        customer_contact: saleType === 'mobile' ? customerName : undefined
+      });
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Update local state
-      const newSale: Sale = {
-        sale_id: Date.now(), // Temporary ID
-        item_name: selectedItem.item_name,
-        quantity_sold: saleQuantity,
-        unit_price: selectedItem.unit_price,
-        total_amount: saleData.total_amount,
-        sale_type: saleType,
-        date_time: new Date().toISOString(),
-        customer_name: customerName || undefined
-      };
-
-      setSales(prev => [newSale, ...prev]);
-      setTodaySales(prev => prev + saleData.total_amount);
-      setTodayUnits(prev => prev + saleQuantity);
-
-      // Update item stock
-      setItems(prev => prev.map(item => 
-        item.item_id === selectedItem.item_id 
-          ? { ...item, current_stock: item.current_stock - saleQuantity }
-          : item
-      ));
+      // Refresh all data
+      await fetchDashboardData();
 
       // Reset form
       setShowSaleForm(false);
@@ -128,6 +108,7 @@ const UserDashboard: React.FC = () => {
 
     } catch (error) {
       console.error('Error recording sale:', error);
+      alert('Failed to record sale');
     }
   };
 
