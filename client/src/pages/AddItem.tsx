@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mockApi } from '../services/mockData';
+import VoiceAssistant from '../components/VoiceAssistant';
 
 interface Stall {
   stall_id: number;
@@ -124,17 +125,23 @@ const AddItem: React.FC = () => {
               <label htmlFor="item_name" className="block text-sm font-medium text-gray-700 mb-2">
                 Item Name *
               </label>
-              <input
-                type="text"
-                id="item_name"
-                name="item_name"
-                value={formData.item_name}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter item name"
-                required
-                disabled={loading}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="item_name"
+                  name="item_name"
+                  value={formData.item_name}
+                  onChange={handleInputChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter item name"
+                  required
+                  disabled={loading}
+                />
+                <VoiceAssistant 
+                  onTextReceived={(text) => setFormData(prev => ({ ...prev, item_name: text }))}
+                  disabled={loading}
+                />
+              </div>
             </div>
 
             {/* Category */}
@@ -142,17 +149,23 @@ const AddItem: React.FC = () => {
               <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
                 Category *
               </label>
-              <input
-                type="text"
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., Jeans, Shirts, Shoes"
-                required
-                disabled={loading}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., Jeans, Shirts, Shoes"
+                  required
+                  disabled={loading}
+                />
+                <VoiceAssistant 
+                  onTextReceived={(text) => setFormData(prev => ({ ...prev, category: text }))}
+                  disabled={loading}
+                />
+              </div>
             </div>
 
             {/* Stock Quantity */}

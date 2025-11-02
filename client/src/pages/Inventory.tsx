@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { mockApi } from '../services/mockData';
+import VoiceAssistant from '../components/VoiceAssistant';
 
 interface Item {
   item_id: number;
@@ -117,6 +118,32 @@ const Inventory: React.FC = () => {
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
+  // Voice Assistant handlers
+  const handleVoiceSearch = (text: string) => {
+    setSearchTerm(text);
+  };
+
+  const handleVoiceCommand = (command: string, params: any) => {
+    switch (command) {
+      case 'search':
+        setSearchTerm(params.term || '');
+        break;
+      case 'filterCategory':
+        setSelectedCategory(params.category || '');
+        break;
+      case 'clearFilters':
+        setSearchTerm('');
+        setSelectedCategory('');
+        setShowLowStock(false);
+        break;
+      case 'showLowStock':
+        setShowLowStock(true);
+        break;
+      default:
+        break;
+    }
+  };
+
   const getItemsSold = (itemName: string) => {
     return salesData
       .filter(sale => sale.item_name === itemName)
@@ -166,13 +193,20 @@ const Inventory: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search Items</label>
-            <input
-              type="text"
-              placeholder="Search by name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <VoiceAssistant 
+                onTextReceived={handleVoiceSearch}
+                onCommand={handleVoiceCommand}
+                placeholder="Voice search..."
+              />
+            </div>
           </div>
           
           <div>
