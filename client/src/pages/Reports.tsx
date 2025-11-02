@@ -78,7 +78,7 @@ const Reports: React.FC = () => {
           return;
         }
 
-        if (!confirm('⚠️ WARNING: This will replace ALL current data. Continue?')) {
+        if (!window.confirm('⚠️ WARNING: This will replace ALL current data. Continue?')) {
           return;
         }
 
