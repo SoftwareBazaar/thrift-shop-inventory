@@ -261,7 +261,8 @@ export const mockApi = {
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
     
     // Find the item to get its details
-    const item = items.find(i => i.item_id === parseInt(saleData.item_id));
+    const itemId = typeof saleData.item_id === 'number' ? saleData.item_id : parseInt(saleData.item_id.toString());
+    const item = items.find(i => i.item_id === itemId);
     if (!item) {
       throw new Error('Item not found');
     }
@@ -271,8 +272,9 @@ export const mockApi = {
     const user = users.find(u => u.user_id === saleData.recorded_by);
     
     // Get stall info
+    const stallId = typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString());
     const stalls = getStorageData<Stall[]>('stalls', mockStalls);
-    const stall = stalls.find(s => s.stall_id === saleData.stall_id);
+    const stall = stalls.find(s => s.stall_id === stallId);
     
     const newSale: Sale = {
       sale_id: Math.max(...sales.map(s => s.sale_id), 0) + 1,
