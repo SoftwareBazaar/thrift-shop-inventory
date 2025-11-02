@@ -113,16 +113,6 @@ const Users: React.FC = () => {
     }
   };
 
-  const toggleUserStatus = async (userId: number, currentStatus: string) => {
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      fetchUsers();
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to update user status');
-    }
-  };
-
   const openEditUserModal = (user: User) => {
     setEditingUser(user);
     setShowEditUserModal(true);

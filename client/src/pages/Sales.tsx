@@ -109,15 +109,6 @@ const Sales: React.FC = () => {
     });
   };
 
-  const getPaymentStatusColor = (status?: string) => {
-    switch (status) {
-      case 'fully_paid': return 'text-green-600';
-      case 'partially_paid': return 'text-yellow-600';
-      case 'unpaid': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">

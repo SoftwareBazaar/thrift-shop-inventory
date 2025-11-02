@@ -184,11 +184,6 @@ const Inventory: React.FC = () => {
     }).format(amount);
   };
 
-  const getStockStatus = (currentStock: number) => {
-    if (currentStock === 0) return { text: 'Out of Stock', color: 'text-red-600' };
-    if (currentStock <= 5) return { text: 'Low Stock', color: 'text-yellow-600' };
-    return { text: 'In Stock', color: 'text-green-600' };
-  };
 
   if (loading) {
     return (
@@ -319,7 +314,6 @@ const Inventory: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item) => {
-                const stockStatus = getStockStatus(item.current_stock);
                 return (
                   <tr key={item.item_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
