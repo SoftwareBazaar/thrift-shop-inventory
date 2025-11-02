@@ -11,9 +11,11 @@ const Layout: React.FC = () => {
     { name: 'Dashboard', href: '/dashboard', icon: '📊' },
     { name: 'Inventory', href: '/inventory', icon: '📦' },
     { name: 'Sales', href: '/sales', icon: '💰' },
-    { name: 'Feedback', href: '/feedback', icon: '💬' },
-    { name: 'Reports', href: '/reports', icon: '📈' },
-    ...(user?.role === 'admin' ? [{ name: 'Users', href: '/users', icon: '👥' }] : []),
+    ...(user?.role === 'admin' ? [
+      { name: 'Feedback', href: '/feedback', icon: '💬' },
+      { name: 'Reports', href: '/reports', icon: '📈' },
+      { name: 'Users', href: '/users', icon: '👥' }
+    ] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;

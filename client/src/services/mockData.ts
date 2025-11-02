@@ -86,8 +86,25 @@ export const mockUsers: User[] = [
   }
 ];
 
-// Mock Stalls Data - Empty for fresh start
-export const mockStalls: Stall[] = [];
+// Mock Stalls Data - Real stalls for testing
+export const mockStalls: Stall[] = [
+  {
+    stall_id: 316,
+    stall_name: 'Stall 316',
+    user_id: 2,
+    location: 'Stall 316',
+    manager: 'Kelvin',
+    status: 'active'
+  },
+  {
+    stall_id: 309,
+    stall_name: 'Stall 309',
+    user_id: 3,
+    location: 'Stall 309',
+    manager: 'Manuel',
+    status: 'active'
+  }
+];
 
 // Mock Inventory Data - Empty for fresh start
 export const mockInventory: InventoryItem[] = [];
