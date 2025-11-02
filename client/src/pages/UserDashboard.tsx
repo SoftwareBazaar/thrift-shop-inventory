@@ -373,7 +373,7 @@ const UserDashboard: React.FC = () => {
 
                 {selectedItem && saleType === 'mobile' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Customer Mobile Number</label>
+                    <label className="block text-sm font-medium text-gray-700">Customer Mobile Number (Optional)</label>
                     <input
                       type="text"
                       value={customerName}
