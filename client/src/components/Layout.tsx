@@ -60,15 +60,16 @@ const Layout: React.FC = () => {
       <div className={`fixed inset-y-0 left-0 z-50 w-64 sidebar-enhanced transform transition-transform duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
-        <div className="flex items-center justify-between h-16 px-4 border-b" style={{borderColor: 'var(--neutral-200)'}}>
+        <div className="flex items-center justify-center h-20 border-b" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
             src="/G thrifts.jpg" 
             alt="G Thrifts Logo" 
-            className="h-12 w-auto object-contain"
+            className="h-16 w-auto object-contain drop-shadow-sm"
+            style={{background: 'transparent'}}
           />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden hover:opacity-70"
+            className="lg:hidden absolute right-4 hover:opacity-70"
             style={{color: 'var(--primary-600)'}}
           >
             ✕
