@@ -171,7 +171,7 @@ const AddItem: React.FC = () => {
             {/* Stock Quantity */}
             <div>
               <label htmlFor="initial_stock" className="block text-sm font-medium text-gray-700 mb-2">
-                Number of Items to Add *
+                Initial Stock *
               </label>
               <input
                 type="number"

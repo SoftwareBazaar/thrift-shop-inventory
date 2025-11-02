@@ -281,6 +281,18 @@ export const mockApi = {
     return { item: newItem };
   },
 
+  updateItem: async (itemId: number, itemData: Partial<InventoryItem>): Promise<{ item: InventoryItem }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const itemIndex = items.findIndex(i => i.item_id === itemId);
+    if (itemIndex === -1) {
+      throw new Error('Item not found');
+    }
+    items[itemIndex] = { ...items[itemIndex], ...itemData };
+    setStorageData('items', items);
+    return { item: items[itemIndex] };
+  },
+
   // Sales API
   getSales: async (): Promise<{ sales: Sale[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));

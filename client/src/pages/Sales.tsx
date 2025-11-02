@@ -383,9 +383,6 @@ const Sales: React.FC = () => {
                   Customer
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Recorded By
                 </th>
               </tr>
@@ -428,15 +425,6 @@ const Sales: React.FC = () => {
                         <div className="font-medium">{sale.customer_name}</div>
                         <div className="text-gray-500">{sale.customer_contact}</div>
                       </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {sale.payment_status ? (
-                      <span className={`text-sm font-medium ${getPaymentStatusColor(sale.payment_status)}`}>
-                        {sale.payment_status.replace('_', ' ')}
-                      </span>
                     ) : (
                       <span className="text-gray-400">-</span>
                     )}

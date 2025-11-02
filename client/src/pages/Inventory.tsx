@@ -36,6 +36,7 @@ const Inventory: React.FC = () => {
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [showDistributeModal, setShowDistributeModal] = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
   const [distributionData, setDistributionData] = useState({
@@ -44,6 +45,7 @@ const Inventory: React.FC = () => {
     quantity: '',
     notes: ''
   });
+  const [addStockQuantity, setAddStockQuantity] = useState('');
 
   useEffect(() => {
     fetchItems();
@@ -107,6 +109,31 @@ const Inventory: React.FC = () => {
       alert('Stock distributed successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to distribute stock');
+    }
+  };
+
+  const handleAddStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem || !addStockQuantity) return;
+
+    const quantityToAdd = parseInt(addStockQuantity);
+    if (quantityToAdd <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    try {
+      await mockApi.updateItem(selectedItem.item_id, {
+        current_stock: selectedItem.current_stock + quantityToAdd,
+        total_added: selectedItem.total_added + quantityToAdd
+      });
+      
+      setShowAddStockModal(false);
+      setAddStockQuantity('');
+      fetchItems(); // Refresh items
+      alert('Stock added successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to add stock');
     }
   };
 
@@ -283,9 +310,6 @@ const Inventory: React.FC = () => {
                     Value
                   </th>
                 )}
-                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                  Status
-                </th>
                 {user?.role === 'admin' && (
                   <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Actions
@@ -309,7 +333,7 @@ const Inventory: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{item.current_stock}</div>
                       <div className="text-xs text-gray-500">
-                        New Stock: {item.initial_stock} | Added: {item.total_added}
+                        Initial: {item.initial_stock} | New Items Added: {item.total_added}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -323,11 +347,6 @@ const Inventory: React.FC = () => {
                         {formatCurrency(item.current_stock * item.unit_price)}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-medium ${stockStatus.color}`}>
-                        {stockStatus.text}
-                      </span>
-                    </td>
                     {user?.role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
@@ -341,8 +360,9 @@ const Inventory: React.FC = () => {
                         </button>
                         <button
                           onClick={() => {
-                            // TODO: Implement add stock functionality
-                            console.log('Add stock for item:', item.item_id);
+                            setSelectedItem(item);
+                            setAddStockQuantity('');
+                            setShowAddStockModal(true);
                           }}
                           className="text-green-600 hover:text-green-900"
                         >
@@ -450,6 +470,67 @@ const Inventory: React.FC = () => {
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
                   Distribute Stock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Stock Modal */}
+      {showAddStockModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Stock</h3>
+            <form onSubmit={handleAddStockSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
+                <input
+                  type="text"
+                  value={selectedItem.item_name}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
+                <input
+                  type="text"
+                  value={selectedItem.current_stock}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Items to Add *</label>
+                <input
+                  type="number"
+                  value={addStockQuantity}
+                  onChange={(e) => setAddStockQuantity(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddStockModal(false);
+                    setAddStockQuantity('');
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  Add Stock
                 </button>
               </div>
             </form>

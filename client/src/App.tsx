@@ -6,7 +6,6 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Sales from './pages/Sales';
-import Feedback from './pages/Feedback';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Layout from './components/Layout';
@@ -34,7 +33,6 @@ function App() {
               <Route path="/sales" element={<Sales />} />
               <Route path="/record-sale" element={<RecordSale />} />
               <Route path="/credit-sales" element={<CreditSales />} />
-              <Route path="/feedback" element={<Feedback />} />
               <Route path="/reports" element={<ProtectedRoute requireAdmin><Reports /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
             </Route>
