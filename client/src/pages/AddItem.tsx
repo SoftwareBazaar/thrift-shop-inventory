@@ -22,6 +22,7 @@ const AddItem: React.FC = () => {
     item_name: '',
     category: '',
     initial_stock: '',
+    buying_price: '',
     unit_price: '',
     description: '',
     selectedStall: ''
@@ -56,14 +57,14 @@ const AddItem: React.FC = () => {
     setLoading(true);
 
     // Validation
-    if (!formData.item_name || !formData.category || !formData.initial_stock || !formData.unit_price) {
+    if (!formData.item_name || !formData.category || !formData.initial_stock || !formData.buying_price || !formData.unit_price) {
       setError('Please fill in all required fields.');
       setLoading(false);
       return;
     }
 
-    if (parseInt(formData.initial_stock) <= 0 || parseFloat(formData.unit_price) <= 0) {
-      setError('Stock and price must be greater than 0.');
+    if (parseInt(formData.initial_stock) <= 0 || parseFloat(formData.unit_price) <= 0 || parseFloat(formData.buying_price) <= 0) {
+      setError('Stock and prices must be greater than 0.');
       setLoading(false);
       return;
     }
@@ -74,6 +75,7 @@ const AddItem: React.FC = () => {
         category: formData.category,
         initial_stock: parseInt(formData.initial_stock),
         current_stock: parseInt(formData.initial_stock),
+        buying_price: parseFloat(formData.buying_price),
         unit_price: parseFloat(formData.unit_price)
       });
       
@@ -84,6 +86,7 @@ const AddItem: React.FC = () => {
         item_name: '',
         category: '',
         initial_stock: '',
+        buying_price: '',
         unit_price: '',
         description: '',
         selectedStall: ''
@@ -187,10 +190,31 @@ const AddItem: React.FC = () => {
               />
             </div>
 
-            {/* Unit Price */}
+            {/* Buying Price */}
+            <div>
+              <label htmlFor="buying_price" className="block text-sm font-medium text-gray-700 mb-2">
+                Buying Price (KES) *
+              </label>
+              <input
+                type="number"
+                id="buying_price"
+                name="buying_price"
+                value={formData.buying_price}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter cost/buying price"
+                min="0"
+                step="0.01"
+                required
+                disabled={loading}
+              />
+              <p className="mt-1 text-xs text-gray-500">The price you paid to acquire this item</p>
+            </div>
+
+            {/* Selling Price */}
             <div>
               <label htmlFor="unit_price" className="block text-sm font-medium text-gray-700 mb-2">
-                Unit Price (KES) *
+                Selling Price (KES) *
               </label>
               <input
                 type="number"
@@ -199,12 +223,13 @@ const AddItem: React.FC = () => {
                 value={formData.unit_price}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter unit price"
+                placeholder="Enter selling price"
                 min="0.01"
                 step="0.01"
                 required
                 disabled={loading}
               />
+              <p className="mt-1 text-xs text-gray-500">The price you will sell this item for</p>
             </div>
 
 

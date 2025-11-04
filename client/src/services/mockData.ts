@@ -166,12 +166,42 @@ const setStorageData = <T>(key: string, data: T): void => {
 // Initialize data in localStorage if not present
 const initStorage = () => {
   try {
-    // Always ensure users and stalls are initialized (these are system data)
+    // Always ensure demo users exist (admin, kelvin, manuel)
     const existingUsers = localStorage.getItem('thrift_shop_users');
-    if (!existingUsers || JSON.parse(existingUsers).length === 0) {
-      localStorage.setItem('thrift_shop_users', JSON.stringify(mockUsers));
+    let users: User[] = [];
+    
+    if (existingUsers) {
+      try {
+        users = JSON.parse(existingUsers);
+      } catch {
+        users = [];
+      }
     }
     
+    // Ensure demo users always exist
+    let needsUpdate = false;
+    
+    for (const demoUser of mockUsers) {
+      const exists = users.find(u => u.username.toLowerCase() === demoUser.username.toLowerCase());
+      if (!exists) {
+        // Add missing demo user
+        users.push(demoUser);
+        needsUpdate = true;
+      } else {
+        // Update existing demo user to ensure correct data
+        const index = users.findIndex(u => u.username.toLowerCase() === demoUser.username.toLowerCase());
+        if (index !== -1) {
+          users[index] = { ...users[index], ...demoUser };
+          needsUpdate = true;
+        }
+      }
+    }
+    
+    if (needsUpdate || users.length === 0) {
+      localStorage.setItem('thrift_shop_users', JSON.stringify(users.length > 0 ? users : mockUsers));
+    }
+    
+    // Always ensure stalls are initialized
     const existingStalls = localStorage.getItem('thrift_shop_stalls');
     if (!existingStalls || JSON.parse(existingStalls).length === 0) {
       localStorage.setItem('thrift_shop_stalls', JSON.stringify(mockStalls));
