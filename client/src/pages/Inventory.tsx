@@ -345,7 +345,7 @@ const Inventory: React.FC = () => {
                     </td>
                     {user?.role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(item.current_stock * item.unit_price)}
+                        {formatCurrency(item.current_stock * (item.buying_price || 0))}
                       </td>
                     )}
                     {user?.role === 'admin' && (
