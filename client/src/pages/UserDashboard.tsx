@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { mockApi } from '../services/mockData';
 
@@ -34,11 +34,7 @@ const UserDashboard: React.FC = () => {
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [user]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       // Fetch items for this user's stall
       const itemsResponse = await mockApi.getInventory();
@@ -71,7 +67,11 @@ const UserDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleItemSelect = (item: SaleItem) => {
     setSelectedItem(item);
