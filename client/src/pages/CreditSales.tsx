@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/MockAuthContext';
 import { mockApi, Sale } from '../services/mockData';
 
 const CreditSales: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [creditSales, setCreditSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -15,11 +13,7 @@ const CreditSales: React.FC = () => {
     balance_due: 0
   });
 
-  useEffect(() => {
-    fetchCreditSales();
-  }, []);
-
-  const fetchCreditSales = async () => {
+  const fetchCreditSales = useCallback(async () => {
     try {
       const response = await mockApi.getSales();
       const creditOnlySales = response.sales.filter(sale => sale.sale_type === 'credit');
@@ -29,7 +23,11 @@ const CreditSales: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCreditSales();
+  }, [fetchCreditSales]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
