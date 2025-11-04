@@ -22,6 +22,7 @@ export interface Sale {
   sale_id: number;
   item_name: string;
   category: string;
+  item_id?: number;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
@@ -32,6 +33,7 @@ export interface Sale {
   stall_name: string;
   customer_name?: string;
   customer_contact?: string;
+  buying_price?: number;
   payment_status?: string;
   balance_due?: number;
 }
@@ -57,6 +59,7 @@ export interface InventoryItem {
   initial_stock: number;
   current_stock: number;
   unit_price: number;
+  buying_price?: number;
   date_added: string;
   sku?: string;
   total_allocated: number;

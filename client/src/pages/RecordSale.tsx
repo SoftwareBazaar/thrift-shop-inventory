@@ -377,6 +377,9 @@ const RecordSale: React.FC = () => {
                     required={formData.sale_type === 'credit'}
                     disabled={loading}
                   />
+                  {formData.sale_type === 'mobile' && (
+                    <p className="mt-1 text-xs text-gray-500">Optional - Leave blank if not needed</p>
+                  )}
                 </div>
 
                 {formData.sale_type === 'credit' && (

@@ -7,18 +7,21 @@ interface SaleItem {
   item_name: string;
   current_stock: number;
   unit_price: number;
+  buying_price?: number;
   category: string;
 }
 
 interface Sale {
   sale_id: number;
   item_name: string;
+  item_id?: number;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
   sale_type: 'cash' | 'credit' | 'mobile';
   date_time: string;
   customer_name?: string;
+  buying_price?: number;
 }
 
 const UserDashboard: React.FC = () => {
@@ -33,6 +36,7 @@ const UserDashboard: React.FC = () => {
   const [customerName, setCustomerName] = useState('');
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -43,21 +47,29 @@ const UserDashboard: React.FC = () => {
       // Filter items for user's stall (in real system, this would be filtered by stall_id)
       setItems(allItems);
 
-      // Fetch today's sales
+      // Fetch sales
       const salesResponse = await mockApi.getSales();
       const allSales = salesResponse.sales || [];
       
-      // Filter today's sales for this user
-      const today = new Date().toISOString().split('T')[0];
-      const todaySalesData = allSales.filter((sale: any) => 
-        sale.date_time.startsWith(today) && sale.recorded_by === user?.user_id
-      );
+      // Filter sales for this user based on selected period
+      const now = new Date();
+      const periodStart = new Date();
+      if (selectedPeriod === 'week') {
+        periodStart.setDate(now.getDate() - 7);
+      } else if (selectedPeriod === 'month') {
+        periodStart.setDate(now.getDate() - 30);
+      }
       
-      setSales(todaySalesData);
+      const periodSalesData = allSales.filter((sale: any) => {
+        const saleDate = new Date(sale.date_time);
+        return saleDate >= periodStart && sale.recorded_by === user?.user_id;
+      });
       
-      // Calculate today's totals
-      const totalSales = todaySalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
-      const totalUnits = todaySalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
+      setSales(periodSalesData);
+      
+      // Calculate totals
+      const totalSales = periodSalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
+      const totalUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
       
       setTodaySales(totalSales);
       setTodayUnits(totalUnits);
@@ -67,7 +79,7 @@ const UserDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, selectedPeriod]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -144,7 +156,7 @@ const UserDashboard: React.FC = () => {
               <span className="text-3xl">💰</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
+              <h3 className="text-lg font-medium text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
               <p className="text-2xl font-bold text-green-600">{formatCurrency(todaySales)}</p>
             </div>
           </div>
@@ -206,7 +218,8 @@ const UserDashboard: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buying Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
@@ -223,6 +236,9 @@ const UserDashboard: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {item.current_stock} units
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatCurrency(item.buying_price || 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCurrency(item.unit_price)}
@@ -243,10 +259,18 @@ const UserDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Today's Sales */}
+      {/* Sales Summary */}
       <div className="bg-white rounded-lg shadow-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Today's Sales</h2>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h2>
+          <select
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value as 'week' | 'month')}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+          </select>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -254,7 +278,8 @@ const UserDashboard: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buying Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
@@ -268,6 +293,9 @@ const UserDashboard: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.quantity_sold}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatCurrency(sale.buying_price || 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCurrency(sale.unit_price)}
@@ -381,6 +409,7 @@ const UserDashboard: React.FC = () => {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter customer phone number"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Optional - Leave blank if not needed</p>
                   </div>
                 )}
 

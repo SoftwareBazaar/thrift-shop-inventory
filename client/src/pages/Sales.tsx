@@ -7,6 +7,7 @@ interface Sale {
   sale_id: number;
   item_name: string;
   category: string;
+  item_id?: number;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
@@ -17,6 +18,7 @@ interface Sale {
   stall_name: string;
   customer_name?: string;
   customer_contact?: string;
+  buying_price?: number;
   payment_status?: string;
   balance_due?: number;
 }
@@ -362,7 +364,10 @@ const Sales: React.FC = () => {
                   Quantity
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit Price
+                  Buying Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Selling Price
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total Amount
@@ -392,6 +397,9 @@ const Sales: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.quantity_sold}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatCurrency(sale.buying_price || 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCurrency(sale.unit_price)}
