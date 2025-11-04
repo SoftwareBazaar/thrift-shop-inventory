@@ -1,15 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/MockAuthContext';
+import React, { useState, useEffect, useCallback } from 'react';
 import { mockApi } from '../services/mockData';
-
-interface User {
-  user_id: number;
-  username: string;
-  full_name: string;
-  role: string;
-  stall_id?: number;
-  status: string;
-}
 
 interface Stall {
   stall_id: number;
@@ -45,9 +35,7 @@ interface Analytics {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { user } = useAuth();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
@@ -55,16 +43,8 @@ const AdminDashboard: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [showCommissionModal, setShowCommissionModal] = useState(false);
 
-  useEffect(() => {
-    fetchAdminData();
-  }, [selectedPeriod]);
-
-  const fetchAdminData = async () => {
+  const fetchAdminData = useCallback(async () => {
     try {
-      // Fetch users
-      const usersResponse = await mockApi.getUsers();
-      setUsers(usersResponse.users || []);
-
       // Fetch stalls
       const stallsResponse = await mockApi.getStalls();
       setStalls(stallsResponse.stalls || []);
@@ -96,16 +76,11 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPeriod]);
 
-  const calculateCommissions = (userPerformance: any[]) => {
-    const commissionRate = 0.05; // 5% commission
-    return userPerformance.map(user => ({
-      user_name: user.user_name,
-      sales: user.sales,
-      commission: user.revenue * commissionRate
-    }));
-  };
+  useEffect(() => {
+    fetchAdminData();
+  }, [fetchAdminData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
