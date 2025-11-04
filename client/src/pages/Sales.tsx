@@ -120,25 +120,25 @@ const Sales: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Sales Management</h1>
-              <p style={{color: 'var(--neutral-600)'}}>View and manage sales records</p>
-            </div>
-        <div className="flex space-x-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Sales Management</h1>
+          <p className="text-sm sm:text-base" style={{color: 'var(--neutral-600)'}}>View and manage sales records</p>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:gap-3 sm:flex-nowrap">
           <button
             onClick={() => navigate('/record-sale')}
-            className="btn-primary"
+            className="btn-primary text-sm sm:text-base px-3 sm:px-4 py-2 whitespace-nowrap"
           >
             Record Sale
           </button>
           {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/credit-sales')}
-              className="btn-accent"
+              className="btn-accent text-sm sm:text-base px-3 sm:px-4 py-2 whitespace-nowrap"
             >
-              Manage Credit Sales
+              <span className="hidden sm:inline">Manage </span>Credit Sales
             </button>
           )}
         </div>

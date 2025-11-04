@@ -141,16 +141,16 @@ const UserDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-lg">
-        <h1 className="text-2xl font-bold">Welcome, {user?.full_name}</h1>
-        <p className="text-blue-100">Stall Operator Dashboard - {new Date().toLocaleDateString()}</p>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6 rounded-lg">
+        <h1 className="text-xl sm:text-2xl font-bold truncate">Welcome, {user?.full_name}</h1>
+        <p className="text-sm sm:text-base text-blue-100 mt-1 truncate">Stall Operator Dashboard - {new Date().toLocaleDateString()}</p>
       </div>
 
       {/* Today's Performance */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-green-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">💰</span>
@@ -162,7 +162,7 @@ const UserDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">📦</span>
@@ -174,7 +174,7 @@ const UserDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">🏪</span>
@@ -188,18 +188,18 @@ const UserDashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <button
             onClick={() => setShowSaleForm(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base"
           >
             💰 Record New Sale
           </button>
           <button
             onClick={fetchDashboardData}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base"
           >
             🔄 Refresh Data
           </button>
@@ -261,12 +261,12 @@ const UserDashboard: React.FC = () => {
 
       {/* Sales Summary */}
       <div className="bg-white rounded-lg shadow-lg">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h2>
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h2>
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value as 'week' | 'month')}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base w-full sm:w-auto"
           >
             <option value="week">Weekly</option>
             <option value="month">Monthly</option>

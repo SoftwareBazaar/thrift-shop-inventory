@@ -204,16 +204,16 @@ const Layout: React.FC = () => {
             >
               ☰
             </button>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm" style={{color: 'var(--primary-700)'}}>
-                Welcome back, {user?.full_name}
+            <div className="flex items-center space-x-4 flex-1 min-w-0">
+              <span className="text-sm truncate" style={{color: 'var(--primary-700)'}}>
+                Welcome back, <span className="hidden sm:inline">{user?.full_name}</span><span className="sm:hidden">{user?.full_name?.split(' ')[0] || user?.full_name}</span>
               </span>
             </div>
           </div>
         </div>
 
         {/* Page content */}
-        <main className="p-6">
+        <main className="p-3 sm:p-4 md:p-6">
           <Outlet />
         </main>
       </div>

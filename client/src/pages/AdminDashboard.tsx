@@ -129,19 +129,19 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-primary text-white p-6 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-blue-100">System Overview & Analytics - {new Date().toLocaleDateString()}</p>
+      <div className="bg-gradient-primary text-white p-4 sm:p-6 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">Admin Dashboard</h1>
+            <p className="text-sm sm:text-base text-blue-100 mt-1 truncate">System Overview & Analytics - {new Date().toLocaleDateString()}</p>
           </div>
-          <div className="flex space-x-4">
+          <div className="flex flex-wrap gap-2 sm:gap-4 sm:flex-nowrap">
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-white text-gray-900 px-4 py-2 rounded-lg"
+              className="bg-white text-gray-900 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base flex-1 sm:flex-none min-w-[120px]"
             >
               <option value="today">Today</option>
               <option value="week">This Week</option>
@@ -150,15 +150,15 @@ const AdminDashboard: React.FC = () => {
             </select>
             <button
               onClick={() => downloadReport('pdf')}
-              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-medium"
+              className="bg-red-600 hover:bg-red-700 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap"
             >
-              📄 PDF Report
+              <span className="hidden sm:inline">📄 </span>PDF
             </button>
             <button
               onClick={() => downloadReport('excel')}
-              className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium"
+              className="bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap"
             >
-              📊 Excel Report
+              <span className="hidden sm:inline">📊 </span>Excel
             </button>
           </div>
         </div>
@@ -166,7 +166,7 @@ const AdminDashboard: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">💰</span>
@@ -180,7 +180,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-green-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">📈</span>
@@ -192,7 +192,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">📦</span>
@@ -204,7 +204,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-3xl">📊</span>
