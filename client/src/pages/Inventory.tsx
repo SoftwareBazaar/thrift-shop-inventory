@@ -42,8 +42,7 @@ const Inventory: React.FC = () => {
   const [salesData, setSalesData] = useState<any[]>([]);
   const [distributionData, setDistributionData] = useState({
     item_id: 0,
-    stall_id: '',
-    quantity: '',
+    distributions: [] as Array<{ stall_id: string; quantity: string }>,
     notes: ''
   });
   const [addStockQuantity, setAddStockQuantity] = useState('');
@@ -53,6 +52,14 @@ const Inventory: React.FC = () => {
     fetchCategories();
     fetchStalls();
     fetchSales();
+    
+    // Auto-refresh every 5 seconds to sync data across all users
+    const interval = setInterval(() => {
+      fetchItems();
+      fetchSales();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchItems = async () => {
@@ -101,16 +108,68 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     if (!selectedItem) return;
 
+    // Validate distributions
+    if (distributionData.distributions.length === 0) {
+      alert('Please add at least one stall distribution');
+      return;
+    }
+
+    const totalDistributed = distributionData.distributions.reduce((sum, dist) => {
+      return sum + (parseInt(dist.quantity) || 0);
+    }, 0);
+
+    if (totalDistributed > selectedItem.current_stock) {
+      alert(`Total quantity (${totalDistributed}) exceeds available stock (${selectedItem.current_stock})`);
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Distribute to each stall
+      for (const dist of distributionData.distributions) {
+        const quantity = parseInt(dist.quantity);
+        if (quantity > 0 && dist.stall_id) {
+          // Call API to distribute to this stall
+          await mockApi.distributeStock(selectedItem.item_id, {
+            stall_id: parseInt(dist.stall_id),
+            quantity_allocated: quantity
+          });
+        }
+      }
       
       setShowDistributeModal(false);
+      setDistributionData({
+        item_id: 0,
+        distributions: [],
+        notes: ''
+      });
       fetchItems(); // Refresh items
       alert('Stock distributed successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to distribute stock');
     }
+  };
+
+  const addDistributionRow = () => {
+    setDistributionData(prev => ({
+      ...prev,
+      distributions: [...prev.distributions, { stall_id: '', quantity: '' }]
+    }));
+  };
+
+  const removeDistributionRow = (index: number) => {
+    setDistributionData(prev => ({
+      ...prev,
+      distributions: prev.distributions.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateDistribution = (index: number, field: 'stall_id' | 'quantity', value: string) => {
+    setDistributionData(prev => ({
+      ...prev,
+      distributions: prev.distributions.map((dist, i) => 
+        i === index ? { ...dist, [field]: value } : dist
+      )
+    }));
   };
 
   const handleAddStockSubmit = async (e: React.FormEvent) => {
@@ -301,9 +360,6 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Buying Price
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Selling Price
-                </th>
                 {user?.role === 'admin' && (
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Value
@@ -340,9 +396,6 @@ const Inventory: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(item.buying_price || 0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(item.unit_price)}
-                    </td>
                     {user?.role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(item.current_stock * (item.buying_price || 0))}
@@ -353,6 +406,11 @@ const Inventory: React.FC = () => {
                         <button
                           onClick={() => {
                             setSelectedItem(item);
+                            setDistributionData({
+                              item_id: item.item_id,
+                              distributions: [],
+                              notes: ''
+                            });
                             setShowDistributeModal(true);
                           }}
                           className="text-blue-600 hover:text-blue-900 mr-3"
@@ -395,7 +453,7 @@ const Inventory: React.FC = () => {
       {/* Stock Distribution Modal */}
       {showDistributeModal && selectedItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Distribute Stock - {selectedItem.item_name}
             </h3>
@@ -404,36 +462,69 @@ const Inventory: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Available Stock: {selectedItem.current_stock}
                 </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Total to distribute: {
+                    distributionData.distributions.reduce((sum, dist) => sum + (parseInt(dist.quantity) || 0), 0)
+                  } / {selectedItem.current_stock}
+                </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Stall</label>
-                <select
-                  value={distributionData.stall_id}
-                  onChange={(e) => setDistributionData(prev => ({ ...prev, stall_id: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">-- Select a stall --</option>
-                  {stalls.map(stall => (
-                    <option key={stall.stall_id} value={stall.stall_id}>
-                      {stall.stall_name} ({stall.manager})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity to Distribute</label>
-                <input
-                  type="number"
-                  value={distributionData.quantity}
-                  onChange={(e) => setDistributionData(prev => ({ ...prev, quantity: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="1"
-                  max={selectedItem.current_stock}
-                  required
-                />
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Stall Distributions</label>
+                  <button
+                    type="button"
+                    onClick={addDistributionRow}
+                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                  >
+                    + Add Stall
+                  </button>
+                </div>
+                
+                {distributionData.distributions.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">Click "Add Stall" to start distributing</p>
+                )}
+                
+                {distributionData.distributions.map((dist, index) => (
+                  <div key={index} className="flex gap-2 mb-2 items-end">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Stall</label>
+                      <select
+                        value={dist.stall_id}
+                        onChange={(e) => updateDistribution(index, 'stall_id', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="">-- Select stall --</option>
+                        {stalls.map(stall => (
+                          <option key={stall.stall_id} value={stall.stall_id}>
+                            {stall.stall_name} ({stall.manager})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
+                      <input
+                        type="number"
+                        value={dist.quantity}
+                        onChange={(e) => updateDistribution(index, 'quantity', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        min="1"
+                        max={selectedItem.current_stock}
+                        required
+                        placeholder="Qty"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeDistributionRow(index)}
+                      className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
 
               <div>

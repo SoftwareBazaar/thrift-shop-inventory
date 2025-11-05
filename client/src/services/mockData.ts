@@ -26,7 +26,7 @@ export interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit' | 'mobile';
+  sale_type: 'cash' | 'credit' | 'mobile' | 'split';
   date_time: string;
   recorded_by: number;
   recorded_by_name: string;
@@ -36,6 +36,8 @@ export interface Sale {
   buying_price?: number;
   payment_status?: string;
   balance_due?: number;
+  cash_amount?: number | null;
+  mobile_amount?: number | null;
 }
 
 export interface SaleInput {
@@ -43,13 +45,15 @@ export interface SaleInput {
   stall_id: number | string;
   quantity_sold: number;
   unit_price: number;
-  sale_type: 'cash' | 'credit' | 'mobile';
+  sale_type: 'cash' | 'credit' | 'mobile' | 'split';
   recorded_by: number;
   total_amount?: number;
   customer_name?: string;
   customer_contact?: string;
   payment_status?: string;
   balance_due?: number;
+  cash_amount?: number | null;
+  mobile_amount?: number | null;
 }
 
 export interface InventoryItem {
@@ -369,7 +373,9 @@ export const mockApi = {
       customer_name: saleData.customer_name,
       customer_contact: saleData.customer_contact,
       payment_status: saleData.sale_type === 'credit' ? 'unpaid' : undefined,
-      balance_due: saleData.sale_type === 'credit' ? saleData.total_amount : undefined
+      balance_due: saleData.sale_type === 'credit' ? saleData.total_amount : undefined,
+      cash_amount: saleData.cash_amount || null,
+      mobile_amount: saleData.mobile_amount || null
     };
     
     sales.push(newSale);
@@ -406,5 +412,29 @@ export const mockApi = {
   getAnalytics: async (): Promise<Analytics> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return mockAnalytics;
+  },
+
+  // Distribution API
+  distributeStock: async (itemId: number, distribution: { stall_id: number; quantity_allocated: number }): Promise<void> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const item = items.find(i => i.item_id === itemId);
+    
+    if (!item) {
+      throw new Error('Item not found');
+    }
+    
+    if (item.current_stock < distribution.quantity_allocated) {
+      throw new Error('Insufficient stock');
+    }
+    
+    // Update item stock (subtract from main stock)
+    item.current_stock -= distribution.quantity_allocated;
+    item.total_allocated += distribution.quantity_allocated;
+    
+    setStorageData('items', items);
+    
+    // Note: In a real system, this would also create a stock_distribution record
+    // For mock data, we're just updating the item's current_stock
   }
 };

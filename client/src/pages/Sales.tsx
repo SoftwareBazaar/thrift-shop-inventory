@@ -11,7 +11,9 @@ interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit' | 'mobile';
+  sale_type: 'cash' | 'credit' | 'mobile' | 'split';
+  cash_amount?: number | null;
+  mobile_amount?: number | null;
   date_time: string;
   recorded_by: number;
   recorded_by_name: string;
@@ -43,6 +45,13 @@ const Sales: React.FC = () => {
   useEffect(() => {
     fetchSales();
     fetchStalls();
+    
+    // Auto-refresh every 5 seconds to sync data across all users
+    const interval = setInterval(() => {
+      fetchSales();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSales = async () => {
@@ -413,9 +422,13 @@ const Sales: React.FC = () => {
                         ? 'bg-green-100 text-green-800' 
                         : sale.sale_type === 'mobile'
                         ? 'bg-purple-100 text-purple-800'
+                        : sale.sale_type === 'split'
+                        ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {sale.sale_type}
+                      {sale.sale_type === 'split' 
+                        ? `Split (Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'})`
+                        : sale.sale_type}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

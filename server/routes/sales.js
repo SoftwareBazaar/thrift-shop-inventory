@@ -24,8 +24,22 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Validate sale type
-    if (!['cash', 'credit'].includes(sale_type)) {
+    if (!['cash', 'credit', 'mobile', 'split'].includes(sale_type)) {
       return res.status(400).json({ message: 'Invalid sale type' });
+    }
+    
+    // For split payments, validate cash_amount and mobile_amount
+    let cash_amount = null;
+    let mobile_amount = null;
+    if (sale_type === 'split') {
+      cash_amount = req.body.cash_amount || null;
+      mobile_amount = req.body.mobile_amount || null;
+      if (!cash_amount || !mobile_amount || cash_amount <= 0 || mobile_amount <= 0) {
+        return res.status(400).json({ message: 'Both cash_amount and mobile_amount are required for split payments' });
+      }
+      if (Math.abs((cash_amount + mobile_amount) - (quantity_sold * unit_price)) > 0.01) {
+        return res.status(400).json({ message: 'Cash and mobile amounts must equal total amount' });
+      }
     }
 
     // For credit sales, customer details are required
@@ -61,10 +75,10 @@ router.post('/', authenticateToken, async (req, res) => {
     try {
       // Insert sale record
       const saleResult = await pool.query(
-        `INSERT INTO sales (item_id, stall_id, quantity_sold, unit_price, total_amount, sale_type, recorded_by) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
+        `INSERT INTO sales (item_id, stall_id, quantity_sold, unit_price, total_amount, sale_type, cash_amount, mobile_amount, recorded_by) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
          RETURNING *`,
-        [item_id, stall_id, quantity_sold, unit_price, total_amount, sale_type, req.user.user_id]
+        [item_id, stall_id, quantity_sold, unit_price, total_amount, sale_type, cash_amount, mobile_amount, req.user.user_id]
       );
 
       // If credit sale, create credit record

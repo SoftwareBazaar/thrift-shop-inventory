@@ -61,7 +61,9 @@ CREATE TABLE IF NOT EXISTS sales (
     quantity_sold INTEGER NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
-    sale_type VARCHAR(20) NOT NULL CHECK (sale_type IN ('cash', 'credit')),
+    sale_type VARCHAR(20) NOT NULL CHECK (sale_type IN ('cash', 'credit', 'mobile', 'split')),
+    cash_amount DECIMAL(10,2) DEFAULT NULL,
+    mobile_amount DECIMAL(10,2) DEFAULT NULL,
     date_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     recorded_by INTEGER REFERENCES users(user_id) NOT NULL
 );

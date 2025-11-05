@@ -19,7 +19,9 @@ const RecordSale: React.FC = () => {
     served_by: '',
     quantity_sold: '',
     unit_price: '',
-    sale_type: 'cash' as 'cash' | 'mobile' | 'credit',
+    sale_type: 'cash' as 'cash' | 'mobile' | 'credit' | 'split',
+    cash_amount: '',
+    mobile_amount: '',
     customer_name: '',
     customer_contact: '',
     due_date: '',
@@ -115,6 +117,16 @@ const RecordSale: React.FC = () => {
         ? parseInt(formData.served_by)
         : (user?.user_id || 0);
 
+      // Calculate split amounts if needed
+      let cash_amount = null;
+      let mobile_amount = null;
+      const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
+      
+      if (formData.sale_type === 'split') {
+        cash_amount = parseFloat(formData.cash_amount) || totalAmount / 2;
+        mobile_amount = parseFloat(formData.mobile_amount) || totalAmount / 2;
+      }
+      
       // Record the sale
       await mockApi.createSale({
         item_id: formData.item_id,
@@ -124,7 +136,9 @@ const RecordSale: React.FC = () => {
         sale_type: formData.sale_type,
         recorded_by: recordedBy,
         customer_name: formData.customer_name || undefined,
-        customer_contact: formData.customer_contact || undefined
+        customer_contact: formData.customer_contact || undefined,
+        cash_amount: cash_amount,
+        mobile_amount: mobile_amount
       });
       
       setSuccessMessage('Sale recorded successfully!');
@@ -140,7 +154,9 @@ const RecordSale: React.FC = () => {
         customer_name: '',
         customer_contact: '',
         due_date: '',
-        notes: ''
+        notes: '',
+        cash_amount: '',
+        mobile_amount: ''
       });
 
       // Navigate back to sales after 2 seconds
@@ -159,9 +175,9 @@ const RecordSale: React.FC = () => {
   // Determine available payment methods based on role
   const getAvailablePaymentMethods = () => {
     if (user?.role === 'admin') {
-      return ['cash', 'mobile', 'credit'];
+      return ['cash', 'mobile', 'credit', 'split'];
     }
-    return ['cash', 'mobile'];
+    return ['cash', 'mobile', 'split'];
   };
 
   const formatCurrency = (amount: number) => {
@@ -313,7 +329,7 @@ const RecordSale: React.FC = () => {
               >
                 {getAvailablePaymentMethods().map(method => (
                   <option key={method} value={method}>
-                    {method.charAt(0).toUpperCase() + method.slice(1)}
+                    {method === 'split' ? 'Split (Cash + Mobile)' : method.charAt(0).toUpperCase() + method.slice(1)}
                   </option>
                 ))}
               </select>
@@ -338,6 +354,58 @@ const RecordSale: React.FC = () => {
               />
             </div>
           </div>
+
+          {/* Split Payment Details */}
+          {formData.sale_type === 'split' && (
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Split Payment Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="cash_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                    Cash Amount (KES) *
+                  </label>
+                  <input
+                    type="number"
+                    id="cash_amount"
+                    name="cash_amount"
+                    value={formData.cash_amount}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter cash amount"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="mobile_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                    Mobile Amount (KES) *
+                  </label>
+                  <input
+                    type="number"
+                    id="mobile_amount"
+                    name="mobile_amount"
+                    value={formData.mobile_amount}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter mobile amount"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-gray-600">
+                Total: KES {(
+                  (parseFloat(formData.cash_amount) || 0) + 
+                  (parseFloat(formData.mobile_amount) || 0)
+                ).toFixed(2)} | 
+                Expected: KES {(parseInt(formData.quantity_sold) * parseFloat(formData.unit_price)).toFixed(2)}
+              </p>
+            </div>
+          )}
 
           {/* Customer Details (for credit and mobile sales) */}
           {(formData.sale_type === 'credit' || formData.sale_type === 'mobile') && (

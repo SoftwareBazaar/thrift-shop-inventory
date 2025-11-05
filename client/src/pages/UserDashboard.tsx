@@ -18,10 +18,12 @@ interface Sale {
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
-  sale_type: 'cash' | 'credit' | 'mobile';
+  sale_type: 'cash' | 'credit' | 'mobile' | 'split';
   date_time: string;
   customer_name?: string;
   buying_price?: number;
+  cash_amount?: number | null;
+  mobile_amount?: number | null;
 }
 
 const UserDashboard: React.FC = () => {
@@ -32,8 +34,10 @@ const UserDashboard: React.FC = () => {
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SaleItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
-  const [saleType, setSaleType] = useState<'cash' | 'mobile'>('cash');
+  const [saleType, setSaleType] = useState<'cash' | 'mobile' | 'split'>('cash');
   const [customerName, setCustomerName] = useState('');
+  const [cashAmount, setCashAmount] = useState('');
+  const [mobileAmount, setMobileAmount] = useState('');
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
@@ -83,6 +87,13 @@ const UserDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Auto-refresh every 5 seconds to sync data across all users
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   const handleItemSelect = (item: SaleItem) => {
@@ -96,6 +107,16 @@ const UserDashboard: React.FC = () => {
     if (!selectedItem || !user) return;
 
     try {
+      // Calculate split amounts if needed
+      let cash_amount = null;
+      let mobile_amount = null;
+      const totalAmount = saleQuantity * selectedItem.unit_price;
+      
+      if (saleType === 'split') {
+        cash_amount = parseFloat(cashAmount) || totalAmount / 2;
+        mobile_amount = parseFloat(mobileAmount) || totalAmount / 2;
+      }
+      
       // Use mockApi to persist the sale
       await mockApi.createSale({
         item_id: selectedItem.item_id,
@@ -105,7 +126,9 @@ const UserDashboard: React.FC = () => {
         sale_type: saleType,
         recorded_by: user.user_id,
         customer_name: saleType === 'mobile' ? customerName : undefined,
-        customer_contact: saleType === 'mobile' ? customerName : undefined
+        customer_contact: saleType === 'mobile' ? customerName : undefined,
+        cash_amount: cash_amount,
+        mobile_amount: mobile_amount
       });
 
       // Refresh all data
@@ -117,6 +140,8 @@ const UserDashboard: React.FC = () => {
       setSaleQuantity(1);
       setCustomerName('');
       setSaleType('cash');
+      setCashAmount('');
+      setMobileAmount('');
 
     } catch (error) {
       console.error('Error recording sale:', error);
@@ -309,9 +334,13 @@ const UserDashboard: React.FC = () => {
                         ? 'bg-green-100 text-green-800' 
                         : sale.sale_type === 'mobile'
                         ? 'bg-purple-100 text-purple-800'
+                        : sale.sale_type === 'split'
+                        ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {sale.sale_type}
+                      {sale.sale_type === 'split' 
+                        ? `Split (Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'})`
+                        : sale.sale_type}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -389,13 +418,51 @@ const UserDashboard: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700">Sale Type</label>
                       <select
                         value={saleType}
-                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'mobile')}
+                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'mobile' | 'split')}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="cash">Cash</option>
                         <option value="mobile">Mobile</option>
+                        <option value="split">Split (Cash + Mobile)</option>
                       </select>
                     </div>
+                    
+                    {saleType === 'split' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Cash Amount (KES) *</label>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={cashAmount}
+                            onChange={(e) => setCashAmount(e.target.value)}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            required
+                            placeholder="Enter cash amount"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Mobile Amount (KES) *</label>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={mobileAmount}
+                            onChange={(e) => setMobileAmount(e.target.value)}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            required
+                            placeholder="Enter mobile amount"
+                          />
+                        </div>
+                        <div className="bg-blue-50 p-3 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            Total: {formatCurrency((parseFloat(cashAmount) || 0) + (parseFloat(mobileAmount) || 0))} | 
+                            Expected: {formatCurrency(saleQuantity * selectedItem.unit_price)}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
