@@ -331,12 +331,13 @@ export const mockApi = {
             return null;
           }
           
-          // Calculate initial distributed stock (first distribution)
-          const initialDistributed = stallDistributions.length > 0 ? stallDistributions[0].quantity_allocated : 0;
+          // For users: Initial stock = total distributed stock (cumulative)
+          // Added stock = only the most recent distribution amount
+          const initialDistributed = totalDistributedToStall;
           
-          // Calculate additional stock distributed (sum of all distributions after the first)
-          const additionalDistributed = stallDistributions.length > 1
-            ? stallDistributions.slice(1).reduce((sum, d) => sum + d.quantity_allocated, 0)
+          // Get the most recent distribution amount only (not accumulated)
+          const mostRecentDistribution = stallDistributions.length > 0 
+            ? stallDistributions[stallDistributions.length - 1].quantity_allocated 
             : 0;
           
           // Calculate sales from this stall for this item
@@ -355,9 +356,10 @@ export const mockApi = {
           return {
             ...item,
             current_stock: remainingStock,
-            // Update initial_stock and total_added to reflect user's distributed stock
+            // Initial stock = total distributed (cumulative)
+            // Added stock = only the most recent distribution amount
             initial_stock: initialDistributed,
-            total_added: additionalDistributed
+            total_added: mostRecentDistribution
           };
         })
         .filter((item): item is InventoryItem => item !== null);
