@@ -76,8 +76,17 @@ const AdminDashboard: React.FC = () => {
 
       // Fetch recent sales
       const recentSalesResponse = await mockApi.getSales();
-      setAllSales(recentSalesResponse.sales || []);
-      setRecentSales(recentSalesResponse.sales.slice(0, 10) || []);
+      const allSales = recentSalesResponse.sales || [];
+      
+      // Sort sales by date (newest first) for timely display
+      const sortedSales = [...allSales].sort((a, b) => {
+        const dateA = new Date(a.date_time).getTime();
+        const dateB = new Date(b.date_time).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+      
+      setAllSales(sortedSales);
+      setRecentSales(sortedSales.slice(0, 10));
 
       // Calculate total revenue from sales
       const totalRevenue = recentSalesResponse.sales.reduce((sum: number, sale: any) => {
