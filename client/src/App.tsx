@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MockAuthProvider } from './contexts/MockAuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
@@ -16,30 +17,34 @@ import './App.css';
 
 function App() {
   return (
-    <MockAuthProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/inventory" element={<Inventory />} />
-              <Route path="/add-item" element={<AddItem />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/record-sale" element={<RecordSale />} />
-              <Route path="/credit-sales" element={<CreditSales />} />
-              <Route path="/reports" element={<ProtectedRoute requireAdmin><Reports /></ProtectedRoute>} />
-              <Route path="/users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
-            </Route>
-          </Routes>
-        </div>
-      </Router>
-    </MockAuthProvider>
+    <ErrorBoundary>
+      <MockAuthProvider>
+        <Router>
+          <div className="App">
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }>
+                  <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                  <Route path="/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
+                  <Route path="/add-item" element={<ErrorBoundary><AddItem /></ErrorBoundary>} />
+                  <Route path="/sales" element={<ErrorBoundary><Sales /></ErrorBoundary>} />
+                  <Route path="/record-sale" element={<ErrorBoundary><RecordSale /></ErrorBoundary>} />
+                  <Route path="/credit-sales" element={<ErrorBoundary><CreditSales /></ErrorBoundary>} />
+                  <Route path="/reports" element={<ProtectedRoute requireAdmin><ErrorBoundary><Reports /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/users" element={<ProtectedRoute requireAdmin><ErrorBoundary><Users /></ErrorBoundary></ProtectedRoute>} />
+                </Route>
+              </Routes>
+            </ErrorBoundary>
+          </div>
+        </Router>
+      </MockAuthProvider>
+    </ErrorBoundary>
   );
 }
 

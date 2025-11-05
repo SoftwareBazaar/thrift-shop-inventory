@@ -480,11 +480,25 @@ const Sales: React.FC = () => {
         </div>
       </div>
 
-      {sales.length === 0 && (
-        <div className="text-center py-12">
+      {filteredSales.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
           <div className="text-gray-400 text-6xl mb-4">💰</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No sales recorded</h3>
-          <p className="text-gray-600">Start by recording your first sale</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {sales.length === 0 ? 'No sales recorded yet' : 'No sales match your filters'}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {sales.length === 0 
+              ? 'Start by recording your first sale to track revenue'
+              : 'Try adjusting your filters or date range'}
+          </p>
+          {sales.length === 0 && (
+            <button
+              onClick={() => navigate('/record-sale')}
+              className="btn-primary mt-4"
+            >
+              ➕ Record Your First Sale
+            </button>
+          )}
         </div>
       )}
     </div>

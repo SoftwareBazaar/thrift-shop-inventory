@@ -1,15 +1,34 @@
 import React, { useState } from 'react';
-import { Link, useLocation, Outlet } from 'react-router-dom';
+import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
 
 const Layout: React.FC = () => {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const { user, logout, changePassword } = useAuth();
   const location = useLocation();
+  
+  const handleLogout = () => {
+    try {
+      logout();
+      // Clear any other relevant data
+      localStorage.removeItem('user_passwords');
+      // Close modal
+      setShowLogoutModal(false);
+      // Redirect to login
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force logout even if there's an error
+      localStorage.clear();
+      navigate('/login', { replace: true });
+    }
+  };
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: '📊' },
@@ -76,19 +95,29 @@ const Layout: React.FC = () => {
         </div>
         
         <nav className="mt-8">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={`nav-item flex items-center px-4 py-3 text-sm font-medium ${
-                isActive(item.href) ? 'active' : ''
-              }`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <span className="mr-3 text-lg">{item.icon}</span>
-              {item.name}
-            </Link>
-          ))}
+          {navigation.map((item) => {
+            const isCurrentlyActive = isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`nav-item flex items-center px-4 py-3 text-sm font-medium transition-colors ${
+                  isCurrentlyActive ? 'active bg-blue-50 border-l-4 border-blue-600 font-semibold text-blue-700' : 'hover:bg-gray-50 text-gray-700'
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSidebarOpen(false);
+                  navigate(item.href);
+                }}
+              >
+                <span className="mr-3 text-lg">{item.icon}</span>
+                {item.name}
+                {isCurrentlyActive && (
+                  <span className="ml-auto w-2 h-2 bg-blue-600 rounded-full"></span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="absolute bottom-0 w-full p-4 border-t">
@@ -106,8 +135,8 @@ const Layout: React.FC = () => {
                 🔒
               </button>
               <button
-                onClick={logout}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowLogoutModal(true)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                 title="Logout"
               >
                 🚪
@@ -116,6 +145,32 @@ const Layout: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-bold mb-4">Confirm Logout</h2>
+            <p className="text-gray-600 mb-6">Are you sure you want to log out? You will need to sign in again to access your account.</p>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Change Password Modal */}
       {showPasswordModal && (
