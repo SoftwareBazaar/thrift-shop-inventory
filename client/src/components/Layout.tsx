@@ -14,6 +14,7 @@ const Layout: React.FC = () => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: '📊' },
     { name: 'Inventory', href: '/inventory', icon: '📦' },
+    { name: 'Record Sale', href: '/record-sale', icon: '💳' },
     { name: 'Sales', href: '/sales', icon: '💰' },
     ...(user?.role === 'admin' ? [
       { name: 'Reports', href: '/reports', icon: '📈' },
