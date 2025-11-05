@@ -38,9 +38,10 @@ const Login: React.FC = () => {
         <div className="text-center">
           <div className="mx-auto h-32 sm:h-40 w-auto flex items-center justify-center mb-6">
             <img 
-              src="/sta-logo.png.png" 
+              src={process.env.PUBLIC_URL + '/sta-logo.png.png'}
               alt="Street Thrift Apparel Logo" 
               className="h-32 sm:h-40 w-auto object-contain"
+              style={{maxWidth: '100%'}}
             />
           </div>
           <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">

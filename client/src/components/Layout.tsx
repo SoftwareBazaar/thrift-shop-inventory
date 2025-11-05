@@ -61,9 +61,10 @@ const Layout: React.FC = () => {
       } lg:translate-x-0`}>
         <div className="flex items-center justify-center h-24 sm:h-28 border-b py-2" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
-            src="/sta-logo.png.png" 
+            src={process.env.PUBLIC_URL + '/sta-logo.png.png'}
             alt="Street Thrift Apparel Logo" 
             className="h-20 sm:h-24 md:h-28 w-auto object-contain px-2"
+            style={{maxWidth: '100%'}}
           />
           <button
             onClick={() => setSidebarOpen(false)}
