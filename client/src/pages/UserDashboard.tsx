@@ -66,6 +66,8 @@ const UserDashboard: React.FC = () => {
       
       const periodSalesData = allSales.filter((sale: any) => {
         const saleDate = new Date(sale.date_time);
+        // Filter out credit sales for non-admin users
+        if (sale.sale_type === 'credit') return false;
         return saleDate >= periodStart && sale.recorded_by === user?.user_id;
       });
       
