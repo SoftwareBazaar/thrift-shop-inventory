@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { mockApi } from '../services/mockData';
@@ -55,6 +55,28 @@ const Inventory: React.FC = () => {
   });
   const [addStockQuantity, setAddStockQuantity] = useState('');
 
+  const fetchItems = useCallback(async () => {
+    try {
+      // For non-admin users, pass their stall_id to get only distributed stock
+      const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
+      const response = await mockApi.getInventory(stallId);
+      setItems(response.items);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.role, user?.stall_id]);
+
+  const fetchSales = useCallback(async () => {
+    try {
+      const response = await mockApi.getSales();
+      setSalesData(response.sales);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchItems();
     fetchCategories();
@@ -68,29 +90,7 @@ const Inventory: React.FC = () => {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, []);
-
-  const fetchItems = async () => {
-    try {
-      // For non-admin users, pass their stall_id to get only distributed stock
-      const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
-      const response = await mockApi.getInventory(stallId);
-      setItems(response.items);
-    } catch (error) {
-      console.error('Error fetching items:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSales = async () => {
-    try {
-      const response = await mockApi.getSales();
-      setSalesData(response.sales);
-    } catch (error) {
-      console.error('Error fetching sales:', error);
-    }
-  };
+  }, [fetchItems, fetchSales]);
 
   const fetchCategories = async () => {
     try {
