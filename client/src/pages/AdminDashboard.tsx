@@ -55,11 +55,17 @@ const AdminDashboard: React.FC = () => {
     total_amount: '',
     sale_type: 'cash' as 'cash' | 'credit' | 'mobile' | 'split',
     cash_amount: '',
-    mobile_amount: ''
+    mobile_amount: '',
+    recorded_by: ''
   });
+  const [users, setUsers] = useState<any[]>([]);
 
   const fetchAdminData = useCallback(async () => {
     try {
+      // Fetch users for "Recorded By" dropdown
+      const usersResponse = await mockApi.getUsers();
+      setUsers(usersResponse.users || []);
+
       // Fetch stalls
       const stallsResponse = await mockApi.getStalls();
       setStalls(stallsResponse.stalls || []);
@@ -486,7 +492,8 @@ const AdminDashboard: React.FC = () => {
                           total_amount: sale.total_amount.toString(),
                           sale_type: sale.sale_type as 'cash' | 'credit' | 'mobile' | 'split',
                           cash_amount: sale.cash_amount?.toString() || '',
-                          mobile_amount: sale.mobile_amount?.toString() || ''
+                          mobile_amount: sale.mobile_amount?.toString() || '',
+                          recorded_by: sale.recorded_by.toString()
                         });
                         setShowEditSaleModal(true);
                       }}
@@ -560,7 +567,8 @@ const AdminDashboard: React.FC = () => {
                   quantity_sold: parseInt(editSaleData.quantity_sold),
                   unit_price: parseFloat(editSaleData.unit_price),
                   total_amount: parseFloat(editSaleData.total_amount),
-                  sale_type: editSaleData.sale_type
+                  sale_type: editSaleData.sale_type,
+                  recorded_by: parseInt(editSaleData.recorded_by)
                 };
                 
                 if (editSaleData.sale_type === 'split') {
@@ -652,6 +660,23 @@ const AdminDashboard: React.FC = () => {
                   <option value="mobile">Mobile</option>
                   <option value="credit">Credit</option>
                   <option value="split">Split (Cash + Mobile)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Recorded By *</label>
+                <select
+                  value={editSaleData.recorded_by}
+                  onChange={(e) => setEditSaleData(prev => ({ ...prev, recorded_by: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select a user...</option>
+                  {users.map((user) => (
+                    <option key={user.user_id} value={user.user_id}>
+                      {user.full_name} ({user.role})
+                    </option>
+                  ))}
                 </select>
               </div>
 

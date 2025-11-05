@@ -411,6 +411,12 @@ export const mockApi = {
       throw new Error('Sale not found');
     }
     // Update sale with new data, preserving existing fields
+    const updatedRecordedBy = saleData.recorded_by !== undefined ? saleData.recorded_by : sales[saleIndex].recorded_by;
+    // Find the user name for the updated recorded_by
+    const users = getStorageData<User[]>('users', mockUsers);
+    const recordedByUser = users.find(u => u.user_id === updatedRecordedBy);
+    const recordedByName = recordedByUser ? recordedByUser.full_name : sales[saleIndex].recorded_by_name;
+    
     sales[saleIndex] = { 
       ...sales[saleIndex], 
       ...saleData,
@@ -419,8 +425,8 @@ export const mockApi = {
       item_name: sales[saleIndex].item_name,
       category: sales[saleIndex].category,
       date_time: sales[saleIndex].date_time,
-      recorded_by: sales[saleIndex].recorded_by,
-      recorded_by_name: sales[saleIndex].recorded_by_name,
+      recorded_by: updatedRecordedBy,
+      recorded_by_name: recordedByName,
       stall_name: sales[saleIndex].stall_name,
       customer_name: sales[saleIndex].customer_name,
       customer_contact: sales[saleIndex].customer_contact,
