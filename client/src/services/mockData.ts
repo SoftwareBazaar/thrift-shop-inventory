@@ -396,21 +396,43 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    // For admin users, calculate stock as: (initial + added) - all distributions
-    // Admin's stock decreases when they distribute to users
+    // For admin users, calculate stock as: sum of all users' current stock
+    // Admin's stock = total available inventory across all stalls
     const itemsWithDistributedStock = items.map(item => {
-      // Calculate total distributed for this item (across all stalls)
-      const totalDistributedForItem = distributions
+      // Get all unique stalls that received this item
+      const stallsWithItem = distributions
         .filter(d => d.item_id === item.item_id)
-        .reduce((sum, d) => sum + d.quantity_allocated, 0);
+        .map(d => d.stall_id);
+      const uniqueStallIds = [...new Set(stallsWithItem)];
       
-      // Admin's current stock = total original stock - all distributions
-      const totalOriginalStock = item.initial_stock + item.total_added;
-      const adminCurrentStock = Math.max(0, totalOriginalStock - totalDistributedForItem);
+      // Calculate total current stock across all stalls
+      let totalCurrentStockAcrossStalls = 0;
+      
+      uniqueStallIds.forEach(stallId => {
+        // Get all distributions to this stall for this item
+        const stallDistributions = distributions
+          .filter(d => d.item_id === item.item_id && d.stall_id === stallId);
+        const totalDistributedToStall = stallDistributions.reduce(
+          (sum, d) => sum + d.quantity_allocated, 0
+        );
+        
+        // Get sales from this stall for this item
+        const stall = stalls.find(s => s.stall_id === stallId);
+        const stallSales = stall ? sales.filter(
+          s => s.item_id === item.item_id && s.stall_name === stall.stall_name
+        ) : [];
+        const totalSoldFromStall = stallSales.reduce(
+          (sum, s) => sum + s.quantity_sold, 0
+        );
+        
+        // Current stock at this stall = distributed - sold
+        const currentStockAtStall = Math.max(0, totalDistributedToStall - totalSoldFromStall);
+        totalCurrentStockAcrossStalls += currentStockAtStall;
+      });
       
       return {
         ...item,
-        current_stock: adminCurrentStock,
+        current_stock: totalCurrentStockAcrossStalls,
         // Keep initial_stock and total_added as they represent the item's history
       };
     });
