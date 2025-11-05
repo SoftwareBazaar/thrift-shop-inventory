@@ -61,26 +61,7 @@ const Layout: React.FC = () => {
       } lg:translate-x-0`}>
         <div className="flex items-center justify-center h-24 sm:h-28 border-b py-2" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
-            src="/sta-logo.png.png"
-            onError={(e) => {
-              console.error('Logo failed to load from:', e.currentTarget.src);
-              console.error('Trying alternative paths...');
-              // Try multiple alternative paths
-              const paths = [
-                '/sta-logo.png.png',
-                './sta-logo.png.png',
-                `${window.location.origin}/sta-logo.png.png`,
-                '/sta-logo.png',
-                './sta-logo.png'
-              ];
-              const currentIndex = paths.indexOf(e.currentTarget.src);
-              if (currentIndex < paths.length - 1) {
-                e.currentTarget.src = paths[currentIndex + 1];
-              } else {
-                console.error('All logo paths failed. Please check if sta-logo.png.png exists in public folder.');
-              }
-            }}
-            onLoad={() => console.log('Logo loaded successfully!')}
+            src={`${process.env.PUBLIC_URL || ''}/sta-logo.png.png`}
             alt="Street Thrift Apparel Logo" 
             className="h-20 sm:h-24 md:h-28 w-auto object-contain px-2"
             style={{maxWidth: '100%', display: 'block'}}

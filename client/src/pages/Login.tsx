@@ -38,15 +38,7 @@ const Login: React.FC = () => {
         <div className="text-center">
           <div className="mx-auto h-32 sm:h-40 w-auto flex items-center justify-center mb-6">
             <img 
-              src="/sta-logo.png.png"
-              onError={(e) => {
-                console.error('Logo failed to load:', e.currentTarget.src);
-                // Try alternative paths
-                const altSrc = e.currentTarget.src.replace('.png.png', '.png');
-                if (altSrc !== e.currentTarget.src) {
-                  e.currentTarget.src = altSrc;
-                }
-              }}
+              src={`${process.env.PUBLIC_URL || ''}/sta-logo.png.png`}
               alt="Street Thrift Apparel Logo" 
               className="h-32 sm:h-40 w-auto object-contain"
               style={{maxWidth: '100%', display: 'block'}}
