@@ -332,7 +332,7 @@ export const mockApi = {
       // Preserve existing fields that shouldn't be changed
       item_id: items[itemIndex].item_id,
       date_added: items[itemIndex].date_added,
-      initial_stock: items[itemIndex].initial_stock,
+      initial_stock: itemData.initial_stock !== undefined ? itemData.initial_stock : items[itemIndex].initial_stock,
       current_stock: itemData.current_stock !== undefined ? itemData.current_stock : items[itemIndex].current_stock,
       total_allocated: items[itemIndex].total_allocated,
       total_added: itemData.total_added !== undefined ? itemData.total_added : items[itemIndex].total_added,
