@@ -75,7 +75,7 @@ const AdminDashboard: React.FC = () => {
       }, 0);
 
       // Stock Value = Revenue - Investment (negative until break-even, then profit)
-      const stockValue = totalRevenue - totalStockInvestment;
+      // (calculated in the render section)
 
       // Calculate top selling items from actual sales
       const itemSalesMap = new Map<string, { total_sold: number; revenue: number }>();
@@ -133,7 +133,7 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriod]);
+  }, []);
 
   useEffect(() => {
     fetchAdminData();
