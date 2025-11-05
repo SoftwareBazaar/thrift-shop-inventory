@@ -44,7 +44,8 @@ code {
 /* Custom components */
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    min-height: 44px; /* Touch-friendly minimum height */
   }
   
   .btn-primary {
@@ -80,7 +81,8 @@ code {
   }
   
   .form-input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors;
+    @apply w-full px-3 py-2 sm:py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-base;
+    min-height: 44px; /* Touch-friendly minimum height */
   }
   
   .form-label {
@@ -96,11 +98,18 @@ code {
   }
   
   .table th {
-    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
+    @apply px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
   }
   
   .table td {
-    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+    @apply px-3 sm:px-6 py-4 text-sm text-gray-900;
+  }
+
+  /* Responsive table cells - allow wrapping on mobile */
+  @media (max-width: 640px) {
+    .table td {
+      @apply whitespace-normal;
+    }
   }
   
   .status-badge {
@@ -192,14 +201,21 @@ code {
 
 /* Modal styles */
 .modal-overlay {
-  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4;
 }
 
 .modal-content {
-  @apply bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-screen overflow-y-auto;
+  @apply bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto;
 }
 
-/* Mobile responsive */
+/* Mobile modal improvements */
+@media (max-width: 640px) {
+  .modal-content {
+    @apply max-w-full mx-2 max-h-[95vh];
+  }
+}
+
+/* Mobile responsive improvements */
 @media (max-width: 768px) {
   .mobile-stack {
     @apply flex-col;
@@ -211,6 +227,72 @@ code {
   
   .mobile-hidden {
     @apply hidden;
+  }
+
+  /* Better table scrolling on mobile */
+  .table-container {
+    @apply -mx-4 sm:mx-0;
+  }
+
+  /* Touch-friendly buttons */
+  .btn {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Better form inputs on mobile */
+  .form-input {
+    @apply text-base; /* Prevents zoom on iOS */
+  }
+
+  /* Modal improvements for mobile */
+  .modal-content {
+    @apply mx-2 max-h-[90vh] rounded-lg;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 640px) {
+  /* Reduce padding on very small screens */
+  .card-body {
+    @apply px-3 py-3;
+  }
+
+  .card-header {
+    @apply px-3 py-3;
+  }
+
+  /* Better text sizing */
+  h1 {
+    @apply text-2xl;
+  }
+
+  h2 {
+    @apply text-xl;
+  }
+
+  h3 {
+    @apply text-lg;
+  }
+}
+
+/* Tablet improvements */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .table td, .table th {
+    @apply px-4 py-3 text-sm;
+  }
+}
+
+/* Better scrolling on mobile */
+@media (max-width: 768px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Ensure cards don't overflow on mobile */
+@media (max-width: 640px) {
+  .card {
+    @apply mx-0;
   }
 }
 
