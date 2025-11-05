@@ -365,14 +365,6 @@ export const mockApi = {
         (sum, d) => sum + d.quantity_allocated, 0
       );
       
-      // Calculate total sold across all stalls for this item
-      const allSalesForItem = sales.filter(
-        s => s.item_id === item.item_id
-      );
-      const totalSold = allSalesForItem.reduce(
-        (sum, s) => sum + s.quantity_sold, 0
-      );
-      
       // Admin sees total distributed stock (sum of all distributed stock)
       // This represents the total stock available across all stalls
       return {
