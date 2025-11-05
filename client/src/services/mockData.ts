@@ -355,21 +355,16 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    // For admin users, show total distributed stock across all stalls
+    // For admin users, show total original stock (initial + added) regardless of distributions
+    // Admin's stock should remain at the original total even after distributions
     const itemsWithDistributedStock = items.map(item => {
-      // Calculate total distributed across all stalls
-      const allDistributions = distributions.filter(
-        d => d.item_id === item.item_id
-      );
-      const totalDistributed = allDistributions.reduce(
-        (sum, d) => sum + d.quantity_allocated, 0
-      );
+      // Admin sees the original total stock (initial_stock + total_added)
+      // This represents the total stock the admin originally had, not reduced by distributions
+      const totalOriginalStock = item.initial_stock + item.total_added;
       
-      // Admin sees total distributed stock (sum of all distributed stock)
-      // This represents the total stock available across all stalls
       return {
         ...item,
-        current_stock: totalDistributed > 0 ? totalDistributed : item.current_stock,
+        current_stock: totalOriginalStock,
         // Keep initial_stock and total_added as they represent the item's history
       };
     });
