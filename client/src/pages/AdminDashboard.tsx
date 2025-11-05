@@ -64,11 +64,6 @@ const AdminDashboard: React.FC = () => {
       setAllSales(recentSalesResponse.sales || []);
       setRecentSales(recentSalesResponse.sales.slice(0, 10) || []);
 
-      // Calculate total stock investment (current stock * buying price)
-      const totalStockInvestment = items.reduce((sum: number, item: any) => {
-        return sum + (item.current_stock * (item.buying_price || 0));
-      }, 0);
-
       // Calculate total revenue from sales
       const totalRevenue = recentSalesResponse.sales.reduce((sum: number, sale: any) => {
         return sum + (sale.total_amount || 0);
