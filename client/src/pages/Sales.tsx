@@ -456,7 +456,7 @@ const Sales: React.FC = () => {
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {sale.sale_type === 'split' 
-                        ? `Split (Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'})`
+                        ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
                   </td>

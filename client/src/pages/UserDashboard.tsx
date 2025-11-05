@@ -44,12 +44,12 @@ const UserDashboard: React.FC = () => {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      // Fetch items for this user's stall
-      const itemsResponse = await mockApi.getInventory();
-      const allItems = itemsResponse.items || [];
+      // Fetch items for this user's stall - pass stall_id to get user-specific stock
+      const itemsResponse = await mockApi.getInventory(user?.stall_id);
+      const userItems = itemsResponse.items || [];
       
-      // Filter items for user's stall (in real system, this would be filtered by stall_id)
-      setItems(allItems);
+      // Set items with user's distributed stock (not admin's total stock)
+      setItems(userItems);
 
       // Fetch sales
       const salesResponse = await mockApi.getSales();
@@ -208,7 +208,9 @@ const UserDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Available Items</h3>
-              <p className="text-2xl font-bold text-purple-600">{items.length}</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {items.reduce((sum, item) => sum + (item.current_stock || 0), 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -333,7 +335,7 @@ const UserDashboard: React.FC = () => {
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {sale.sale_type === 'split' 
-                        ? `Split (Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'})`
+                        ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
                   </td>
