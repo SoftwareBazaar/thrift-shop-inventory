@@ -45,7 +45,9 @@ const Inventory: React.FC = () => {
     item_name: '',
     category: '',
     unit_price: '',
-    sku: ''
+    sku: '',
+    initial_stock: '',
+    total_added: ''
   });
   const [distributionData, setDistributionData] = useState({
     item_id: 0,
@@ -220,11 +222,20 @@ const Inventory: React.FC = () => {
     if (!selectedItem) return;
 
     try {
+      const initialStock = parseInt(editFormData.initial_stock);
+      const totalAdded = parseInt(editFormData.total_added);
+      
+      // Calculate current_stock based on initial_stock and total_added
+      // Note: current_stock = initial_stock + total_added - distributed
+      // We'll keep current_stock as is, but update initial_stock and total_added
+      
       await mockApi.updateItem(selectedItem.item_id, {
         item_name: editFormData.item_name,
         category: editFormData.category,
         unit_price: parseFloat(editFormData.unit_price),
-        sku: editFormData.sku || undefined
+        sku: editFormData.sku || undefined,
+        initial_stock: initialStock,
+        total_added: totalAdded
       });
       
       setShowEditModal(false);
@@ -472,7 +483,9 @@ const Inventory: React.FC = () => {
                               item_name: item.item_name,
                               category: item.category,
                               unit_price: item.unit_price.toString(),
-                              sku: item.sku || ''
+                              sku: item.sku || '',
+                              initial_stock: item.initial_stock.toString(),
+                              total_added: item.total_added.toString()
                             });
                             setShowEditModal(true);
                           }}
@@ -732,6 +745,32 @@ const Inventory: React.FC = () => {
                   onChange={(e) => setEditFormData(prev => ({ ...prev, sku: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Initial Stock *</label>
+                <input
+                  type="number"
+                  value={editFormData.initial_stock}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, initial_stock: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">Original stock quantity when item was added</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Items Added (Total) *</label>
+                <input
+                  type="number"
+                  value={editFormData.total_added}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, total_added: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">Total quantity added after initial stock</p>
               </div>
 
               <div className="flex justify-end space-x-3">

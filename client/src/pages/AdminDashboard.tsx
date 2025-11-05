@@ -47,6 +47,16 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [showEditSaleModal, setShowEditSaleModal] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [editSaleData, setEditSaleData] = useState({
+    quantity_sold: '',
+    unit_price: '',
+    total_amount: '',
+    sale_type: 'cash' as 'cash' | 'credit' | 'mobile' | 'split',
+    cash_amount: '',
+    mobile_amount: ''
+  });
 
   const fetchAdminData = useCallback(async () => {
     try {
@@ -280,9 +290,9 @@ const AdminDashboard: React.FC = () => {
             <div className="flex-shrink-0">
               <span className="text-3xl">📊</span>
             </div>
-            <div className="ml-4">
+            <div className="ml-4 flex-1 min-w-0">
               <h3 className="text-lg font-medium text-gray-900">Stock Value</h3>
-              <p className={`text-2xl font-bold ${(() => {
+              <p className={`text-xl sm:text-2xl font-bold break-words ${(() => {
                 const items = inventoryResponse?.items || [];
                 const totalStockInvestment = items.reduce((sum: number, item: any) => {
                   return sum + (item.current_stock * (item.buying_price || 0));
@@ -421,6 +431,7 @@ const AdminDashboard: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold By</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stall</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -464,6 +475,25 @@ const AdminDashboard: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(sale.date_time).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setSelectedSale(sale);
+                        setEditSaleData({
+                          quantity_sold: sale.quantity_sold.toString(),
+                          unit_price: sale.unit_price.toString(),
+                          total_amount: sale.total_amount.toString(),
+                          sale_type: sale.sale_type as 'cash' | 'credit' | 'mobile' | 'split',
+                          cash_amount: sale.cash_amount?.toString() || '',
+                          mobile_amount: sale.mobile_amount?.toString() || ''
+                        });
+                        setShowEditSaleModal(true);
+                      }}
+                      className="text-purple-600 hover:text-purple-900"
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -514,6 +544,162 @@ const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Sale Modal */}
+      {showEditSaleModal && selectedSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Sale</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const updateData: any = {
+                  quantity_sold: parseInt(editSaleData.quantity_sold),
+                  unit_price: parseFloat(editSaleData.unit_price),
+                  total_amount: parseFloat(editSaleData.total_amount),
+                  sale_type: editSaleData.sale_type
+                };
+                
+                if (editSaleData.sale_type === 'split') {
+                  updateData.cash_amount = parseFloat(editSaleData.cash_amount);
+                  updateData.mobile_amount = parseFloat(editSaleData.mobile_amount);
+                }
+                
+                await mockApi.updateSale(selectedSale.sale_id, updateData);
+                setShowEditSaleModal(false);
+                fetchAdminData();
+                alert('Sale updated successfully!');
+              } catch (error: any) {
+                alert(error.message || 'Failed to update sale');
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
+                <input
+                  type="text"
+                  value={selectedSale.item_name}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Sold *</label>
+                <input
+                  type="number"
+                  value={editSaleData.quantity_sold}
+                  onChange={(e) => {
+                    const qty = parseInt(e.target.value) || 0;
+                    const price = parseFloat(editSaleData.unit_price) || 0;
+                    setEditSaleData(prev => ({
+                      ...prev,
+                      quantity_sold: e.target.value,
+                      total_amount: (qty * price).toString()
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
+                <input
+                  type="number"
+                  value={editSaleData.unit_price}
+                  onChange={(e) => {
+                    const qty = parseInt(editSaleData.quantity_sold) || 0;
+                    const price = parseFloat(e.target.value) || 0;
+                    setEditSaleData(prev => ({
+                      ...prev,
+                      unit_price: e.target.value,
+                      total_amount: (qty * price).toString()
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (KES) *</label>
+                <input
+                  type="number"
+                  value={editSaleData.total_amount}
+                  onChange={(e) => setEditSaleData(prev => ({ ...prev, total_amount: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sale Type *</label>
+                <select
+                  value={editSaleData.sale_type}
+                  onChange={(e) => setEditSaleData(prev => ({ ...prev, sale_type: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="cash">Cash</option>
+                  <option value="mobile">Mobile</option>
+                  <option value="credit">Credit</option>
+                  <option value="split">Split (Cash + Mobile)</option>
+                </select>
+              </div>
+
+              {editSaleData.sale_type === 'split' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cash Amount (KES) *</label>
+                    <input
+                      type="number"
+                      value={editSaleData.cash_amount}
+                      onChange={(e) => setEditSaleData(prev => ({ ...prev, cash_amount: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      min="0.01"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Amount (KES) *</label>
+                    <input
+                      type="number"
+                      value={editSaleData.mobile_amount}
+                      onChange={(e) => setEditSaleData(prev => ({ ...prev, mobile_amount: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      min="0.01"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditSaleModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  Update Sale
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

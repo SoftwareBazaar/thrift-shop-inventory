@@ -410,7 +410,22 @@ export const mockApi = {
     if (saleIndex === -1) {
       throw new Error('Sale not found');
     }
-    sales[saleIndex] = { ...sales[saleIndex], ...saleData };
+    // Update sale with new data, preserving existing fields
+    sales[saleIndex] = { 
+      ...sales[saleIndex], 
+      ...saleData,
+      // Preserve fields that shouldn't change
+      sale_id: sales[saleIndex].sale_id,
+      item_name: sales[saleIndex].item_name,
+      category: sales[saleIndex].category,
+      date_time: sales[saleIndex].date_time,
+      recorded_by: sales[saleIndex].recorded_by,
+      recorded_by_name: sales[saleIndex].recorded_by_name,
+      stall_name: sales[saleIndex].stall_name,
+      customer_name: sales[saleIndex].customer_name,
+      customer_contact: sales[saleIndex].customer_contact,
+      buying_price: sales[saleIndex].buying_price
+    };
     setStorageData('sales', sales);
     return { sale: sales[saleIndex] };
   },
