@@ -38,7 +38,7 @@ const Login: React.FC = () => {
         <div className="text-center">
           <div className="mx-auto h-32 sm:h-40 w-auto flex items-center justify-center mb-6">
             <img 
-              src="/sta-logo.png" 
+              src="/sta-logo.png.png" 
               alt="Street Thrift Apparel Logo" 
               className="h-32 sm:h-40 w-auto object-contain"
             />

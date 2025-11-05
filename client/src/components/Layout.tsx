@@ -61,7 +61,7 @@ const Layout: React.FC = () => {
       } lg:translate-x-0`}>
         <div className="flex items-center justify-center h-20 border-b" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
-            src="/sta-logo.png" 
+            src="/sta-logo.png.png" 
             alt="Street Thrift Apparel Logo" 
             className="h-16 sm:h-20 w-auto object-contain px-2"
           />
