@@ -147,20 +147,26 @@ const AdminDashboard: React.FC = () => {
     }).format(amount);
   };
 
-  const getStallSalesSummary = (stallName: string): { revenue: number; count: number; contributors: string[] } => {
+  const getStallSalesSummary = (stallName: string): { revenue: number; count: number; contributors: Array<{ name: string; amount: number }> } => {
     const stallSales = allSales.filter(sale => sale.stall_name === stallName);
     const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
     const count = stallSales.length;
     
-    // Get all contributors (unique users who made sales)
-    const contributors = new Set<string>();
+    // Get all contributors with their individual contribution amounts
+    const contributorMap = new Map<string, number>();
     stallSales.forEach(sale => {
       if (sale.recorded_by_name) {
-        contributors.add(sale.recorded_by_name);
+        const currentAmount = contributorMap.get(sale.recorded_by_name) || 0;
+        contributorMap.set(sale.recorded_by_name, currentAmount + sale.total_amount);
       }
     });
     
-    return { revenue, count, contributors: Array.from(contributors) };
+    // Convert to array and sort by amount (descending)
+    const contributors = Array.from(contributorMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    
+    return { revenue, count, contributors };
   };
 
   const downloadReport = async (type: 'pdf' | 'excel') => {
@@ -372,11 +378,12 @@ const AdminDashboard: React.FC = () => {
                     {summary.contributors.length > 0 && (
                       <div className="mt-2">
                         <p className="text-xs text-gray-500">Contributors:</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {summary.contributors.map((contributor: string, idx: number) => (
-                            <span key={idx} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                              {contributor}
-                            </span>
+                        <div className="flex flex-col gap-1 mt-1">
+                          {summary.contributors.map((contributor, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-xs bg-blue-50 border border-blue-200 px-2 py-1 rounded">
+                              <span className="font-medium text-blue-900">{contributor.name}</span>
+                              <span className="text-blue-700 font-semibold">{formatCurrency(contributor.amount)}</span>
+                            </div>
                           ))}
                         </div>
                       </div>
