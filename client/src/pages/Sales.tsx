@@ -240,6 +240,7 @@ const Sales: React.FC = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items Sold</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cash</th>
@@ -260,6 +261,7 @@ const Sales: React.FC = () => {
                         totalRevenue: 0,
                         cash: 0,
                         mobile: 0,
+                        items: {} as Record<string, number>,
                         ...(user?.role === 'admin' && { credit: 0 })
                       };
                     }
@@ -268,33 +270,53 @@ const Sales: React.FC = () => {
                     if (sale.sale_type === 'cash') acc[userName].cash += 1;
                     if (sale.sale_type === 'mobile') acc[userName].mobile += 1;
                     if (user?.role === 'admin' && sale.sale_type === 'credit') acc[userName].credit += 1;
+                    
+                    // Track items sold
+                    const itemName = sale.item_name;
+                    if (!acc[userName].items[itemName]) {
+                      acc[userName].items[itemName] = 0;
+                    }
+                    acc[userName].items[itemName] += sale.quantity_sold;
+                    
                     return acc;
                   }, {} as any);
 
-                  return Object.values(userSalesMap).map((userSales: any) => (
-                    <tr key={userSales.name} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {userSales.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {userSales.totalSales}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {formatCurrency(userSales.totalRevenue)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {userSales.cash}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {userSales.mobile}
-                      </td>
-                      {user?.role === 'admin' && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {userSales.credit}
+                  return Object.values(userSalesMap).map((userSales: any) => {
+                    // Format items breakdown: "5 Jeans, 3 T-shirts"
+                    const itemsBreakdown = Object.entries(userSales.items)
+                      .map(([itemName, quantity]) => `${quantity} ${itemName}`)
+                      .join(', ');
+
+                    return (
+                      <tr key={userSales.name} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {userSales.name}
                         </td>
-                      )}
-                    </tr>
-                  ));
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="max-w-xs">
+                            {itemsBreakdown || 'No items'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {userSales.totalSales}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          {formatCurrency(userSales.totalRevenue)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {userSales.cash}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {userSales.mobile}
+                        </td>
+                        {user?.role === 'admin' && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {userSales.credit}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  });
                 })()}
               </tbody>
             </table>
