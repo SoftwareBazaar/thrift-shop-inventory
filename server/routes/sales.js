@@ -61,10 +61,26 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Insufficient stock available' });
     }
 
-    // Get user's stall_id
-    const stall_id = req.user.stall_id;
+    // Get stall_id from request body (admin can select any stall), or use user's stall_id
+    let stall_id = req.body.stall_id;
     if (!stall_id) {
-      return res.status(400).json({ message: 'User not assigned to a stall' });
+      // If no stall_id provided, try to use user's assigned stall
+      stall_id = req.user.stall_id;
+    }
+    
+    // If still no stall_id, return error
+    if (!stall_id) {
+      return res.status(400).json({ message: 'Stall ID is required. Please select a stall.' });
+    }
+    
+    // Validate that stall exists
+    const stallCheck = await pool.query(
+      'SELECT stall_id FROM stalls WHERE stall_id = $1 AND status = $2',
+      [stall_id, 'active']
+    );
+    
+    if (stallCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Stall not found or inactive' });
     }
 
     const total_amount = quantity_sold * unit_price;

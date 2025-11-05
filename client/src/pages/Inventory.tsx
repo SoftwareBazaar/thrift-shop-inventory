@@ -38,8 +38,15 @@ const Inventory: React.FC = () => {
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [showDistributeModal, setShowDistributeModal] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
+  const [editFormData, setEditFormData] = useState({
+    item_name: '',
+    category: '',
+    unit_price: '',
+    sku: ''
+  });
   const [distributionData, setDistributionData] = useState({
     item_id: 0,
     distributions: [] as Array<{ stall_id: string; quantity: string }>,
@@ -124,15 +131,26 @@ const Inventory: React.FC = () => {
     }
 
     try {
-      // Distribute to each stall
+      let currentStock = selectedItem.current_stock;
+      
+      // Distribute to each stall with stock validation
       for (const dist of distributionData.distributions) {
         const quantity = parseInt(dist.quantity);
         if (quantity > 0 && dist.stall_id) {
+          // Check if we have enough stock
+          if (quantity > currentStock) {
+            alert(`Insufficient stock! Available: ${currentStock}, Requested: ${quantity}. Please reduce the quantity.`);
+            return;
+          }
+          
           // Call API to distribute to this stall
           await mockApi.distributeStock(selectedItem.item_id, {
             stall_id: parseInt(dist.stall_id),
             quantity_allocated: quantity
           });
+          
+          // Update current stock for next iteration
+          currentStock -= quantity;
         }
       }
       
@@ -145,7 +163,7 @@ const Inventory: React.FC = () => {
       fetchItems(); // Refresh items
       alert('Stock distributed successfully!');
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to distribute stock');
+      alert(error.response?.data?.message || error.message || 'Failed to distribute stock. Please check available stock.');
     }
   };
 
@@ -194,6 +212,26 @@ const Inventory: React.FC = () => {
       alert('Stock added successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to add stock');
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    try {
+      await mockApi.updateItem(selectedItem.item_id, {
+        item_name: editFormData.item_name,
+        category: editFormData.category,
+        unit_price: parseFloat(editFormData.unit_price),
+        sku: editFormData.sku || undefined
+      });
+      
+      setShowEditModal(false);
+      fetchItems(); // Refresh items - this will sync to all users
+      alert('Item updated successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to update item');
     }
   };
 
@@ -423,9 +461,24 @@ const Inventory: React.FC = () => {
                             setAddStockQuantity('');
                             setShowAddStockModal(true);
                           }}
-                          className="text-green-600 hover:text-green-900"
+                          className="text-green-600 hover:text-green-900 mr-3"
                         >
                           Add Stock
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedItem(item);
+                            setEditFormData({
+                              item_name: item.item_name,
+                              category: item.category,
+                              unit_price: item.unit_price.toString(),
+                              sku: item.sku || ''
+                            });
+                            setShowEditModal(true);
+                          }}
+                          className="text-purple-600 hover:text-purple-900"
+                        >
+                          Edit
                         </button>
                       </td>
                     )}
@@ -623,6 +676,77 @@ const Inventory: React.FC = () => {
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                 >
                   Add Stock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Item</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                <input
+                  type="text"
+                  value={editFormData.item_name}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, item_name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                <input
+                  type="text"
+                  value={editFormData.category}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
+                <input
+                  type="number"
+                  value={editFormData.unit_price}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, unit_price: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Optional)</label>
+                <input
+                  type="text"
+                  value={editFormData.sku}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, sku: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  Update Item
                 </button>
               </div>
             </form>

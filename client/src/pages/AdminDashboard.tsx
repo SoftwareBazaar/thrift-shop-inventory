@@ -43,6 +43,7 @@ const AdminDashboard: React.FC = () => {
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
+  const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [showCommissionModal, setShowCommissionModal] = useState(false);
@@ -53,24 +54,76 @@ const AdminDashboard: React.FC = () => {
       const stallsResponse = await mockApi.getStalls();
       setStalls(stallsResponse.stalls || []);
 
-      // Fetch sales data
-      const salesData = await mockApi.getSalesSummary(selectedPeriod);
+      // Fetch inventory for stock value calculation
+      const inventoryResp = await mockApi.getInventory();
+      setInventoryResponse(inventoryResp);
+      const items = inventoryResp.items || [];
 
       // Fetch recent sales
       const recentSalesResponse = await mockApi.getSales();
       setAllSales(recentSalesResponse.sales || []);
       setRecentSales(recentSalesResponse.sales.slice(0, 10) || []);
 
-      // Use analytics data directly
+      // Calculate total stock investment (current stock * buying price)
+      const totalStockInvestment = items.reduce((sum: number, item: any) => {
+        return sum + (item.current_stock * (item.buying_price || 0));
+      }, 0);
+
+      // Calculate total revenue from sales
+      const totalRevenue = recentSalesResponse.sales.reduce((sum: number, sale: any) => {
+        return sum + (sale.total_amount || 0);
+      }, 0);
+
+      // Stock Value = Revenue - Investment (negative until break-even, then profit)
+      const stockValue = totalRevenue - totalStockInvestment;
+
+      // Calculate top selling items from actual sales
+      const itemSalesMap = new Map<string, { total_sold: number; revenue: number }>();
+      recentSalesResponse.sales.forEach((sale: any) => {
+        const existing = itemSalesMap.get(sale.item_name) || { total_sold: 0, revenue: 0 };
+        itemSalesMap.set(sale.item_name, {
+          total_sold: existing.total_sold + sale.quantity_sold,
+          revenue: existing.revenue + sale.total_amount
+        });
+      });
+      
+      const topSellingItems = Array.from(itemSalesMap.entries())
+        .map(([item_name, data]) => ({ item_name, ...data }))
+        .sort((a, b) => b.total_sold - a.total_sold)
+        .slice(0, 5);
+
+      // Calculate user performance (all contributors)
+      const userSalesMap = new Map<string, { sales: number; revenue: number }>();
+      recentSalesResponse.sales.forEach((sale: any) => {
+        const userName = sale.recorded_by_name || 'Unknown';
+        const existing = userSalesMap.get(userName) || { sales: 0, revenue: 0 };
+        userSalesMap.set(userName, {
+          sales: existing.sales + 1,
+          revenue: existing.revenue + sale.total_amount
+        });
+      });
+      
+      const userPerformance = Array.from(userSalesMap.entries())
+        .map(([user_name, data]) => ({ user_name, ...data }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      // Calculate commission data
+      const commissionData = userPerformance.map(user => ({
+        user_name: user.user_name,
+        sales: user.sales,
+        commission: user.revenue * 0.05
+      }));
+
+      // Use analytics data
       const analyticsData: Analytics = {
-        totalRevenue: salesData.totalRevenue,
-        totalSales: salesData.totalSales,
-        totalUnits: salesData.totalUnits,
-        averageSale: salesData.averageSale,
-        topSellingItems: salesData.topSellingItems,
-        userPerformance: salesData.userPerformance,
-        dailySales: salesData.dailySales,
-        commissionData: salesData.commissionData
+        totalRevenue: totalRevenue,
+        totalSales: recentSalesResponse.sales.length,
+        totalUnits: recentSalesResponse.sales.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0),
+        averageSale: recentSalesResponse.sales.length > 0 ? totalRevenue / recentSalesResponse.sales.length : 0,
+        topSellingItems: topSellingItems,
+        userPerformance: userPerformance,
+        dailySales: [],
+        commissionData: commissionData
       };
 
       setAnalytics(analyticsData);
@@ -100,11 +153,20 @@ const AdminDashboard: React.FC = () => {
     }).format(amount);
   };
 
-  const getStallSalesSummary = (stallName: string) => {
+  const getStallSalesSummary = (stallName: string): { revenue: number; count: number; contributors: string[] } => {
     const stallSales = allSales.filter(sale => sale.stall_name === stallName);
     const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
     const count = stallSales.length;
-    return { revenue, count };
+    
+    // Get all contributors (unique users who made sales)
+    const contributors = new Set<string>();
+    stallSales.forEach(sale => {
+      if (sale.recorded_by_name) {
+        contributors.add(sale.recorded_by_name);
+      }
+    });
+    
+    return { revenue, count, contributors: Array.from(contributors) };
   };
 
   const downloadReport = async (type: 'pdf' | 'excel') => {
@@ -219,9 +281,23 @@ const AdminDashboard: React.FC = () => {
               <span className="text-3xl">📊</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Avg Sale</h3>
-              <p className="text-2xl font-bold text-orange-600">
-                {formatCurrency(analytics?.averageSale || 0)}
+              <h3 className="text-lg font-medium text-gray-900">Stock Value</h3>
+              <p className={`text-2xl font-bold ${(() => {
+                const items = inventoryResponse?.items || [];
+                const totalStockInvestment = items.reduce((sum: number, item: any) => {
+                  return sum + (item.current_stock * (item.buying_price || 0));
+                }, 0);
+                const stockValue = (analytics?.totalRevenue || 0) - totalStockInvestment;
+                return stockValue < 0 ? 'text-red-600' : 'text-green-600';
+              })()}`}>
+                {(() => {
+                  const items = inventoryResponse?.items || [];
+                  const totalStockInvestment = items.reduce((sum: number, item: any) => {
+                    return sum + (item.current_stock * (item.buying_price || 0));
+                  }, 0);
+                  const stockValue = (analytics?.totalRevenue || 0) - totalStockInvestment;
+                  return formatCurrency(stockValue);
+                })()}
               </p>
             </div>
           </div>
@@ -299,6 +375,18 @@ const AdminDashboard: React.FC = () => {
                   <div className="mt-2 pt-2 border-t border-gray-300">
                     <p className="text-xs text-gray-600">Sales: {summary.count}</p>
                     <p className="text-sm font-semibold text-blue-600">{formatCurrency(summary.revenue)}</p>
+                    {summary.contributors.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500">Contributors:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {summary.contributors.map((contributor: string, idx: number) => (
+                            <span key={idx} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {contributor}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                     stall.status === 'active' 

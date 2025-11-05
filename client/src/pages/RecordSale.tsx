@@ -238,7 +238,7 @@ const RecordSale: React.FC = () => {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
-                disabled={loading || !!user?.stall_id}
+                disabled={loading}
               >
                 <option value="">-- Select a stall --</option>
                 {stalls.map((stall) => (
@@ -247,7 +247,9 @@ const RecordSale: React.FC = () => {
                   </option>
                 ))}
               </select>
-              {user?.stall_id && <p className="mt-1 text-xs text-gray-500">You are recording for your assigned stall</p>}
+              {user?.stall_id && !formData.stall_id && (
+                <p className="mt-1 text-xs text-gray-500">Your assigned stall will be pre-selected, but you can change it</p>
+              )}
             </div>
 
             {/* Served By (Admin only) */}

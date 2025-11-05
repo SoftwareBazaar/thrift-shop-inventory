@@ -325,7 +325,19 @@ export const mockApi = {
     if (itemIndex === -1) {
       throw new Error('Item not found');
     }
-    items[itemIndex] = { ...items[itemIndex], ...itemData };
+    // Update the item with new data
+    items[itemIndex] = { 
+      ...items[itemIndex], 
+      ...itemData,
+      // Preserve existing fields that shouldn't be changed
+      item_id: items[itemIndex].item_id,
+      date_added: items[itemIndex].date_added,
+      initial_stock: items[itemIndex].initial_stock,
+      current_stock: itemData.current_stock !== undefined ? itemData.current_stock : items[itemIndex].current_stock,
+      total_allocated: items[itemIndex].total_allocated,
+      total_added: itemData.total_added !== undefined ? itemData.total_added : items[itemIndex].total_added,
+      buying_price: items[itemIndex].buying_price
+    };
     setStorageData('items', items);
     return { item: items[itemIndex] };
   },
