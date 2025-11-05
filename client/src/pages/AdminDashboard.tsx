@@ -615,7 +615,7 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES) *</label>
                 <input
                   type="number"
                   value={editSaleData.unit_price}
