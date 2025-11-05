@@ -1,4 +1,6 @@
 // Mock data service for offline demonstration
+// NOTE: In production, this is automatically replaced by databaseService.ts
+// when Supabase credentials are configured
 export interface User {
   user_id: number;
   username: string;
