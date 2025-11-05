@@ -57,7 +57,6 @@ const AdminDashboard: React.FC = () => {
       // Fetch inventory for stock value calculation
       const inventoryResp = await mockApi.getInventory();
       setInventoryResponse(inventoryResp);
-      const items = inventoryResp.items || [];
 
       // Fetch recent sales
       const recentSalesResponse = await mockApi.getSales();
