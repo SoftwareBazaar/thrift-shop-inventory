@@ -404,9 +404,11 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Items Sold
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Buying Price
-                </th>
+                {user?.role === 'admin' && (
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Buying Price
+                  </th>
+                )}
                 {user?.role === 'admin' && (
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Value
@@ -440,9 +442,11 @@ const Inventory: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getItemsSold(item.item_name)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(item.buying_price || 0)}
-                    </td>
+                    {user?.role === 'admin' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(item.buying_price || 0)}
+                      </td>
+                    )}
                     {user?.role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(item.current_stock * (item.buying_price || 0))}
