@@ -1,6 +1,6 @@
 // Database Service - Uses Supabase with real-time sync, falls back to mockData
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { mockApi, type User, type Sale, type Stall, type Item, type SaleInput } from './mockData';
+import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -120,9 +120,9 @@ export const dbApi = {
     }
   },
 
-  createUser: async (userData: Partial<User>) => {
+  createUser: async (userData: any) => {
     if (!isSupabaseConfigured()) {
-      return mockApi.createUser(userData);
+      return mockApi.createUser(userData as any);
     }
 
     try {
@@ -203,9 +203,9 @@ export const dbApi = {
     }
   },
 
-  createItem: async (itemData: Partial<Item>) => {
+  createItem: async (itemData: any) => {
     if (!isSupabaseConfigured()) {
-      return mockApi.createItem(itemData);
+      return mockApi.createItem(itemData as any);
     }
 
     try {
@@ -223,9 +223,9 @@ export const dbApi = {
     }
   },
 
-  updateItem: async (itemId: number, itemData: Partial<Item>) => {
+  updateItem: async (itemId: number, itemData: any) => {
     if (!isSupabaseConfigured()) {
-      return mockApi.updateItem(itemId, itemData);
+      return mockApi.updateItem(itemId, itemData as any);
     }
 
     try {
@@ -250,7 +250,20 @@ export const dbApi = {
     notes?: string;
   }) => {
     if (!isSupabaseConfigured()) {
-      return mockApi.distributeStock(distributionData);
+      // Call mockApi with the correct signature - it expects (itemId, distribution)
+      // We'll call it for each distribution
+      for (const dist of distributionData.distributions) {
+        await mockApi.distributeStock(distributionData.item_id, {
+          stall_id: dist.stall_id,
+          quantity_allocated: dist.quantity
+        });
+      }
+      return { distributions: distributionData.distributions.map(d => ({
+        item_id: distributionData.item_id,
+        stall_id: d.stall_id,
+        quantity_allocated: d.quantity,
+        date_distributed: new Date().toISOString()
+      })) };
     }
 
     try {
@@ -329,7 +342,7 @@ export const dbApi = {
     }
   },
 
-  updateSale: async (saleId: number, saleData: Partial<Sale>) => {
+  updateSale: async (saleId: number, saleData: any) => {
     if (!isSupabaseConfigured()) {
       // Mock implementation
       return { sale: { ...saleData, sale_id: saleId } as Sale };
