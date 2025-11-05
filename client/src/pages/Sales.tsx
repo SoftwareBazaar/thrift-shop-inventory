@@ -83,6 +83,11 @@ const Sales: React.FC = () => {
 
   // Filtering logic
   const filteredSales = sales.filter(sale => {
+    // Non-admin users cannot see credit sales
+    if (user?.role !== 'admin' && sale.sale_type === 'credit') {
+      return false;
+    }
+    
     // Non-admin users can only see their own sales
     if (user?.role !== 'admin' && sale.recorded_by !== user?.user_id) {
       return false;
@@ -209,19 +214,21 @@ const Sales: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <span className="text-xl">💳</span>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-600">Credit Sales</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {filteredSales.filter(sale => sale.sale_type === 'credit').length}
-              </p>
+        {user?.role === 'admin' && (
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <span className="text-xl">💳</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-gray-600">Credit Sales</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {filteredSales.filter(sale => sale.sale_type === 'credit').length}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* User Sales Summary */}
@@ -237,7 +244,9 @@ const Sales: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cash</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                  {user?.role === 'admin' && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -251,14 +260,14 @@ const Sales: React.FC = () => {
                         totalRevenue: 0,
                         cash: 0,
                         mobile: 0,
-                        credit: 0
+                        ...(user?.role === 'admin' && { credit: 0 })
                       };
                     }
                     acc[userName].totalSales += 1;
                     acc[userName].totalRevenue += sale.total_amount;
                     if (sale.sale_type === 'cash') acc[userName].cash += 1;
                     if (sale.sale_type === 'mobile') acc[userName].mobile += 1;
-                    if (sale.sale_type === 'credit') acc[userName].credit += 1;
+                    if (user?.role === 'admin' && sale.sale_type === 'credit') acc[userName].credit += 1;
                     return acc;
                   }, {} as any);
 
@@ -279,9 +288,11 @@ const Sales: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {userSales.mobile}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {userSales.credit}
-                      </td>
+                      {user?.role === 'admin' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {userSales.credit}
+                        </td>
+                      )}
                     </tr>
                   ));
                 })()}
@@ -338,7 +349,9 @@ const Sales: React.FC = () => {
               <option value="">All Types</option>
               <option value="cash">Cash Sales</option>
               <option value="mobile">Mobile Sales</option>
-              <option value="credit">Credit Sales</option>
+              {user?.role === 'admin' && (
+                <option value="credit">Credit Sales</option>
+              )}
             </select>
           </div>
 
