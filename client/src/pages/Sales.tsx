@@ -177,9 +177,9 @@ const Sales: React.FC = () => {
             <div className="p-2 bg-green-100 rounded-lg">
               <span className="text-xl">💵</span>
             </div>
-            <div className="ml-3">
+            <div className="ml-3 flex-1 min-w-0">
               <p className="text-sm text-gray-600">Total Revenue</p>
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-sm sm:text-base font-semibold text-gray-900 break-words">
                 {formatCurrency(filteredSales.reduce((sum, sale) => sum + sale.total_amount, 0))}
               </p>
             </div>
