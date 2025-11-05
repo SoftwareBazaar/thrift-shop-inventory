@@ -59,11 +59,11 @@ const Layout: React.FC = () => {
       <div className={`fixed inset-y-0 left-0 z-50 w-64 sidebar-enhanced transform transition-transform duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
-        <div className="flex items-center justify-center h-20 border-b" style={{borderColor: 'var(--neutral-200)'}}>
+        <div className="flex items-center justify-center h-24 sm:h-28 border-b py-2" style={{borderColor: 'var(--neutral-200)'}}>
           <img 
             src="/sta-logo.png.png" 
             alt="Street Thrift Apparel Logo" 
-            className="h-16 sm:h-20 w-auto object-contain px-2"
+            className="h-20 sm:h-24 md:h-28 w-auto object-contain px-2"
           />
           <button
             onClick={() => setSidebarOpen(false)}
