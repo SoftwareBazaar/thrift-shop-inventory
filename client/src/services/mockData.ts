@@ -427,6 +427,7 @@ export const mockApi = {
     
     const newSale: Sale = {
       sale_id: Math.max(...sales.map(s => s.sale_id), 0) + 1,
+      item_id: itemId,
       item_name: item.item_name,
       category: item.category,
       quantity_sold: saleData.quantity_sold,
