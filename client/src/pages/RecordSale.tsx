@@ -268,26 +268,14 @@ const RecordSale: React.FC = () => {
                 disabled={loading}
               >
                 <option value="">-- Select user --</option>
-                {user?.role === 'admin' ? (
-                  // Admin can select any user
-                  users.filter(u => u.role === 'user').map((userItem) => (
-                    <option key={userItem.user_id} value={userItem.user_id}>
-                      {userItem.full_name}
-                    </option>
-                  ))
-                ) : (
-                  // Regular users can select themselves or other users at their stall
-                  users.filter(u => u.stall_id === user?.stall_id || u.user_id === user?.user_id).map((userItem) => (
-                    <option key={userItem.user_id} value={userItem.user_id}>
-                      {userItem.full_name}
-                    </option>
-                  ))
-                )}
+                {users.map((userItem) => (
+                  <option key={userItem.user_id} value={userItem.user_id}>
+                    {userItem.full_name} {userItem.role === 'admin' ? '(Admin)' : ''}
+                  </option>
+                ))}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                {user?.role === 'admin' 
-                  ? 'Select the user who served this sale'
-                  : 'Select who served this sale (you or others at your stall)'}
+                Select who served this sale (any user, including admin)
               </p>
             </div>
 
