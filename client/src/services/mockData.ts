@@ -331,35 +331,64 @@ export const mockApi = {
             return null;
           }
           
-          // For users: Initial stock = total distributed stock (cumulative)
-          // Added stock = only the most recent distribution amount
-          const initialDistributed = totalDistributedToStall;
-          
-          // Get the most recent distribution amount only (not accumulated)
-          const mostRecentDistribution = stallDistributions.length > 0 
-            ? stallDistributions[stallDistributions.length - 1].quantity_allocated 
-            : 0;
-          
           // Calculate sales from this stall for this item
           // Get stall name from stall_id to match with sales
           const stall = stalls.find(s => s.stall_id === stallId);
           const stallSales = stall ? sales.filter(
             s => s.item_id === item.item_id && s.stall_name === stall.stall_name
           ) : [];
+          
+          // Calculate stock before the most recent distribution
+          // Initial stock = previous stock (before latest distribution)
+          const mostRecentDistribution = stallDistributions.length > 0 
+            ? stallDistributions[stallDistributions.length - 1] 
+            : null;
+          
+          let stockBeforeLastDistribution = 0;
+          
+          if (mostRecentDistribution && stallDistributions.length > 1) {
+            // Calculate distributions before the most recent one
+            const previousDistributions = stallDistributions.slice(0, -1);
+            const totalPreviousDistributed = previousDistributions.reduce(
+              (sum, d) => sum + d.quantity_allocated, 0
+            );
+            
+            // Calculate sales that happened before the most recent distribution
+            const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
+            const salesBeforeLastDistribution = stallSales.filter(
+              s => new Date(s.date_time) < lastDistributionDate
+            );
+            const totalSalesBeforeLast = salesBeforeLastDistribution.reduce(
+              (sum, s) => sum + s.quantity_sold, 0
+            );
+            
+            // Stock before last distribution = previous distributions - sales before last distribution
+            stockBeforeLastDistribution = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
+          } else if (mostRecentDistribution && stallDistributions.length === 1) {
+            // First distribution: initial stock is 0
+            stockBeforeLastDistribution = 0;
+          }
+          
+          // Calculate total sales from this stall
           const totalSoldFromStall = stallSales.reduce(
             (sum, s) => sum + s.quantity_sold, 0
           );
           
-          // Calculate remaining stock (distributed - sold)
+          // Current stock = total distributed - total sold
           const remainingStock = Math.max(0, totalDistributedToStall - totalSoldFromStall);
+          
+          // Get the most recent distribution amount
+          const mostRecentDistributionAmount = mostRecentDistribution 
+            ? mostRecentDistribution.quantity_allocated 
+            : 0;
           
           return {
             ...item,
             current_stock: remainingStock,
-            // Initial stock = total distributed (cumulative)
-            // Added stock = only the most recent distribution amount
-            initial_stock: initialDistributed,
-            total_added: mostRecentDistribution
+            // Initial stock = previous stock (before latest distribution)
+            // Added stock = most recent distribution amount only
+            initial_stock: stockBeforeLastDistribution,
+            total_added: mostRecentDistributionAmount
           };
         })
         .filter((item): item is InventoryItem => item !== null);
@@ -367,16 +396,21 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    // For admin users, show total original stock (initial + added) regardless of distributions
-    // Admin's stock should remain at the original total even after distributions
+    // For admin users, calculate stock as: (initial + added) - all distributions
+    // Admin's stock decreases when they distribute to users
     const itemsWithDistributedStock = items.map(item => {
-      // Admin sees the original total stock (initial_stock + total_added)
-      // This represents the total stock the admin originally had, not reduced by distributions
+      // Calculate total distributed for this item (across all stalls)
+      const totalDistributedForItem = distributions
+        .filter(d => d.item_id === item.item_id)
+        .reduce((sum, d) => sum + d.quantity_allocated, 0);
+      
+      // Admin's current stock = total original stock - all distributions
       const totalOriginalStock = item.initial_stock + item.total_added;
+      const adminCurrentStock = Math.max(0, totalOriginalStock - totalDistributedForItem);
       
       return {
         ...item,
-        current_stock: totalOriginalStock,
+        current_stock: adminCurrentStock,
         // Keep initial_stock and total_added as they represent the item's history
       };
     });
