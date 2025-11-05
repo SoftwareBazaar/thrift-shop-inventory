@@ -317,10 +317,11 @@ export const mockApi = {
     if (stallId !== undefined) {
       const filteredItems = items
         .map(item => {
-          // Calculate total distributed to this stall
-          const stallDistributions = distributions.filter(
-            d => d.item_id === item.item_id && d.stall_id === stallId
-          );
+          // Get all distributions to this stall for this item, sorted by date
+          const stallDistributions = distributions
+            .filter(d => d.item_id === item.item_id && d.stall_id === stallId)
+            .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
+          
           const totalDistributedToStall = stallDistributions.reduce(
             (sum, d) => sum + d.quantity_allocated, 0
           );
@@ -329,6 +330,14 @@ export const mockApi = {
           if (totalDistributedToStall === 0) {
             return null;
           }
+          
+          // Calculate initial distributed stock (first distribution)
+          const initialDistributed = stallDistributions.length > 0 ? stallDistributions[0].quantity_allocated : 0;
+          
+          // Calculate additional stock distributed (sum of all distributions after the first)
+          const additionalDistributed = stallDistributions.length > 1
+            ? stallDistributions.slice(1).reduce((sum, d) => sum + d.quantity_allocated, 0)
+            : 0;
           
           // Calculate sales from this stall for this item
           // Get stall name from stall_id to match with sales
@@ -346,8 +355,9 @@ export const mockApi = {
           return {
             ...item,
             current_stock: remainingStock,
-            // Keep initial_stock and total_added as they represent the item's history
-            // The distributed stock is what's available at this stall
+            // Update initial_stock and total_added to reflect user's distributed stock
+            initial_stock: initialDistributed,
+            total_added: additionalDistributed
           };
         })
         .filter((item): item is InventoryItem => item !== null);
