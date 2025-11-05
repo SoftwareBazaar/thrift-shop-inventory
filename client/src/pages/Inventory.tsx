@@ -72,7 +72,9 @@ const Inventory: React.FC = () => {
 
   const fetchItems = async () => {
     try {
-      const response = await mockApi.getInventory();
+      // For non-admin users, pass their stall_id to get only distributed stock
+      const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
+      const response = await mockApi.getInventory(stallId);
       setItems(response.items);
     } catch (error) {
       console.error('Error fetching items:', error);

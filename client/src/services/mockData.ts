@@ -70,6 +70,15 @@ export interface InventoryItem {
   total_added: number;
 }
 
+export interface StockDistribution {
+  distribution_id: number;
+  item_id: number;
+  stall_id: number;
+  quantity_allocated: number;
+  date_distributed: string;
+  distributed_by: number;
+}
+
 export interface Analytics {
   totalRevenue: number;
   totalSales: number;
@@ -297,9 +306,55 @@ export const mockApi = {
   },
 
   // Inventory API
-  getInventory: async (): Promise<{ items: InventoryItem[] }> => {
+  getInventory: async (stallId?: number): Promise<{ items: InventoryItem[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const sales = getStorageData<Sale[]>('sales', []);
+    
+    // If stallId is provided (for non-admin users), filter to show only distributed stock
+    if (stallId !== undefined) {
+      const filteredItems = items
+        .map(item => {
+          // Calculate total distributed to this stall
+          const stallDistributions = distributions.filter(
+            d => d.item_id === item.item_id && d.stall_id === stallId
+          );
+          const totalDistributedToStall = stallDistributions.reduce(
+            (sum, d) => sum + d.quantity_allocated, 0
+          );
+          
+          // If no stock distributed to this stall, exclude this item
+          if (totalDistributedToStall === 0) {
+            return null;
+          }
+          
+          // Calculate sales from this stall for this item
+          // Get stall name from stall_id to match with sales
+          const stalls = getStorageData<Stall[]>('stalls', []);
+          const stall = stalls.find(s => s.stall_id === stallId);
+          const stallSales = stall ? sales.filter(
+            s => s.item_id === item.item_id && s.stall_name === stall.stall_name
+          ) : [];
+          const totalSoldFromStall = stallSales.reduce(
+            (sum, s) => sum + s.quantity_sold, 0
+          );
+          
+          // Calculate remaining stock (distributed - sold)
+          const remainingStock = Math.max(0, totalDistributedToStall - totalSoldFromStall);
+          
+          return {
+            ...item,
+            current_stock: remainingStock,
+            // Keep initial_stock and total_added as they represent the item's history
+            // The distributed stock is what's available at this stall
+          };
+        })
+        .filter((item): item is InventoryItem => item !== null);
+      
+      return { items: filteredItems };
+    }
+    
     return { items };
   },
 
@@ -467,7 +522,17 @@ export const mockApi = {
     
     setStorageData('items', items);
     
-    // Note: In a real system, this would also create a stock_distribution record
-    // For mock data, we're just updating the item's current_stock
+    // Create stock_distribution record
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const newDistribution: StockDistribution = {
+      distribution_id: Math.max(...distributions.map(d => d.distribution_id), 0) + 1,
+      item_id: itemId,
+      stall_id: distribution.stall_id,
+      quantity_allocated: distribution.quantity_allocated,
+      date_distributed: new Date().toISOString(),
+      distributed_by: 1 // Assuming admin user_id is 1, in real system use req.user.user_id
+    };
+    distributions.push(newDistribution);
+    setStorageData('stock_distributions', distributions);
   }
 };
