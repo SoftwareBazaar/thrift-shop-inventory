@@ -527,18 +527,28 @@ export const mockApi = {
       throw new Error('Item not found');
     }
     
-    if (item.current_stock < distribution.quantity_allocated) {
-      throw new Error('Insufficient stock');
+    // Get existing distributions to calculate total already distributed
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const existingDistributions = distributions.filter(d => d.item_id === itemId);
+    const totalAlreadyDistributed = existingDistributions.reduce(
+      (sum, d) => sum + d.quantity_allocated, 0
+    );
+    
+    // Calculate total available stock (initial + added - already distributed)
+    const totalAvailableStock = item.initial_stock + item.total_added - totalAlreadyDistributed;
+    
+    if (totalAvailableStock < distribution.quantity_allocated) {
+      throw new Error(`Insufficient stock! Available: ${totalAvailableStock}, Requested: ${distribution.quantity_allocated}`);
     }
     
-    // Update item stock (subtract from main stock)
+    // Update item stock (subtract from main stock for tracking purposes)
+    // Note: Admin will still see initial_stock + total_added in display
     item.current_stock -= distribution.quantity_allocated;
     item.total_allocated += distribution.quantity_allocated;
     
     setStorageData('items', items);
     
     // Create stock_distribution record
-    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
     const newDistribution: StockDistribution = {
       distribution_id: Math.max(...distributions.map(d => d.distribution_id), 0) + 1,
       item_id: itemId,
