@@ -311,6 +311,7 @@ export const mockApi = {
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
     const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
     const sales = getStorageData<Sale[]>('sales', []);
+    const stalls = getStorageData<Stall[]>('stalls', []);
     
     // If stallId is provided (for non-admin users), filter to show only distributed stock
     if (stallId !== undefined) {
@@ -331,7 +332,6 @@ export const mockApi = {
           
           // Calculate sales from this stall for this item
           // Get stall name from stall_id to match with sales
-          const stalls = getStorageData<Stall[]>('stalls', []);
           const stall = stalls.find(s => s.stall_id === stallId);
           const stallSales = stall ? sales.filter(
             s => s.item_id === item.item_id && s.stall_name === stall.stall_name
@@ -355,7 +355,34 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    return { items };
+    // For admin users, show total distributed stock across all stalls
+    const itemsWithDistributedStock = items.map(item => {
+      // Calculate total distributed across all stalls
+      const allDistributions = distributions.filter(
+        d => d.item_id === item.item_id
+      );
+      const totalDistributed = allDistributions.reduce(
+        (sum, d) => sum + d.quantity_allocated, 0
+      );
+      
+      // Calculate total sold across all stalls for this item
+      const allSalesForItem = sales.filter(
+        s => s.item_id === item.item_id
+      );
+      const totalSold = allSalesForItem.reduce(
+        (sum, s) => sum + s.quantity_sold, 0
+      );
+      
+      // Admin sees total distributed stock (sum of all distributed stock)
+      // This represents the total stock available across all stalls
+      return {
+        ...item,
+        current_stock: totalDistributed > 0 ? totalDistributed : item.current_stock,
+        // Keep initial_stock and total_added as they represent the item's history
+      };
+    });
+    
+    return { items: itemsWithDistributedStock };
   },
 
   createItem: async (itemData: Omit<InventoryItem, 'item_id' | 'date_added' | 'total_allocated' | 'total_added'>): Promise<{ item: InventoryItem }> => {
