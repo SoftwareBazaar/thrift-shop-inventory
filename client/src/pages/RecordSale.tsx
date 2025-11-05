@@ -113,7 +113,8 @@ const RecordSale: React.FC = () => {
       }
 
       // Determine who recorded the sale
-      const recordedBy = user?.role === 'admin' && formData.served_by 
+      // If served_by is selected, use that; otherwise use the current user
+      const recordedBy = formData.served_by 
         ? parseInt(formData.served_by)
         : (user?.user_id || 0);
 
@@ -252,31 +253,43 @@ const RecordSale: React.FC = () => {
               )}
             </div>
 
-            {/* Served By (Admin only) */}
-            {user?.role === 'admin' && (
-              <div>
-                <label htmlFor="served_by" className="block text-sm font-medium text-gray-700 mb-2">
-                  Served By *
-                </label>
-                <select
-                  id="served_by"
-                  name="served_by"
-                  value={formData.served_by}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                  disabled={loading}
-                >
-                  <option value="">-- Select user --</option>
-                  {users.filter(u => u.role === 'user').map((userItem) => (
+            {/* Served By */}
+            <div>
+              <label htmlFor="served_by" className="block text-sm font-medium text-gray-700 mb-2">
+                Served By *
+              </label>
+              <select
+                id="served_by"
+                name="served_by"
+                value={formData.served_by}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+                disabled={loading}
+              >
+                <option value="">-- Select user --</option>
+                {user?.role === 'admin' ? (
+                  // Admin can select any user
+                  users.filter(u => u.role === 'user').map((userItem) => (
                     <option key={userItem.user_id} value={userItem.user_id}>
                       {userItem.full_name}
                     </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-gray-500">Select the user who served this sale</p>
-              </div>
-            )}
+                  ))
+                ) : (
+                  // Regular users can select themselves or other users at their stall
+                  users.filter(u => u.stall_id === user?.stall_id || u.user_id === user?.user_id).map((userItem) => (
+                    <option key={userItem.user_id} value={userItem.user_id}>
+                      {userItem.full_name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {user?.role === 'admin' 
+                  ? 'Select the user who served this sale'
+                  : 'Select who served this sale (you or others at your stall)'}
+              </p>
+            </div>
 
             {/* Quantity */}
             <div>
