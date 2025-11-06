@@ -263,13 +263,20 @@ export const dbApi = {
 
           console.log(`[User Stock Calc] Item: ${item.item_name}, Stall: ${stallId}, Distributions: ${sortedDistributions.length}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
 
-          // IMPORTANT: Create new object WITHOUT item.initial_stock, then add calculated values
-          const { initial_stock: _, ...itemWithoutInitialStock } = item;
+          // IMPORTANT: Explicitly create new object with calculated values
+          // DO NOT use spread operator on item - it might include the original initial_stock
           const userItem = {
-            ...itemWithoutInitialStock,
+            item_id: item.item_id,
+            item_name: item.item_name,
+            category: item.category,
+            sku: item.sku,
+            unit_price: item.unit_price,
+            buying_price: item.buying_price,
+            date_added: item.date_added,
             current_stock: currentStock,
             initial_stock: initialStock, // Use calculated value (0 for first distribution)
-            total_added: totalAdded
+            total_added: totalAdded,
+            total_allocated: totalDistributed // For compatibility
           };
           
           console.log(`[User Stock Calc] Returning item:`, {
@@ -278,7 +285,8 @@ export const dbApi = {
             original_initial_stock: item.initial_stock,
             calculated_initial_stock: userItem.initial_stock,
             total_added: userItem.total_added,
-            current_stock: userItem.current_stock
+            current_stock: userItem.current_stock,
+            distributions_count: sortedDistributions.length
           });
           
           return userItem;
