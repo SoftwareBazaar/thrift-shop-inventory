@@ -263,18 +263,20 @@ export const dbApi = {
 
           console.log(`[User Stock Calc] Item: ${item.item_name}, Stall: ${stallId}, Distributions: ${sortedDistributions.length}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
 
-          // IMPORTANT: Override item.initial_stock with calculated value for users
+          // IMPORTANT: Create new object WITHOUT item.initial_stock, then add calculated values
+          const { initial_stock: _, ...itemWithoutInitialStock } = item;
           const userItem = {
-            ...item,
+            ...itemWithoutInitialStock,
             current_stock: currentStock,
-            initial_stock: initialStock, // Use calculated value, NOT item.initial_stock
+            initial_stock: initialStock, // Use calculated value (0 for first distribution)
             total_added: totalAdded
           };
           
           console.log(`[User Stock Calc] Returning item:`, {
             item_id: userItem.item_id,
             item_name: userItem.item_name,
-            initial_stock: userItem.initial_stock,
+            original_initial_stock: item.initial_stock,
+            calculated_initial_stock: userItem.initial_stock,
             total_added: userItem.total_added,
             current_stock: userItem.current_stock
           });
