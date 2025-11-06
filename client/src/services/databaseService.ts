@@ -280,17 +280,9 @@ export const dbApi = {
 
       if (error) throw error;
       
-      // If initial_stock > 0, create a stock_additions record for tracking
-      if (itemToInsert.initial_stock > 0) {
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        await (supabase as any)
-          .from('stock_additions')
-          .insert([{
-            item_id: data.item_id,
-            quantity_added: itemToInsert.initial_stock,
-            added_by: currentUser.user_id || itemData.created_by || 1
-          }]);
-      }
+      // Note: We don't create stock_additions for initial_stock
+      // initial_stock is the starting stock, and stock_additions tracks additional stock added later
+      // Admin Stock = initial_stock + total_added (from stock_additions) - total_distributed
       
       return { item: data as Item };
     } catch (error) {
