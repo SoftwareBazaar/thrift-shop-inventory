@@ -183,9 +183,12 @@ export const dbApi = {
           .eq('stall_id', stallId);
 
         const itemIds = (distributions as any)?.map((d: any) => d.item_id) || [];
+        console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} items with distributions:`, itemIds);
+        
         if (itemIds.length > 0) {
           query = query.in('item_id', itemIds);
         } else {
+          console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
           return { items: [] };
         }
       }
@@ -195,8 +198,10 @@ export const dbApi = {
       if (error) throw error;
 
       // Calculate current stock based on distributions and sales
+      console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${stallId}`);
       const items = await Promise.all((data || []).map(async (item: any) => {
         if (stallId !== undefined) {
+          console.log(`[Get Inventory] Processing item ${item.item_id} (${item.item_name}) for stall ${stallId}`);
           // For specific stall: calculate distributed - sold for that stall
           // Get all distributions sorted by date
           const { data: distributions } = await (supabase as any)
