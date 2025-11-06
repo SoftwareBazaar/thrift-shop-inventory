@@ -44,7 +44,7 @@ export interface Sale {
 
 export interface SaleInput {
   item_id: number | string;
-  stall_id: number | string;
+  stall_id: number | string | null;
   quantity_sold: number;
   unit_price: number;
   sale_type: 'cash' | 'credit' | 'mobile' | 'split';
@@ -504,10 +504,12 @@ export const mockApi = {
     const users = getStorageData<User[]>('users', mockUsers);
     const user = users.find(u => u.user_id === saleData.recorded_by);
     
-    // Get stall info
-    const stallId = typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString());
+    // Get stall info (stall_id can be null for admin sales)
+    const stallId = saleData.stall_id === null || saleData.stall_id === undefined 
+      ? null 
+      : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString()));
     const stalls = getStorageData<Stall[]>('stalls', mockStalls);
-    const stall = stalls.find(s => s.stall_id === stallId);
+    const stall = stallId ? stalls.find(s => s.stall_id === stallId) : null;
     
     const newSale: Sale = {
       sale_id: Math.max(...sales.map(s => s.sale_id), 0) + 1,
@@ -521,7 +523,7 @@ export const mockApi = {
       date_time: new Date().toISOString(),
       recorded_by: saleData.recorded_by,
       recorded_by_name: user ? user.full_name : 'Unknown',
-      stall_name: stall ? stall.stall_name : 'Unknown',
+      stall_name: stall ? stall.stall_name : (stallId === null ? 'Admin Sale' : 'Unknown'),
       customer_name: saleData.customer_name,
       customer_contact: saleData.customer_contact,
       payment_status: saleData.sale_type === 'credit' ? 'unpaid' : undefined,

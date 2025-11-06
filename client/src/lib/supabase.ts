@@ -6,6 +6,9 @@ const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('⚠️ Supabase credentials not found. Using mock data mode.');
+} else {
+  console.log('✅ Supabase client initialized successfully!');
+  console.log('📡 Project URL:', supabaseUrl);
 }
 
 // Create Supabase client

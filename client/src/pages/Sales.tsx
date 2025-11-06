@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 
 interface Sale {
   sale_id: number;
@@ -56,7 +56,7 @@ const Sales: React.FC = () => {
 
   const fetchSales = async () => {
     try {
-      const response = await mockApi.getSales();
+      const response = await dataApi.getSales();
       setSales(response.sales);
     } catch (error) {
       console.error('Error fetching sales:', error);
@@ -67,7 +67,7 @@ const Sales: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await mockApi.getStalls();
+      const response = await dataApi.getStalls();
       setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);

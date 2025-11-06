@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 
 interface SaleItem {
   item_id: number;
@@ -45,14 +45,14 @@ const UserDashboard: React.FC = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       // Fetch items for this user's stall - pass stall_id to get user-specific stock
-      const itemsResponse = await mockApi.getInventory(user?.stall_id);
+      const itemsResponse = await dataApi.getInventory(user?.stall_id);
       const userItems = itemsResponse.items || [];
       
       // Set items with user's distributed stock (not admin's total stock)
       setItems(userItems);
 
       // Fetch sales
-      const salesResponse = await mockApi.getSales();
+      const salesResponse = await dataApi.getSales();
       const allSales = salesResponse.sales || [];
       
       // Filter sales for this user based on selected period
@@ -120,7 +120,7 @@ const UserDashboard: React.FC = () => {
       }
       
       // Use mockApi to persist the sale
-      await mockApi.createSale({
+      await dataApi.createSale({
         item_id: selectedItem.item_id,
         stall_id: user.stall_id || 0,
         quantity_sold: saleQuantity,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
@@ -27,10 +27,10 @@ const Reports: React.FC = () => {
     setLoading(true);
     try {
       const [usersResponse, itemsResponse, salesResponse, stallsResponse] = await Promise.all([
-        mockApi.getUsers(),
-        mockApi.getInventory(),
-        mockApi.getSales(),
-        mockApi.getStalls()
+        dataApi.getUsers(),
+        dataApi.getInventory(),
+        dataApi.getSales(),
+        dataApi.getStalls()
       ]);
 
       const backupData = {

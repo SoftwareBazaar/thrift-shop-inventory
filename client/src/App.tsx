@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MockAuthProvider } from './contexts/MockAuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -13,9 +13,40 @@ import Layout from './components/Layout';
 import AddItem from './pages/AddItem';
 import RecordSale from './pages/RecordSale';
 import CreditSales from './pages/CreditSales';
+import { setupRealtime } from './services/dataService';
+import { isSupabaseConfigured } from './lib/supabase';
 import './App.css';
 
 function App() {
+  // Set up real-time subscriptions if Supabase is configured
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      console.log('🔄 Setting up real-time subscriptions...');
+      
+      const cleanup = setupRealtime({
+        inventory: (items) => {
+          // Dispatch event for inventory updates
+          window.dispatchEvent(new CustomEvent('inventory-updated', { detail: items }));
+        },
+        sales: (sales) => {
+          // Dispatch event for sales updates
+          window.dispatchEvent(new CustomEvent('sales-updated', { detail: sales }));
+        },
+        users: (users) => {
+          // Dispatch event for users updates
+          window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
+        }
+      });
+
+      return () => {
+        console.log('🛑 Cleaning up real-time subscriptions...');
+        cleanup();
+      };
+    } else {
+      console.log('📝 Supabase not configured, using polling for data sync');
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <MockAuthProvider>

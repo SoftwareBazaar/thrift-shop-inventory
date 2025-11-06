@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 
 interface User {
   user_id: number;
@@ -53,7 +53,7 @@ const Users: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await mockApi.getUsers();
+      const response = await dataApi.getUsers();
       setUsers(response.users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -64,7 +64,7 @@ const Users: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await mockApi.getStalls();
+      const response = await dataApi.getStalls();
       setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
@@ -75,7 +75,7 @@ const Users: React.FC = () => {
     e.preventDefault();
     try {
       const stallId = newUser.stall_id ? parseInt(newUser.stall_id as any) : undefined;
-      await mockApi.createUser({
+      await dataApi.createUser({
         username: newUser.username,
         password: newUser.password,
         full_name: newUser.full_name,
@@ -97,7 +97,7 @@ const Users: React.FC = () => {
     try {
       // Find assigned user details
       const assignedUser = newStall.user_id ? users.find(u => u.user_id === parseInt(newStall.user_id as any)) : null;
-      await mockApi.createStall({
+      await dataApi.createStall({
         stall_name: newStall.stall_name,
         user_id: newStall.user_id ? parseInt(newStall.user_id as any) : 0,
         location: newStall.location,
@@ -127,7 +127,7 @@ const Users: React.FC = () => {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      await mockApi.updateUser(editingUser.user_id, {
+      await dataApi.updateUser(editingUser.user_id, {
         username: editingUser.username,
         full_name: editingUser.full_name,
         role: editingUser.role,
@@ -159,7 +159,7 @@ const Users: React.FC = () => {
         stallData.manager = assignedUser.full_name;
       }
       
-      await mockApi.updateStall(editingStall.stall_id, stallData);
+      await dataApi.updateStall(editingStall.stall_id, stallData);
       setShowEditStallModal(false);
       setEditingStall(null);
       fetchStalls();

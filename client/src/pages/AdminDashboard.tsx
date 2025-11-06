@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 
 interface Stall {
   stall_id: number;
@@ -63,19 +63,19 @@ const AdminDashboard: React.FC = () => {
   const fetchAdminData = useCallback(async () => {
     try {
       // Fetch users for "Recorded By" dropdown
-      const usersResponse = await mockApi.getUsers();
+      const usersResponse = await dataApi.getUsers();
       setUsers(usersResponse.users || []);
 
       // Fetch stalls
-      const stallsResponse = await mockApi.getStalls();
+      const stallsResponse = await dataApi.getStalls();
       setStalls(stallsResponse.stalls || []);
 
       // Fetch inventory for stock value calculation
-      const inventoryResp = await mockApi.getInventory();
+      const inventoryResp = await dataApi.getInventory();
       setInventoryResponse(inventoryResp);
 
       // Fetch recent sales
-      const recentSalesResponse = await mockApi.getSales();
+      const recentSalesResponse = await dataApi.getSales();
       const allSales = recentSalesResponse.sales || [];
       
       // Sort sales by date (newest first) for timely display
@@ -577,7 +577,7 @@ const AdminDashboard: React.FC = () => {
                   updateData.mobile_amount = parseFloat(editSaleData.mobile_amount);
                 }
                 
-                await mockApi.updateSale(selectedSale.sale_id, updateData);
+                await dataApi.updateSale(selectedSale.sale_id, updateData);
                 setShowEditSaleModal(false);
                 fetchAdminData();
                 alert('Sale updated successfully!');

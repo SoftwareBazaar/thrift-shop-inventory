@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
-import { mockApi, InventoryItem, Stall, User } from '../services/mockData';
+import { dataApi } from '../services/dataService';
+import type { Item as InventoryItem, Stall, User } from '../services/dataService';
 
 const RecordSale: React.FC = () => {
   const navigate = useNavigate();
@@ -35,9 +36,9 @@ const RecordSale: React.FC = () => {
   const fetchData = async () => {
     try {
       const [itemsResponse, stallsResponse, usersResponse] = await Promise.all([
-        mockApi.getInventory(),
-        mockApi.getStalls(),
-        mockApi.getUsers()
+        dataApi.getInventory(),
+        dataApi.getStalls(),
+        dataApi.getUsers()
       ]);
       setItems(itemsResponse.items);
       setStalls(stallsResponse.stalls);
@@ -82,7 +83,9 @@ const RecordSale: React.FC = () => {
     setLoading(true);
 
     // Validation
-    if (!formData.item_id || !formData.quantity_sold || !formData.unit_price || !formData.sale_type || !formData.stall_id) {
+    // Stall is only required for non-admin users
+    const isStallRequired = user?.role !== 'admin';
+    if (!formData.item_id || !formData.quantity_sold || !formData.unit_price || !formData.sale_type || (isStallRequired && !formData.stall_id)) {
       setError('Please fill in all required fields.');
       setLoading(false);
       return;
@@ -118,10 +121,12 @@ const RecordSale: React.FC = () => {
         ? parseInt(formData.served_by)
         : (user?.user_id || 0);
 
+      // Calculate total amount
+      const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
+      
       // Calculate split amounts if needed
       let cash_amount = null;
       let mobile_amount = null;
-      const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
       
       if (formData.sale_type === 'split') {
         cash_amount = parseFloat(formData.cash_amount) || totalAmount / 2;
@@ -129,11 +134,12 @@ const RecordSale: React.FC = () => {
       }
       
       // Record the sale
-      await mockApi.createSale({
+      await dataApi.createSale({
         item_id: formData.item_id,
-        stall_id: formData.stall_id,
+        stall_id: formData.stall_id ? parseInt(formData.stall_id) : null, // Optional for admin - use null instead of undefined
         quantity_sold: parseInt(formData.quantity_sold),
         unit_price: parseFloat(formData.unit_price),
+        total_amount: totalAmount, // Add total_amount calculation
         sale_type: formData.sale_type,
         recorded_by: recordedBy,
         customer_name: formData.customer_name || undefined,
@@ -228,30 +234,55 @@ const RecordSale: React.FC = () => {
               </select>
             </div>
 
-            {/* Stall Selection */}
-            <div>
-              <label htmlFor="stall_id" className="block text-sm font-medium text-gray-700 mb-2">
-                Stall *</label>
-              <select
-                id="stall_id"
-                name="stall_id"
-                value={formData.stall_id}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-                disabled={loading}
-              >
-                <option value="">-- Select a stall --</option>
-                {stalls.map((stall) => (
-                  <option key={stall.stall_id} value={stall.stall_id}>
-                    {stall.stall_name} - {stall.location}
-                  </option>
-                ))}
-              </select>
-              {user?.stall_id && !formData.stall_id && (
-                <p className="mt-1 text-xs text-gray-500">Your assigned stall will be pre-selected, but you can change it</p>
-              )}
-            </div>
+            {/* Stall Selection - Optional for admin */}
+            {user?.role !== 'admin' && (
+              <div>
+                <label htmlFor="stall_id" className="block text-sm font-medium text-gray-700 mb-2">
+                  Stall *</label>
+                <select
+                  id="stall_id"
+                  name="stall_id"
+                  value={formData.stall_id}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={loading}
+                >
+                  <option value="">-- Select a stall --</option>
+                  {stalls.map((stall) => (
+                    <option key={stall.stall_id} value={stall.stall_id}>
+                      {stall.stall_name} - {stall.location}
+                    </option>
+                  ))}
+                </select>
+                {user?.stall_id && !formData.stall_id && (
+                  <p className="mt-1 text-xs text-gray-500">Your assigned stall will be pre-selected, but you can change it</p>
+                )}
+              </div>
+            )}
+            {/* Optional stall selection for admin */}
+            {user?.role === 'admin' && (
+              <div>
+                <label htmlFor="stall_id" className="block text-sm font-medium text-gray-700 mb-2">
+                  Stall (Optional)</label>
+                <select
+                  id="stall_id"
+                  name="stall_id"
+                  value={formData.stall_id}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={loading}
+                >
+                  <option value="">-- No stall (Admin sale) --</option>
+                  {stalls.map((stall) => (
+                    <option key={stall.stall_id} value={stall.stall_id}>
+                      {stall.stall_name} - {stall.location}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Admin can record sales without assigning to a stall</p>
+              </div>
+            )}
 
             {/* Served By */}
             <div>

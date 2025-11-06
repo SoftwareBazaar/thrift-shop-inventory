@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockApi } from '../services/mockData';
+import { useAuth } from '../contexts/MockAuthContext';
+import { dataApi } from '../services/dataService';
 import VoiceAssistant from '../components/VoiceAssistant';
 
 interface Stall {
@@ -12,6 +13,7 @@ interface Stall {
 
 const AddItem: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +36,7 @@ const AddItem: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await mockApi.getStalls();
+      const response = await dataApi.getStalls();
       setStalls(response.stalls);
     } catch (err) {
       console.error('Error fetching stalls:', err);
@@ -70,13 +72,14 @@ const AddItem: React.FC = () => {
     }
 
     try {
-      await mockApi.createItem({
+      await dataApi.createItem({
         item_name: formData.item_name,
         category: formData.category,
         initial_stock: parseInt(formData.initial_stock),
         current_stock: parseInt(formData.initial_stock),
         buying_price: parseFloat(formData.buying_price),
-        unit_price: parseFloat(formData.unit_price)
+        unit_price: parseFloat(formData.unit_price),
+        created_by: user?.user_id || 1 // Use current user ID, default to admin (1) if not logged in
       });
       
       setSuccessMessage('Item added successfully!');

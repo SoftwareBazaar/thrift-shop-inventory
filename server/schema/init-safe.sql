@@ -1,4 +1,5 @@
 -- Thrift Shop Multi-Stall Inventory Management System Database Schema
+-- Safe version that handles existing objects gracefully
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -163,3 +164,4 @@ CREATE TRIGGER trigger_log_users_activity
     AFTER INSERT OR UPDATE ON users
     FOR EACH ROW
     EXECUTE FUNCTION log_activity();
+

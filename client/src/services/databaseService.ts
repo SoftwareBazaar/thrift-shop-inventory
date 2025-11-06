@@ -140,6 +140,27 @@ export const dbApi = {
     }
   },
 
+  updateUser: async (userId: number, userData: Partial<User>) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.updateUser(userId, userData as any);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { user: data as User };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  },
+
   // Inventory
   getInventory: async (stallId?: number) => {
     if (!isSupabaseConfigured()) {
@@ -172,28 +193,51 @@ export const dbApi = {
 
       // Calculate current stock based on distributions and sales
       const items = await Promise.all((data || []).map(async (item: any) => {
-        const { data: distributions } = await supabase
-          .from('stock_distribution')
-          .select('quantity_allocated')
-          .eq('item_id', item.item_id)
-          .eq('stall_id', stallId || 0);
+        if (stallId !== undefined) {
+          // For specific stall: calculate distributed - sold for that stall
+          const { data: distributions } = await supabase
+            .from('stock_distribution')
+            .select('quantity_allocated')
+            .eq('item_id', item.item_id)
+            .eq('stall_id', stallId);
 
-        const totalDistributed = distributions?.reduce((sum, d) => sum + d.quantity_allocated, 0) || 0;
+          const totalDistributed = distributions?.reduce((sum, d) => sum + d.quantity_allocated, 0) || 0;
 
-        const { data: sales } = await supabase
-          .from('sales')
-          .select('quantity_sold')
-          .eq('item_id', item.item_id)
-          .eq('stall_id', stallId || 0);
+          const { data: sales } = await supabase
+            .from('sales')
+            .select('quantity_sold')
+            .eq('item_id', item.item_id)
+            .eq('stall_id', stallId);
 
-        const totalSold = sales?.reduce((sum, s) => sum + s.quantity_sold, 0) || 0;
+          const totalSold = sales?.reduce((sum, s) => sum + s.quantity_sold, 0) || 0;
 
-        return {
-          ...item,
-          current_stock: Math.max(0, totalDistributed - totalSold),
-          initial_stock: item.initial_stock || 0,
-          total_added: totalDistributed
-        };
+          return {
+            ...item,
+            current_stock: Math.max(0, totalDistributed - totalSold),
+            initial_stock: item.initial_stock || 0,
+            total_added: totalDistributed
+          };
+        } else {
+          // For admin: calculate total available stock (initial + added - distributed)
+          // Get all distributions for this item
+          const { data: allDistributions } = await supabase
+            .from('stock_distribution')
+            .select('quantity_allocated')
+            .eq('item_id', item.item_id);
+
+          const totalDistributed = allDistributions?.reduce((sum, d) => sum + d.quantity_allocated, 0) || 0;
+          
+          // Admin sees: initial_stock + total_added (from stock_additions) - totalDistributed
+          // But for display in Record Sale, show available stock that can be distributed
+          const availableStock = (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed;
+
+          return {
+            ...item,
+            current_stock: Math.max(0, availableStock),
+            initial_stock: item.initial_stock || 0,
+            total_added: item.total_added || 0
+          };
+        }
       }));
 
       return { items };
@@ -248,12 +292,12 @@ export const dbApi = {
     item_id: number;
     distributions: Array<{ stall_id: number; quantity: number }>;
     notes?: string;
-  }) => {
+  }): Promise<{ distributions: Array<{ item_id: number; stall_id: number; quantity_allocated: number; date_distributed: string }> }> => {
     if (!isSupabaseConfigured()) {
       // Call mockApi with the correct signature - it expects (itemId, distribution)
       // We'll call it for each distribution
       for (const dist of distributionData.distributions) {
-        await mockApi.distributeStock(distributionData.item_id, {
+        await (mockApi.distributeStock as any)(distributionData.item_id, {
           stall_id: dist.stall_id,
           quantity_allocated: dist.quantity
         });
@@ -328,9 +372,21 @@ export const dbApi = {
     }
 
     try {
+      // Calculate total_amount if not provided
+      const totalAmount = saleData.total_amount || (saleData.quantity_sold * saleData.unit_price);
+      
+      const saleToInsert = {
+        ...saleData,
+        total_amount: totalAmount,
+        // Convert stall_id to number or null
+        stall_id: saleData.stall_id === null || saleData.stall_id === undefined 
+          ? null 
+          : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString()))
+      };
+
       const { data, error } = await supabase
         .from('sales')
-        .insert([saleData])
+        .insert([saleToInsert])
         .select()
         .single();
 
@@ -381,6 +437,47 @@ export const dbApi = {
     } catch (error) {
       console.error('Error fetching stalls:', error);
       return mockApi.getStalls(); // Fallback
+    }
+  },
+
+  createStall: async (stallData: any) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.createStall(stallData as any);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('stalls')
+        .insert([stallData])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { stall: data as Stall };
+    } catch (error) {
+      console.error('Error creating stall:', error);
+      throw error;
+    }
+  },
+
+  updateStall: async (stallId: number, stallData: Partial<Stall>) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.updateStall(stallId, stallData as any);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('stalls')
+        .update(stallData)
+        .eq('stall_id', stallId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { stall: data as Stall };
+    } catch (error) {
+      console.error('Error updating stall:', error);
+      throw error;
     }
   }
 };

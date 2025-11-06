@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
-import { mockApi } from '../services/mockData';
+import { dataApi } from '../services/dataService';
 import VoiceAssistant from '../components/VoiceAssistant';
 
 interface Item {
@@ -59,7 +59,7 @@ const Inventory: React.FC = () => {
     try {
       // For non-admin users, pass their stall_id to get only distributed stock
       const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
-      const response = await mockApi.getInventory(stallId);
+      const response = await dataApi.getInventory(stallId);
       setItems(response.items);
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -70,7 +70,7 @@ const Inventory: React.FC = () => {
 
   const fetchSales = useCallback(async () => {
     try {
-      const response = await mockApi.getSales();
+      const response = await dataApi.getSales();
       setSalesData(response.sales);
     } catch (error) {
       console.error('Error fetching sales:', error);
@@ -95,7 +95,7 @@ const Inventory: React.FC = () => {
   const fetchCategories = async () => {
     try {
       // Mock categories from inventory data
-      const response = await mockApi.getInventory();
+      const response = await dataApi.getInventory();
       const categories = [...new Set(response.items.map(item => item.category))];
       setCategories(categories);
     } catch (error) {
@@ -105,7 +105,7 @@ const Inventory: React.FC = () => {
 
   const fetchStalls = async () => {
     try {
-      const response = await mockApi.getStalls();
+      const response = await dataApi.getStalls();
       setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
@@ -134,28 +134,27 @@ const Inventory: React.FC = () => {
     }
 
     try {
-      let currentStock = selectedItem.current_stock;
+      // Validate all distributions first
+      const validDistributions = distributionData.distributions
+        .filter(dist => parseInt(dist.quantity) > 0 && dist.stall_id)
+        .map(dist => ({
+          stall_id: parseInt(dist.stall_id),
+          quantity: parseInt(dist.quantity)
+        }));
       
-      // Distribute to each stall with stock validation
-      for (const dist of distributionData.distributions) {
-        const quantity = parseInt(dist.quantity);
-        if (quantity > 0 && dist.stall_id) {
-          // Check if we have enough stock
-          if (quantity > currentStock) {
-            alert(`Insufficient stock! Available: ${currentStock}, Requested: ${quantity}. Please reduce the quantity.`);
-            return;
-          }
-          
-          // Call API to distribute to this stall
-          await mockApi.distributeStock(selectedItem.item_id, {
-            stall_id: parseInt(dist.stall_id),
-            quantity_allocated: quantity
-          });
-          
-          // Update current stock for next iteration
-          currentStock -= quantity;
-        }
+      const totalDistributed = validDistributions.reduce((sum, d) => sum + d.quantity, 0);
+      
+      if (totalDistributed > selectedItem.current_stock) {
+        alert(`Total quantity (${totalDistributed}) exceeds available stock (${selectedItem.current_stock})`);
+        return;
       }
+      
+      // Call API to distribute to all stalls at once
+      await dataApi.distributeStock({
+        item_id: selectedItem.item_id,
+        distributions: validDistributions,
+        notes: distributionData.notes
+      });
       
       setShowDistributeModal(false);
       setDistributionData({
@@ -204,7 +203,7 @@ const Inventory: React.FC = () => {
     }
 
     try {
-      await mockApi.updateItem(selectedItem.item_id, {
+      await dataApi.updateItem(selectedItem.item_id, {
         current_stock: selectedItem.current_stock + quantityToAdd,
         total_added: selectedItem.total_added + quantityToAdd
       });
@@ -230,7 +229,7 @@ const Inventory: React.FC = () => {
       // Note: current_stock = initial_stock + total_added - distributed
       // We'll keep current_stock as is, but update initial_stock and total_added
       
-      await mockApi.updateItem(selectedItem.item_id, {
+      await dataApi.updateItem(selectedItem.item_id, {
         item_name: editFormData.item_name,
         category: editFormData.category,
         unit_price: parseFloat(editFormData.unit_price),

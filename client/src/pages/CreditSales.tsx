@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockApi, Sale } from '../services/mockData';
+import { dataApi } from '../services/dataService';
+import type { Sale } from '../services/dataService';
 
 const CreditSales: React.FC = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ const CreditSales: React.FC = () => {
 
   const fetchCreditSales = useCallback(async () => {
     try {
-      const response = await mockApi.getSales();
+      const response = await dataApi.getSales();
       const creditOnlySales = response.sales.filter(sale => sale.sale_type === 'credit');
       setCreditSales(creditOnlySales);
     } catch (error) {
@@ -224,7 +225,7 @@ const CreditSales: React.FC = () => {
             <form onSubmit={async (e) => {
               e.preventDefault();
               try {
-                await mockApi.updateSale(editingSale.sale_id, {
+                await dataApi.updateSale(editingSale.sale_id, {
                   payment_status: editData.payment_status,
                   balance_due: editData.balance_due
                 });

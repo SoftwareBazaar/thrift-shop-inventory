@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { mockApi, User } from '../services/mockData';
+import { dataApi } from '../services/dataService';
+import type { User } from '../services/dataService';
 
 interface AuthContextType {
   user: User | null;
@@ -53,8 +54,8 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Get users from mockApi (includes localStorage sync)
-      const usersResponse = await mockApi.getUsers();
+      // Get users from dataApi (includes Supabase sync if configured)
+      const usersResponse = await dataApi.getUsers();
       const foundUser = usersResponse.users.find(u => u.username.toLowerCase() === username.toLowerCase());
       
       if (!foundUser) {
