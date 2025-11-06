@@ -376,15 +376,19 @@ export const mockApi = {
           
           const currentStock = Math.max(0, totalDistributedToStall - totalSold);
           
-          // IMPORTANT: Explicitly create new object with calculated values
-          // DO NOT use spread operator on item - it might include the original initial_stock
+          // IMPORTANT: Explicitly create new object WITHOUT original initial_stock
+          // Remove initial_stock from item before spreading to ensure calculated value is used
+          const { initial_stock: _, total_added: __, current_stock: ___, total_allocated: ____, ...itemWithoutStockFields } = item;
           const userItem: InventoryItem = {
-            ...item,
+            ...itemWithoutStockFields,
             current_stock: currentStock,
             initial_stock: initialStock, // Use calculated value (0 for first distribution)
             total_added: totalAdded,
             total_allocated: totalDistributedToStall
           };
+          
+          console.log(`[Mock User Stock] Item: ${userItem.item_name}, Stall: ${stallId}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
+          
           return userItem;
         })
         .filter((item): item is InventoryItem => item !== null);
