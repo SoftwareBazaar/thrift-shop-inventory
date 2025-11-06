@@ -187,11 +187,12 @@ export const dbApi = {
             console.error(`[Get Inventory] Error fetching distributions:`, distError);
           }
 
-          const itemIds = (distributions as any)?.map((d: any) => d.item_id) || [];
+          const itemIds = (distributions as any)?.map((d: any) => d.item_id).filter((id: any) => id != null) || [];
           console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
           
           if (itemIds.length > 0) {
-            query = query.in('item_id', itemIds);
+            // Use .in() method correctly - ensure itemIds is a non-empty array
+            query = (query as any).in('item_id', itemIds);
             console.log(`[Get Inventory] Querying items with item_ids:`, itemIds);
           } else {
             console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
