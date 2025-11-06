@@ -34,7 +34,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
   updateCallbacks.users = callbacks.users;
 
   // Subscribe to inventory changes
-  inventoryChannel = supabase
+  inventoryChannel = (supabase as any)
     .channel('inventory-changes')
     .on('postgres_changes', 
       { event: '*', schema: 'public', table: 'items' },
