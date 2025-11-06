@@ -289,6 +289,17 @@ export const dbApi = {
             distributions_count: sortedDistributions.length
           });
           
+          // CRITICAL: Verify the calculated value is actually in the returned object
+          if (userItem.initial_stock !== initialStock) {
+            console.error(`[ERROR] initial_stock mismatch! Calculated: ${initialStock}, Returned: ${userItem.initial_stock}`);
+          }
+          
+          // Force set the value one more time to be absolutely sure
+          userItem.initial_stock = initialStock;
+          userItem.total_added = totalAdded;
+          
+          console.log(`[User Stock Calc] FINAL VERIFICATION - initial_stock: ${userItem.initial_stock}, total_added: ${userItem.total_added}`);
+          
           return userItem;
         } else {
           // For admin: calculate total available stock (initial + added)
