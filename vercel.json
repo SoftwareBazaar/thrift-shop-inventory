@@ -3,6 +3,7 @@
   "outputDirectory": "build",
   "installCommand": "npm install",
   "rootDirectory": "client",
+  "framework": null,
   "rewrites": [
     {
       "source": "/api/(.*)",
