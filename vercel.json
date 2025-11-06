@@ -2,8 +2,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "installCommand": "npm install",
-  "rootDirectory": "client",
-  "framework": null,
   "rewrites": [
     {
       "source": "/api/(.*)",
