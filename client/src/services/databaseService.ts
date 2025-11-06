@@ -51,7 +51,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .subscribe();
 
   // Subscribe to sales changes
-  salesChannel = supabase
+  salesChannel = (supabase as any)
     .channel('sales-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'sales' },
@@ -74,7 +74,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .subscribe();
 
   // Subscribe to users changes
-  usersChannel = supabase
+  usersChannel = (supabase as any)
     .channel('users-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'users' },
@@ -168,7 +168,7 @@ export const dbApi = {
     }
 
     try {
-      let query = supabase
+      let query = (supabase as any)
         .from('items')
         .select('*');
 
@@ -187,7 +187,7 @@ export const dbApi = {
         }
       }
 
-      const { data, error } = await query.order('date_added', { ascending: false });
+      const { data, error } = await (query as any).order('date_added', { ascending: false });
 
       if (error) throw error;
 
