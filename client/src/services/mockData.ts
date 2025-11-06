@@ -378,19 +378,14 @@ export const mockApi = {
           
           // IMPORTANT: Explicitly create new object with calculated values
           // DO NOT use spread operator on item - it might include the original initial_stock
-          return {
-            item_id: item.item_id,
-            item_name: item.item_name,
-            category: item.category,
-            sku: item.sku,
-            unit_price: item.unit_price,
-            buying_price: item.buying_price,
-            date_added: item.date_added,
+          const userItem: InventoryItem = {
+            ...item,
             current_stock: currentStock,
             initial_stock: initialStock, // Use calculated value (0 for first distribution)
             total_added: totalAdded,
             total_allocated: totalDistributedToStall
           };
+          return userItem;
         })
         .filter((item): item is InventoryItem => item !== null);
       
