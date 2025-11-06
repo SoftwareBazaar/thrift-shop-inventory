@@ -387,10 +387,9 @@ export const mockApi = {
             buying_price: item.buying_price,
             date_added: item.date_added,
             current_stock: currentStock,
-            // Initial stock = previous stock (before latest distribution)
-            // Added stock = most recent distribution amount only
-            initial_stock: stockBeforeLastDistribution,
-            total_added: mostRecentDistributionAmount
+            initial_stock: initialStock, // Use calculated value (0 for first distribution)
+            total_added: totalAdded,
+            total_allocated: totalDistributedToStall
           };
         })
         .filter((item): item is InventoryItem => item !== null);
