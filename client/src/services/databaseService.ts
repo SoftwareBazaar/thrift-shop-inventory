@@ -40,7 +40,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
       { event: '*', schema: 'public', table: 'items' },
       async () => {
         if (callbacks.inventory) {
-          const { data } = await supabase
+          const { data } = await (supabase as any)
             .from('items')
             .select('*')
             .order('date_added', { ascending: false });
@@ -57,7 +57,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
       { event: '*', schema: 'public', table: 'sales' },
       async () => {
         if (callbacks.sales) {
-          const { data } = await supabase
+          const { data } = await (supabase as any)
             .from('sales')
             .select('*, users:recorded_by(full_name)')
             .order('date_time', { ascending: false });
@@ -80,7 +80,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
       { event: '*', schema: 'public', table: 'users' },
       async () => {
         if (callbacks.users) {
-          const { data } = await supabase
+          const { data } = await (supabase as any)
             .from('users')
             .select('*')
             .order('created_date', { ascending: false });
@@ -107,7 +107,7 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('users')
         .select('*')
         .order('created_date', { ascending: false });
@@ -126,9 +126,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('users')
-        .insert([userData] as any)
+        .insert([userData])
         .select()
         .single();
 
@@ -146,9 +146,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('users')
-        .update(userData as any)
+        .update(userData)
         .eq('user_id', userId)
         .select()
         .single();
@@ -174,7 +174,7 @@ export const dbApi = {
 
       if (stallId) {
         // Get items distributed to this stall
-        const { data: distributions } = await supabase
+        const { data: distributions } = await (supabase as any)
           .from('stock_distribution')
           .select('item_id, quantity_allocated')
           .eq('stall_id', stallId);
@@ -195,7 +195,7 @@ export const dbApi = {
       const items = await Promise.all((data || []).map(async (item: any) => {
         if (stallId !== undefined) {
           // For specific stall: calculate distributed - sold for that stall
-          const { data: distributions } = await supabase
+          const { data: distributions } = await (supabase as any)
             .from('stock_distribution')
             .select('quantity_allocated')
             .eq('item_id', item.item_id)
@@ -203,7 +203,7 @@ export const dbApi = {
 
           const totalDistributed = (distributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
 
-          const { data: sales } = await supabase
+          const { data: sales } = await (supabase as any)
             .from('sales')
             .select('quantity_sold')
             .eq('item_id', item.item_id)
@@ -220,7 +220,7 @@ export const dbApi = {
         } else {
           // For admin: calculate total available stock (initial + added - distributed)
           // Get all distributions for this item
-          const { data: allDistributions } = await supabase
+          const { data: allDistributions } = await (supabase as any)
             .from('stock_distribution')
             .select('quantity_allocated')
             .eq('item_id', item.item_id);
@@ -253,9 +253,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('items')
-        .insert([itemData] as any)
+        .insert([itemData])
         .select()
         .single();
 
@@ -273,9 +273,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('items')
-        .update(itemData as any)
+        .update(itemData)
         .eq('item_id', itemId)
         .select()
         .single();
@@ -319,9 +319,9 @@ export const dbApi = {
         notes: distributionData.notes || ''
       }));
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('stock_distribution')
-        .insert(distributions as any)
+        .insert(distributions)
         .select();
 
       if (error) throw error;
@@ -339,7 +339,7 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('sales')
         .select(`
           *,
@@ -384,9 +384,9 @@ export const dbApi = {
           : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString()))
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('sales')
-        .insert([saleToInsert] as any)
+        .insert([saleToInsert])
         .select()
         .single();
 
@@ -405,9 +405,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('sales')
-        .update(saleData as any)
+        .update(saleData)
         .eq('sale_id', saleId)
         .select()
         .single();
@@ -427,7 +427,7 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('stalls')
         .select('*')
         .order('stall_name', { ascending: true });
@@ -446,9 +446,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('stalls')
-        .insert([stallData] as any)
+        .insert([stallData])
         .select()
         .single();
 
@@ -466,9 +466,9 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('stalls')
-        .update(stallData as any)
+        .update(stallData)
         .eq('stall_id', stallId)
         .select()
         .single();
