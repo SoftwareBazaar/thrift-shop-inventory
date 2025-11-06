@@ -263,12 +263,23 @@ export const dbApi = {
 
           console.log(`[User Stock Calc] Item: ${item.item_name}, Stall: ${stallId}, Distributions: ${sortedDistributions.length}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
 
-          return {
+          // IMPORTANT: Override item.initial_stock with calculated value for users
+          const userItem = {
             ...item,
             current_stock: currentStock,
             initial_stock: initialStock, // Use calculated value, NOT item.initial_stock
             total_added: totalAdded
           };
+          
+          console.log(`[User Stock Calc] Returning item:`, {
+            item_id: userItem.item_id,
+            item_name: userItem.item_name,
+            initial_stock: userItem.initial_stock,
+            total_added: userItem.total_added,
+            current_stock: userItem.current_stock
+          });
+          
+          return userItem;
         } else {
           // For admin: calculate total available stock (initial + added)
           // Distributions do NOT reduce admin's displayed stock
