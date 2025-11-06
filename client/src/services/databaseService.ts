@@ -198,27 +198,69 @@ export const dbApi = {
       const items = await Promise.all((data || []).map(async (item: any) => {
         if (stallId !== undefined) {
           // For specific stall: calculate distributed - sold for that stall
+          // Get all distributions sorted by date
           const { data: distributions } = await (supabase as any)
             .from('stock_distribution')
-            .select('quantity_allocated')
+            .select('quantity_allocated, date_distributed')
             .eq('item_id', item.item_id)
-            .eq('stall_id', stallId);
+            .eq('stall_id', stallId)
+            .order('date_distributed', { ascending: true });
 
-          const totalDistributed = (distributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
+          const sortedDistributions = (distributions || []).sort((a: any, b: any) => 
+            new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime()
+          );
 
+          const totalDistributed = sortedDistributions.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0);
+
+          // Get all sales for this item at this stall
           const { data: sales } = await (supabase as any)
             .from('sales')
-            .select('quantity_sold')
+            .select('quantity_sold, date_time')
             .eq('item_id', item.item_id)
             .eq('stall_id', stallId);
 
-          const totalSold = (sales as any)?.reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
+          const totalSold = (sales || []).reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
+
+          // Calculate initial_stock and total_added based on distribution history
+          let initialStock = 0;
+          let totalAdded = 0;
+
+          if (sortedDistributions.length > 0) {
+            const mostRecentDistribution = sortedDistributions[sortedDistributions.length - 1];
+            totalAdded = mostRecentDistribution.quantity_allocated;
+
+            if (sortedDistributions.length === 1) {
+              // First distribution: initial = 0
+              initialStock = 0;
+            } else {
+              // Calculate stock before the most recent distribution
+              const previousDistributions = sortedDistributions.slice(0, -1);
+              const totalPreviousDistributed = previousDistributions.reduce(
+                (sum: number, d: any) => sum + d.quantity_allocated, 0
+              );
+
+              // Calculate sales that happened before the most recent distribution
+              const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
+              const salesBeforeLast = (sales || []).filter(
+                (s: any) => new Date(s.date_time) < lastDistributionDate
+              );
+              const totalSalesBeforeLast = salesBeforeLast.reduce(
+                (sum: number, s: any) => sum + s.quantity_sold, 0
+              );
+
+              // Initial stock = previous distributions - sales before last distribution
+              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
+            }
+          }
+
+          // Current stock = total distributed - total sold
+          const currentStock = Math.max(0, totalDistributed - totalSold);
 
           return {
             ...item,
-            current_stock: Math.max(0, totalDistributed - totalSold),
-            initial_stock: item.initial_stock || 0,
-            total_added: totalDistributed
+            current_stock: currentStock,
+            initial_stock: initialStock,
+            total_added: totalAdded
           };
         } else {
           // For admin: calculate total available stock (initial + added)
