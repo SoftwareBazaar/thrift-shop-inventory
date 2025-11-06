@@ -31,12 +31,15 @@ const RecordSale: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user?.role, user?.stall_id]);
 
   const fetchData = async () => {
     try {
+      // For non-admin users, only get items distributed to their stall
+      const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
+      
       const [itemsResponse, stallsResponse, usersResponse] = await Promise.all([
-        dataApi.getInventory(),
+        dataApi.getInventory(stallId),
         dataApi.getStalls(),
         dataApi.getUsers()
       ]);
