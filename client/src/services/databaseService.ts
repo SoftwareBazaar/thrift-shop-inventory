@@ -383,21 +383,35 @@ export const dbApi = {
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
       const distributedBy = currentUser.user_id || 1; // Default to admin (1) if not found
       
-      const distributions = distributionData.distributions.map(dist => ({
-        item_id: distributionData.item_id,
-        stall_id: dist.stall_id,
-        quantity_allocated: dist.quantity,
-        date_distributed: new Date().toISOString(),
-        distributed_by: distributedBy,
-        notes: distributionData.notes || ''
-      }));
+      console.log('[Distribute Stock] Current user:', currentUser);
+      console.log('[Distribute Stock] distributed_by:', distributedBy);
+      
+      const distributions = distributionData.distributions.map(dist => {
+        const distRecord = {
+          item_id: distributionData.item_id,
+          stall_id: dist.stall_id,
+          quantity_allocated: dist.quantity,
+          date_distributed: new Date().toISOString(),
+          distributed_by: distributedBy,
+          notes: distributionData.notes || ''
+        };
+        console.log('[Distribute Stock] Distribution record:', distRecord);
+        return distRecord;
+      });
+
+      console.log('[Distribute Stock] Inserting distributions:', distributions);
 
       const { data, error } = await (supabase as any)
         .from('stock_distribution')
         .insert(distributions)
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Distribute Stock] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('[Distribute Stock] Success:', data);
       return { distributions: data };
     } catch (error) {
       console.error('Error distributing stock:', error);
