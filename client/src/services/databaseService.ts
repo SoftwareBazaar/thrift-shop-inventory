@@ -128,7 +128,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('users')
-        .insert([userData])
+        .insert([userData] as any)
         .select()
         .single();
 
@@ -148,7 +148,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('users')
-        .update(userData)
+        .update(userData as any)
         .eq('user_id', userId)
         .select()
         .single();
@@ -179,7 +179,7 @@ export const dbApi = {
           .select('item_id, quantity_allocated')
           .eq('stall_id', stallId);
 
-        const itemIds = distributions?.map(d => d.item_id) || [];
+        const itemIds = (distributions as any)?.map((d: any) => d.item_id) || [];
         if (itemIds.length > 0) {
           query = query.in('item_id', itemIds);
         } else {
@@ -201,7 +201,7 @@ export const dbApi = {
             .eq('item_id', item.item_id)
             .eq('stall_id', stallId);
 
-          const totalDistributed = distributions?.reduce((sum, d) => sum + d.quantity_allocated, 0) || 0;
+          const totalDistributed = (distributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
 
           const { data: sales } = await supabase
             .from('sales')
@@ -209,7 +209,7 @@ export const dbApi = {
             .eq('item_id', item.item_id)
             .eq('stall_id', stallId);
 
-          const totalSold = sales?.reduce((sum, s) => sum + s.quantity_sold, 0) || 0;
+          const totalSold = (sales as any)?.reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
 
           return {
             ...item,
@@ -225,7 +225,7 @@ export const dbApi = {
             .select('quantity_allocated')
             .eq('item_id', item.item_id);
 
-          const totalDistributed = allDistributions?.reduce((sum, d) => sum + d.quantity_allocated, 0) || 0;
+          const totalDistributed = (allDistributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
           
           // Admin sees: initial_stock + total_added (from stock_additions) - totalDistributed
           // But for display in Record Sale, show available stock that can be distributed
@@ -255,7 +255,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('items')
-        .insert([itemData])
+        .insert([itemData] as any)
         .select()
         .single();
 
@@ -275,7 +275,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('items')
-        .update(itemData)
+        .update(itemData as any)
         .eq('item_id', itemId)
         .select()
         .single();
@@ -321,7 +321,7 @@ export const dbApi = {
 
       const { data, error } = await supabase
         .from('stock_distribution')
-        .insert(distributions)
+        .insert(distributions as any)
         .select();
 
       if (error) throw error;
@@ -386,7 +386,7 @@ export const dbApi = {
 
       const { data, error } = await supabase
         .from('sales')
-        .insert([saleToInsert])
+        .insert([saleToInsert] as any)
         .select()
         .single();
 
@@ -407,7 +407,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('sales')
-        .update(saleData)
+        .update(saleData as any)
         .eq('sale_id', saleId)
         .select()
         .single();
@@ -448,7 +448,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('stalls')
-        .insert([stallData])
+        .insert([stallData] as any)
         .select()
         .single();
 
@@ -468,7 +468,7 @@ export const dbApi = {
     try {
       const { data, error } = await supabase
         .from('stalls')
-        .update(stallData)
+        .update(stallData as any)
         .eq('stall_id', stallId)
         .select()
         .single();
