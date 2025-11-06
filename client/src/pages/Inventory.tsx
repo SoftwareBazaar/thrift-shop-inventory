@@ -203,9 +203,11 @@ const Inventory: React.FC = () => {
     }
 
     try {
+      // Calculate new total_added (current + quantity to add)
+      const newTotalAdded = (selectedItem.total_added || 0) + quantityToAdd;
+      
       await dataApi.updateItem(selectedItem.item_id, {
-        current_stock: selectedItem.current_stock + quantityToAdd,
-        total_added: selectedItem.total_added + quantityToAdd
+        total_added: newTotalAdded
       });
       
       setShowAddStockModal(false);
@@ -213,6 +215,7 @@ const Inventory: React.FC = () => {
       fetchItems(); // Refresh items
       alert('Stock added successfully!');
     } catch (error: any) {
+      console.error('Error adding stock:', error);
       alert(error.response?.data?.message || 'Failed to add stock');
     }
   };

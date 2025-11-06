@@ -236,12 +236,12 @@ export const dbApi = {
           const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + a.quantity_added, 0) || 0;
           
           // Admin sees: initial_stock + total_added (from stock_additions) - totalDistributed
-          // If initial_stock is null/undefined, use 0, but ensure we have a valid number
-          const initialStock = Number(item.initial_stock) || 0;
+          // Ensure initial_stock is a valid number (handle null, undefined, or string)
+          const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
           const availableStock = initialStock + totalAdded - totalDistributed;
 
           // Debug logging
-          console.log(`[Admin Stock Calc] Item: ${item.item_name}, initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, availableStock: ${availableStock}`);
+          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock} (raw: ${item.initial_stock}), totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, availableStock: ${availableStock}`);
 
           return {
             ...item,
