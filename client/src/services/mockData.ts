@@ -340,53 +340,53 @@ export const mockApi = {
             s => s.item_id === item.item_id && s.stall_name === stall.stall_name
           ) : [];
           
-          // Calculate stock before the most recent distribution
-          // Initial stock = previous stock (before latest distribution)
-          const mostRecentDistribution = stallDistributions.length > 0 
-            ? stallDistributions[stallDistributions.length - 1] 
-            : null;
+          const totalSold = stallSales.reduce((sum, s) => sum + s.quantity_sold, 0);
           
-          let stockBeforeLastDistribution = 0;
+          // Calculate initial_stock and total_added based on distribution history
+          let initialStock = 0;
+          let totalAdded = 0;
           
-          if (mostRecentDistribution && stallDistributions.length > 1) {
-            // Calculate distributions before the most recent one
-            const previousDistributions = stallDistributions.slice(0, -1);
-            const totalPreviousDistributed = previousDistributions.reduce(
-              (sum, d) => sum + d.quantity_allocated, 0
-            );
+          if (stallDistributions.length > 0) {
+            const mostRecentDistribution = stallDistributions[stallDistributions.length - 1];
+            totalAdded = mostRecentDistribution.quantity_allocated;
             
-            // Calculate sales that happened before the most recent distribution
-            const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
-            const salesBeforeLastDistribution = stallSales.filter(
-              s => new Date(s.date_time) < lastDistributionDate
-            );
-            const totalSalesBeforeLast = salesBeforeLastDistribution.reduce(
-              (sum, s) => sum + s.quantity_sold, 0
-            );
-            
-            // Stock before last distribution = previous distributions - sales before last distribution
-            stockBeforeLastDistribution = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
-          } else if (mostRecentDistribution && stallDistributions.length === 1) {
-            // First distribution: initial stock is 0
-            stockBeforeLastDistribution = 0;
+            if (stallDistributions.length === 1) {
+              // First distribution: initial = 0
+              initialStock = 0;
+            } else {
+              // Calculate stock before the most recent distribution
+              const previousDistributions = stallDistributions.slice(0, -1);
+              const totalPreviousDistributed = previousDistributions.reduce(
+                (sum, d) => sum + d.quantity_allocated, 0
+              );
+              
+              // Calculate sales that happened before the most recent distribution
+              const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
+              const salesBeforeLast = stallSales.filter(
+                s => new Date(s.date_time) < lastDistributionDate
+              );
+              const totalSalesBeforeLast = salesBeforeLast.reduce(
+                (sum, s) => sum + s.quantity_sold, 0
+              );
+              
+              // Initial stock = previous distributions - sales before last distribution
+              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
+            }
           }
           
-          // Calculate total sales from this stall
-          const totalSoldFromStall = stallSales.reduce(
-            (sum, s) => sum + s.quantity_sold, 0
-          );
+          const currentStock = Math.max(0, totalDistributedToStall - totalSold);
           
-          // Current stock = total distributed - total sold
-          const remainingStock = Math.max(0, totalDistributedToStall - totalSoldFromStall);
-          
-          // Get the most recent distribution amount
-          const mostRecentDistributionAmount = mostRecentDistribution 
-            ? mostRecentDistribution.quantity_allocated 
-            : 0;
-          
+          // IMPORTANT: Explicitly create new object with calculated values
+          // DO NOT use spread operator on item - it might include the original initial_stock
           return {
-            ...item,
-            current_stock: remainingStock,
+            item_id: item.item_id,
+            item_name: item.item_name,
+            category: item.category,
+            sku: item.sku,
+            unit_price: item.unit_price,
+            buying_price: item.buying_price,
+            date_added: item.date_added,
+            current_stock: currentStock,
             // Initial stock = previous stock (before latest distribution)
             // Added stock = most recent distribution amount only
             initial_stock: stockBeforeLastDistribution,
