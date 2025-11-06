@@ -265,13 +265,33 @@ export const dbApi = {
     }
 
     try {
+      // Ensure initial_stock is a number
+      const itemToInsert = {
+        ...itemData,
+        initial_stock: Number(itemData.initial_stock) || 0,
+        current_stock: Number(itemData.current_stock) || Number(itemData.initial_stock) || 0
+      };
+
       const { data, error } = await (supabase as any)
         .from('items')
-        .insert([itemData])
+        .insert([itemToInsert])
         .select()
         .single();
 
       if (error) throw error;
+      
+      // If initial_stock > 0, create a stock_additions record for tracking
+      if (itemToInsert.initial_stock > 0) {
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        await (supabase as any)
+          .from('stock_additions')
+          .insert([{
+            item_id: data.item_id,
+            quantity_added: itemToInsert.initial_stock,
+            added_by: currentUser.user_id || itemData.created_by || 1
+          }]);
+      }
+      
       return { item: data as Item };
     } catch (error) {
       console.error('Error creating item:', error);
