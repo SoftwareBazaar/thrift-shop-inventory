@@ -256,10 +256,12 @@ export const dbApi = {
           // Current stock = total distributed - total sold
           const currentStock = Math.max(0, totalDistributed - totalSold);
 
+          console.log(`[User Stock Calc] Item: ${item.item_name}, Stall: ${stallId}, Distributions: ${sortedDistributions.length}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
+
           return {
             ...item,
             current_stock: currentStock,
-            initial_stock: initialStock,
+            initial_stock: initialStock, // Use calculated value, NOT item.initial_stock
             total_added: totalAdded
           };
         } else {
