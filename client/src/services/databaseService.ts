@@ -203,11 +203,10 @@ export const dbApi = {
         
         if (error) {
           console.error(`[Get Inventory] Error fetching items:`, error);
+          throw error;
         }
         
         console.log(`[Get Inventory] Fetched ${data?.length || 0} items from database`);
-
-      if (error) throw error;
 
       // Calculate current stock based on distributions and sales
       console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${stallId}`);
