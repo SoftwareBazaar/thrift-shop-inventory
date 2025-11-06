@@ -168,32 +168,44 @@ export const dbApi = {
       return mockApi.getInventory(stallId);
     }
 
-    console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
+      console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
 
-    try {
-      let query = (supabase as any)
-        .from('items')
-        .select('*');
+      try {
+        let query = (supabase as any)
+          .from('items')
+          .select('*');
 
-      if (stallId) {
-        // Get items distributed to this stall
-        const { data: distributions } = await (supabase as any)
-          .from('stock_distribution')
-          .select('item_id, quantity_allocated')
-          .eq('stall_id', stallId);
+        if (stallId) {
+          // Get items distributed to this stall
+          console.log(`[Get Inventory] Querying distributions for stall ${stallId}...`);
+          const { data: distributions, error: distError } = await (supabase as any)
+            .from('stock_distribution')
+            .select('item_id, quantity_allocated')
+            .eq('stall_id', stallId);
 
-        const itemIds = (distributions as any)?.map((d: any) => d.item_id) || [];
-        console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} items with distributions:`, itemIds);
-        
-        if (itemIds.length > 0) {
-          query = query.in('item_id', itemIds);
-        } else {
-          console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
-          return { items: [] };
+          if (distError) {
+            console.error(`[Get Inventory] Error fetching distributions:`, distError);
+          }
+
+          const itemIds = (distributions as any)?.map((d: any) => d.item_id) || [];
+          console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
+          
+          if (itemIds.length > 0) {
+            query = query.in('item_id', itemIds);
+            console.log(`[Get Inventory] Querying items with item_ids:`, itemIds);
+          } else {
+            console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
+            return { items: [] };
+          }
         }
-      }
 
-      const { data, error } = await (query as any).order('date_added', { ascending: false });
+        const { data, error } = await (query as any).order('date_added', { ascending: false });
+        
+        if (error) {
+          console.error(`[Get Inventory] Error fetching items:`, error);
+        }
+        
+        console.log(`[Get Inventory] Fetched ${data?.length || 0} items from database`);
 
       if (error) throw error;
 
