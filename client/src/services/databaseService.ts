@@ -227,15 +227,22 @@ export const dbApi = {
 
           const totalDistributed = (allDistributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
           
+          // Get total_added from stock_additions table
+          const { data: stockAdditions } = await (supabase as any)
+            .from('stock_additions')
+            .select('quantity_added')
+            .eq('item_id', item.item_id);
+
+          const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + a.quantity_added, 0) || 0;
+          
           // Admin sees: initial_stock + total_added (from stock_additions) - totalDistributed
-          // But for display in Record Sale, show available stock that can be distributed
-          const availableStock = (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed;
+          const availableStock = (item.initial_stock || 0) + totalAdded - totalDistributed;
 
           return {
             ...item,
             current_stock: Math.max(0, availableStock),
             initial_stock: item.initial_stock || 0,
-            total_added: item.total_added || 0
+            total_added: totalAdded
           };
         }
       }));
@@ -273,9 +280,39 @@ export const dbApi = {
     }
 
     try {
+      // If total_added is being updated, also create a stock_additions record
+      if (itemData.total_added !== undefined) {
+        // Get current item to calculate the difference
+        const { data: currentItem } = await (supabase as any)
+          .from('items')
+          .select('total_added')
+          .eq('item_id', itemId)
+          .single();
+        
+        const currentTotalAdded = (currentItem?.total_added || 0);
+        const newTotalAdded = itemData.total_added;
+        const quantityToAdd = newTotalAdded - currentTotalAdded;
+        
+        // If quantity is positive, create a stock_additions record
+        if (quantityToAdd > 0) {
+          // Get current user for added_by (from localStorage or default to 1 for admin)
+          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+          
+          await (supabase as any)
+            .from('stock_additions')
+            .insert([{
+              item_id: itemId,
+              quantity_added: quantityToAdd,
+              added_by: currentUser.user_id || 1
+            }]);
+        }
+      }
+      
+      // Update the item (remove total_added from update since we handle it via stock_additions)
+      const { total_added, ...updateData } = itemData;
       const { data, error } = await (supabase as any)
         .from('items')
-        .update(itemData)
+        .update(updateData)
         .eq('item_id', itemId)
         .select()
         .single();
