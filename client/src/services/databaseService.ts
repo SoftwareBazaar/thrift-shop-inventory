@@ -164,8 +164,11 @@ export const dbApi = {
   // Inventory
   getInventory: async (stallId?: number) => {
     if (!isSupabaseConfigured()) {
+      console.warn('⚠️ Supabase not configured, using mock data for inventory');
       return mockApi.getInventory(stallId);
     }
+
+    console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
 
     try {
       let query = (supabase as any)
@@ -261,6 +264,7 @@ export const dbApi = {
 
   createItem: async (itemData: any) => {
     if (!isSupabaseConfigured()) {
+      console.warn('⚠️ Supabase not configured, using mock data');
       return mockApi.createItem(itemData as any);
     }
 
@@ -272,13 +276,20 @@ export const dbApi = {
         current_stock: Number(itemData.current_stock) || Number(itemData.initial_stock) || 0
       };
 
+      console.log('[Create Item] Inserting item:', itemToInsert);
+
       const { data, error } = await (supabase as any)
         .from('items')
         .insert([itemToInsert])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Create Item] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('[Create Item] Item created successfully:', data);
       
       // Note: We don't create stock_additions for initial_stock
       // initial_stock is the starting stock, and stock_additions tracks additional stock added later
