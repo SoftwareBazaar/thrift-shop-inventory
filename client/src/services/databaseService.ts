@@ -379,11 +379,16 @@ export const dbApi = {
     }
 
     try {
+      // Get current user ID for distributed_by field
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const distributedBy = currentUser.user_id || 1; // Default to admin (1) if not found
+      
       const distributions = distributionData.distributions.map(dist => ({
         item_id: distributionData.item_id,
         stall_id: dist.stall_id,
         quantity_allocated: dist.quantity,
         date_distributed: new Date().toISOString(),
+        distributed_by: distributedBy,
         notes: distributionData.notes || ''
       }));
 
