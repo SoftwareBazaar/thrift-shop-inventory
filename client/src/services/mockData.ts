@@ -398,48 +398,21 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    // For admin users, calculate stock as: sum of all users' current stock
-    // Admin's stock = total available inventory across all stalls
-    const itemsWithDistributedStock = items.map(item => {
-      // Get all unique stalls that received this item
-      const stallsWithItem = distributions
-        .filter(d => d.item_id === item.item_id)
-        .map(d => d.stall_id);
-      const uniqueStallIds = [...new Set(stallsWithItem)];
-      
-      // Calculate total current stock across all stalls
-      let totalCurrentStockAcrossStalls = 0;
-      
-      uniqueStallIds.forEach(stallId => {
-        // Get all distributions to this stall for this item
-        const stallDistributions = distributions
-          .filter(d => d.item_id === item.item_id && d.stall_id === stallId);
-        const totalDistributedToStall = stallDistributions.reduce(
-          (sum, d) => sum + d.quantity_allocated, 0
-        );
-        
-        // Get sales from this stall for this item
-        const stall = stalls.find(s => s.stall_id === stallId);
-        const stallSales = stall ? sales.filter(
-          s => s.item_id === item.item_id && s.stall_name === stall.stall_name
-        ) : [];
-        const totalSoldFromStall = stallSales.reduce(
-          (sum, s) => sum + s.quantity_sold, 0
-        );
-        
-        // Current stock at this stall = distributed - sold
-        const currentStockAtStall = Math.max(0, totalDistributedToStall - totalSoldFromStall);
-        totalCurrentStockAcrossStalls += currentStockAtStall;
-      });
+    // For admin users: stock = initial_stock + total_added (distributions do NOT reduce admin's displayed stock)
+    const itemsWithAdminStock = items.map(item => {
+      const initialStock = item.initial_stock || 0;
+      const totalAdded = item.total_added || 0;
+      const adminStock = initialStock + totalAdded;
       
       return {
         ...item,
-        current_stock: totalCurrentStockAcrossStalls,
-        // Keep initial_stock and total_added as they represent the item's history
+        current_stock: adminStock,
+        initial_stock: initialStock,
+        total_added: totalAdded
       };
     });
     
-    return { items: itemsWithDistributedStock };
+    return { items: itemsWithAdminStock };
   },
 
   createItem: async (itemData: Omit<InventoryItem, 'item_id' | 'date_added' | 'total_allocated' | 'total_added'>): Promise<{ item: InventoryItem }> => {
