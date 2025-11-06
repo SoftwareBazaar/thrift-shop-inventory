@@ -306,22 +306,31 @@ export const dbApi = {
           .eq('item_id', itemId)
           .single();
         
-        const currentTotalAdded = (currentItem?.total_added || 0);
-        const newTotalAdded = itemData.total_added;
+        const currentTotalAdded = Number(currentItem?.total_added || 0);
+        const newTotalAdded = Number(itemData.total_added);
         const quantityToAdd = newTotalAdded - currentTotalAdded;
+        
+        console.log(`[Update Item] Item ID: ${itemId}, currentTotalAdded: ${currentTotalAdded}, newTotalAdded: ${newTotalAdded}, quantityToAdd: ${quantityToAdd}`);
         
         // If quantity is positive, create a stock_additions record
         if (quantityToAdd > 0) {
           // Get current user for added_by (from localStorage or default to 1 for admin)
           const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
           
-          await (supabase as any)
+          const { error: insertError } = await (supabase as any)
             .from('stock_additions')
             .insert([{
               item_id: itemId,
               quantity_added: quantityToAdd,
               added_by: currentUser.user_id || 1
             }]);
+          
+          if (insertError) {
+            console.error('Error creating stock_additions record:', insertError);
+            throw insertError;
+          }
+          
+          console.log(`[Update Item] Created stock_additions record: ${quantityToAdd} units`);
         }
       }
       
