@@ -221,14 +221,8 @@ export const dbApi = {
             total_added: totalDistributed
           };
         } else {
-          // For admin: calculate total available stock (initial + added - distributed)
-          // Get all distributions for this item
-          const { data: allDistributions } = await (supabase as any)
-            .from('stock_distribution')
-            .select('quantity_allocated')
-            .eq('item_id', item.item_id);
-
-          const totalDistributed = (allDistributions as any)?.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0) || 0;
+          // For admin: calculate total available stock (initial + added)
+          // Distributions do NOT reduce admin's displayed stock
           
           // Get total_added from stock_additions table
           const { data: stockAdditions } = await (supabase as any)
