@@ -30,6 +30,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   });
 }
 
+// Export the supabase client
+export { supabase };
+
 // Check if Supabase is configured
 export const isSupabaseConfigured = () => {
   return !!(supabaseUrl && supabaseAnonKey);
