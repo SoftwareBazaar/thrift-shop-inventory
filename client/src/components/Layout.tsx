@@ -17,8 +17,6 @@ const Layout: React.FC = () => {
   const handleLogout = () => {
     try {
       logout();
-      // Clear any other relevant data
-      localStorage.removeItem('user_passwords');
       // Close modal
       setShowLogoutModal(false);
       // Redirect to login
@@ -65,10 +63,12 @@ const Layout: React.FC = () => {
       setPasswordSuccess(true);
       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordVisibility({ old: false, new: false, confirm: false });
-      setTimeout(() => {
-        setShowPasswordModal(false);
-        setPasswordSuccess(false);
-      }, 2000);
+    setTimeout(() => {
+      setPasswordSuccess(false);
+      setShowPasswordModal(false);
+      logout();
+      navigate('/login', { replace: true });
+    }, 1800);
     } else {
       setPasswordError('Incorrect current password');
     }
@@ -184,7 +184,7 @@ const Layout: React.FC = () => {
             <h2 className="text-xl font-bold mb-4">Change Password</h2>
             
             {passwordSuccess ? (
-              <div className="text-green-600 mb-4">✓ Password changed successfully!</div>
+              <div className="text-green-600 mb-4">✓ Password changed successfully! You'll be signed out to apply the update.</div>
             ) : (
               <form onSubmit={handlePasswordChange}>
                 <div className="mb-4">

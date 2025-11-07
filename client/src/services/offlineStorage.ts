@@ -181,10 +181,21 @@ class OfflineStorageService {
       const transaction = this.db!.transaction(['offline_queue'], 'readonly');
       const store = transaction.objectStore('offline_queue');
       const index = store.index('synced');
-      const request = index.getAll(IDBKeyRange.only(false)); // Get unsynced operations
+      const pending: OfflineOperation[] = [];
 
-      request.onsuccess = () => {
-        resolve(request.result || []);
+      const request = index.openCursor();
+
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const value = cursor.value as OfflineOperation;
+          if (!value.synced) {
+            pending.push(value);
+          }
+          cursor.continue();
+        } else {
+          resolve(pending);
+        }
       };
 
       request.onerror = () => {
@@ -226,12 +237,15 @@ class OfflineStorageService {
       const transaction = this.db!.transaction(['offline_queue'], 'readwrite');
       const store = transaction.objectStore('offline_queue');
       const index = store.index('synced');
-      const request = index.openCursor(IDBKeyRange.only(true));
+      const request = index.openCursor();
 
       request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
         if (cursor) {
-          cursor.delete();
+          const value = cursor.value as OfflineOperation;
+          if (value.synced) {
+            cursor.delete();
+          }
           cursor.continue();
         } else {
           resolve();
