@@ -239,6 +239,8 @@ export const dbApi = {
           const totalSold = (sales || []).reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
 
           // Calculate initial_stock and total_added based on distribution history
+          // Initial stock = stock the user had at the time of the most recent distribution
+          // Total added = quantity from the most recent distribution
           let initialStock = 0;
           let totalAdded = 0;
 
@@ -247,26 +249,30 @@ export const dbApi = {
             totalAdded = mostRecentDistribution.quantity_allocated;
 
             if (sortedDistributions.length === 1) {
-              // First distribution: initial = 0
+              // First distribution: initial = 0 (no stock before first distribution)
               initialStock = 0;
             } else {
-              // Calculate stock before the most recent distribution
+              // For subsequent distributions: calculate stock at the time of the most recent distribution
+              // This is: all previous distributions minus all sales up to that point
               const previousDistributions = sortedDistributions.slice(0, -1);
               const totalPreviousDistributed = previousDistributions.reduce(
                 (sum: number, d: any) => sum + d.quantity_allocated, 0
               );
 
-              // Calculate sales that happened before the most recent distribution
+              // Calculate all sales that happened strictly before the most recent distribution
+              // We use < (not <=) to ensure we get the stock at the moment before the new distribution
               const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
-              const salesBeforeLast = (sales || []).filter(
+              const salesBeforeDistribution = (sales || []).filter(
                 (s: any) => new Date(s.date_time) < lastDistributionDate
               );
-              const totalSalesBeforeLast = salesBeforeLast.reduce(
+              const totalSalesBeforeDistribution = salesBeforeDistribution.reduce(
                 (sum: number, s: any) => sum + s.quantity_sold, 0
               );
-
-              // Initial stock = previous distributions - sales before last distribution
-              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
+              
+              // Initial stock = stock the user had at that moment (before the new distribution)
+              // This represents their "present stock" at the time they received the new stock
+              // This is: previous distributions - sales before that point
+              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeDistribution);
             }
           }
 
@@ -525,19 +531,31 @@ export const dbApi = {
           *,
           users:recorded_by(full_name),
           stalls:stall_id(stall_name),
-          items:item_id(item_name, category)
+          items:item_id(item_name, category),
+          credit_sales:credit_sales(sale_id, customer_name, customer_contact, payment_status, balance_due, amount_paid, due_date, notes)
         `)
         .order('date_time', { ascending: false });
 
       if (error) throw error;
 
-      const sales = (data || []).map((sale: any) => ({
-        ...sale,
-        recorded_by_name: sale.users?.full_name || 'Unknown',
-        stall_name: sale.stalls?.stall_name || 'Unknown',
-        item_name: sale.items?.item_name || 'Unknown',
-        category: sale.items?.category || 'Unknown'
-      }));
+      const sales = (data || []).map((sale: any) => {
+        const credit = Array.isArray(sale.credit_sales) ? sale.credit_sales[0] : sale.credit_sales;
+
+        return {
+          ...sale,
+          recorded_by_name: sale.users?.full_name || 'Unknown',
+          stall_name: sale.stalls?.stall_name || 'Unknown',
+          item_name: sale.items?.item_name || 'Unknown',
+          category: sale.items?.category || 'Unknown',
+          customer_name: credit?.customer_name ?? sale.customer_name,
+          customer_contact: credit?.customer_contact ?? sale.customer_contact,
+          payment_status: credit?.payment_status ?? sale.payment_status,
+          balance_due: credit?.balance_due ?? sale.balance_due,
+          amount_paid: credit?.amount_paid ?? sale.amount_paid,
+          due_date: credit?.due_date ?? sale.due_date,
+          notes: credit?.notes ?? sale.notes
+        };
+      });
 
       return { sales: sales as Sale[] };
     } catch (error) {

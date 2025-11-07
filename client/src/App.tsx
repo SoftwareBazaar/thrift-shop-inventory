@@ -13,6 +13,7 @@ import Layout from './components/Layout';
 import AddItem from './pages/AddItem';
 import RecordSale from './pages/RecordSale';
 import CreditSales from './pages/CreditSales';
+import OfflineIndicator from './components/OfflineIndicator';
 import { setupRealtime } from './services/dataService';
 import { isSupabaseConfigured } from './lib/supabase';
 import './App.css';
@@ -72,6 +73,8 @@ function App() {
                 </Route>
               </Routes>
             </ErrorBoundary>
+            {/* Offline/Sync Indicator - shows on all pages */}
+            <OfflineIndicator />
           </div>
         </Router>
       </MockAuthProvider>

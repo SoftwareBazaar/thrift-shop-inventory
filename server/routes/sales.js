@@ -186,7 +186,10 @@ router.get('/', authenticateToken, async (req, res) => {
         cs.customer_name,
         cs.customer_contact,
         cs.payment_status,
-        cs.balance_due
+        cs.balance_due,
+        cs.amount_paid,
+        cs.due_date,
+        cs.notes
       FROM sales s
       JOIN items i ON s.item_id = i.item_id
       JOIN stalls st ON s.stall_id = st.stall_id
@@ -211,6 +214,217 @@ router.get('/', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Get sales error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Update sale (Admin only)
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const {
+    item_id,
+    stall_id,
+    quantity_sold,
+    unit_price,
+    sale_type,
+    cash_amount,
+    mobile_amount,
+    customer_name,
+    customer_contact,
+    due_date,
+    notes
+  } = req.body;
+
+  try {
+    if (!item_id || !stall_id || !quantity_sold || !unit_price || !sale_type) {
+      return res.status(400).json({ message: 'Required fields are missing' });
+    }
+
+    if (!['cash', 'credit', 'mobile', 'split'].includes(sale_type)) {
+      return res.status(400).json({ message: 'Invalid sale type' });
+    }
+
+    const newItemId = Number(item_id);
+    const newStallId = Number(stall_id);
+    const newQuantity = Number(quantity_sold);
+    const newUnitPrice = Number(unit_price);
+
+    if ([newItemId, newStallId, newQuantity, newUnitPrice].some((value) => Number.isNaN(value))) {
+      return res.status(400).json({ message: 'Invalid numeric values provided' });
+    }
+
+    const saleResult = await pool.query(
+      `SELECT s.*, cs.credit_id, cs.customer_name AS credit_customer_name, cs.customer_contact AS credit_customer_contact,
+              cs.total_credit_amount, cs.amount_paid, cs.payment_status, cs.due_date AS credit_due_date, cs.notes AS credit_notes
+       FROM sales s
+       LEFT JOIN credit_sales cs ON s.sale_id = cs.sale_id
+       WHERE s.sale_id = $1`,
+      [id]
+    );
+
+    if (saleResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    const existingSale = saleResult.rows[0];
+
+    // Validate stalls
+    const stallCheck = await pool.query(
+      'SELECT stall_id FROM stalls WHERE stall_id = $1 AND status = $2',
+      [newStallId, 'active']
+    );
+
+    if (stallCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Stall not found or inactive' });
+    }
+
+    // Validate split amounts
+    let newCashAmount = null;
+    let newMobileAmount = null;
+    if (sale_type === 'split') {
+      if (!cash_amount || !mobile_amount) {
+        return res.status(400).json({ message: 'Cash and mobile amounts required for split sales' });
+      }
+      newCashAmount = Number(cash_amount);
+      newMobileAmount = Number(mobile_amount);
+      if (newCashAmount <= 0 || newMobileAmount <= 0) {
+        return res.status(400).json({ message: 'Split amounts must be greater than zero' });
+      }
+      const totalCheck = Number(quantity_sold) * Number(unit_price);
+      if (Math.abs((newCashAmount + newMobileAmount) - totalCheck) > 0.01) {
+        return res.status(400).json({ message: 'Split amounts must equal total amount' });
+      }
+    }
+
+    if (sale_type === 'credit' && (!customer_name || !customer_contact)) {
+      return res.status(400).json({ message: 'Customer details are required for credit sales' });
+    }
+
+    const totalAmount = newQuantity * newUnitPrice;
+
+    await pool.query('BEGIN');
+
+    try {
+      // Stock adjustments
+      if (newItemId !== Number(existingSale.item_id)) {
+        // Return stock to previous item
+        await pool.query(
+          'UPDATE items SET current_stock = current_stock + $1 WHERE item_id = $2',
+          [existingSale.quantity_sold, existingSale.item_id]
+        );
+
+        const newItemResult = await pool.query(
+          'SELECT current_stock FROM items WHERE item_id = $1',
+          [newItemId]
+        );
+
+        if (newItemResult.rows.length === 0) {
+          await pool.query('ROLLBACK');
+          return res.status(404).json({ message: 'Selected item not found' });
+        }
+
+        if (newItemResult.rows[0].current_stock < newQuantity) {
+          await pool.query('ROLLBACK');
+          return res.status(400).json({ message: 'Insufficient stock available for selected item' });
+        }
+
+        await pool.query(
+          'UPDATE items SET current_stock = current_stock - $1 WHERE item_id = $2',
+          [newQuantity, newItemId]
+        );
+      } else if (newQuantity !== existingSale.quantity_sold) {
+        const quantityDifference = newQuantity - existingSale.quantity_sold;
+        if (quantityDifference > 0) {
+          const stockResult = await pool.query(
+            'SELECT current_stock FROM items WHERE item_id = $1',
+            [newItemId]
+          );
+
+          if (stockResult.rows.length === 0 || stockResult.rows[0].current_stock < quantityDifference) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ message: 'Insufficient stock available for the new quantity' });
+          }
+
+          await pool.query(
+            'UPDATE items SET current_stock = current_stock - $1 WHERE item_id = $2',
+            [quantityDifference, newItemId]
+          );
+        } else if (quantityDifference < 0) {
+          await pool.query(
+            'UPDATE items SET current_stock = current_stock + $1 WHERE item_id = $2',
+            [Math.abs(quantityDifference), newItemId]
+          );
+        }
+      }
+
+      const updatedSaleResult = await pool.query(
+        `UPDATE sales 
+         SET item_id = $1,
+             stall_id = $2,
+             quantity_sold = $3,
+             unit_price = $4,
+             total_amount = $5,
+             sale_type = $6,
+             cash_amount = $7,
+             mobile_amount = $8
+         WHERE sale_id = $9
+         RETURNING *`,
+        [
+          newItemId,
+          newStallId,
+          newQuantity,
+          newUnitPrice,
+          totalAmount,
+          sale_type,
+          newCashAmount,
+          newMobileAmount,
+          id
+        ]
+      );
+
+      if (sale_type === 'credit') {
+        if (existingSale.credit_id) {
+          // Update existing credit record but keep amount_paid as-is
+          await pool.query(
+            `UPDATE credit_sales 
+             SET customer_name = $1,
+                 customer_contact = $2,
+                 total_credit_amount = $3,
+                 due_date = $4,
+                 notes = $5
+             WHERE credit_id = $6`,
+            [
+              customer_name,
+              customer_contact,
+              totalAmount,
+              due_date || null,
+              notes !== undefined ? notes : existingSale.credit_notes,
+              existingSale.credit_id
+            ]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO credit_sales (sale_id, customer_name, customer_contact, total_credit_amount, due_date, notes)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [id, customer_name, customer_contact, totalAmount, due_date || null, notes || null]
+          );
+        }
+      } else if (existingSale.credit_id) {
+        await pool.query('DELETE FROM credit_sales WHERE sale_id = $1', [id]);
+      }
+
+      await pool.query('COMMIT');
+
+      res.json({
+        message: 'Sale updated successfully',
+        sale: updatedSaleResult.rows[0]
+      });
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Update sale error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

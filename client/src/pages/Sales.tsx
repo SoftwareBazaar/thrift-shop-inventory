@@ -8,6 +8,7 @@ interface Sale {
   item_name: string;
   category: string;
   item_id?: number;
+  stall_id?: number;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
@@ -20,9 +21,12 @@ interface Sale {
   stall_name: string;
   customer_name?: string;
   customer_contact?: string;
+  due_date?: string | null;
+  notes?: string | null;
   buying_price?: number;
   payment_status?: string;
   balance_due?: number;
+  amount_paid?: number | null;
 }
 
 interface Stall {
@@ -32,19 +36,48 @@ interface Stall {
   manager: string;
 }
 
+interface InventoryItem {
+  item_id: number;
+  item_name: string;
+  category: string;
+  unit_price: number;
+  current_stock: number;
+}
+
+interface EditFormState {
+  sale_id: number;
+  item_id: number | '';
+  stall_id: number | '';
+  quantity_sold: string;
+  unit_price: string;
+  sale_type: 'cash' | 'credit' | 'mobile' | 'split';
+  cash_amount: string;
+  mobile_amount: string;
+  customer_name: string;
+  customer_contact: string;
+  due_date: string;
+  notes: string;
+}
+
 const Sales: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [stalls, setStalls] = useState<Stall[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('');
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string>('');
 
   useEffect(() => {
     fetchSales();
     fetchStalls();
+    fetchItems();
     
     // Auto-refresh every 5 seconds to sync data across all users
     const interval = setInterval(() => {
@@ -71,6 +104,15 @@ const Sales: React.FC = () => {
       setStalls(response.stalls);
     } catch (error) {
       console.error('Error fetching stalls:', error);
+    }
+  };
+
+  const fetchItems = async () => {
+    try {
+      const response = await dataApi.getInventory();
+      setItems(response.items || []);
+    } catch (error) {
+      console.error('Error fetching items:', error);
     }
   };
 
@@ -123,6 +165,121 @@ const Sales: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const openEditModal = (sale: Sale) => {
+    if (user?.role !== 'admin') return;
+    setEditError('');
+    setEditForm({
+      sale_id: sale.sale_id,
+      item_id: sale.item_id ?? '',
+      stall_id: sale.stall_id ?? '',
+      quantity_sold: sale.quantity_sold.toString(),
+      unit_price: sale.unit_price.toString(),
+      sale_type: sale.sale_type,
+      cash_amount: sale.cash_amount != null ? sale.cash_amount.toString() : '',
+      mobile_amount: sale.mobile_amount != null ? sale.mobile_amount.toString() : '',
+      customer_name: sale.customer_name || '',
+      customer_contact: sale.customer_contact || '',
+      due_date: sale.due_date ? sale.due_date.split('T')[0] : '',
+      notes: sale.notes || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditForm(null);
+    setSavingEdit(false);
+    setEditError('');
+  };
+
+  const updateEditForm = (field: keyof EditFormState, value: string | number | '') => {
+    setEditForm(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const handleSaleTypeChange = (value: 'cash' | 'credit' | 'mobile' | 'split') => {
+    if (!editForm) return;
+    setEditForm(prev => prev ? {
+      ...prev,
+      sale_type: value,
+      cash_amount: value === 'split' ? prev.cash_amount : '',
+      mobile_amount: value === 'split' ? prev.mobile_amount : '',
+      customer_name: value === 'credit' ? prev.customer_name : '',
+      customer_contact: value === 'credit' ? prev.customer_contact : '',
+      due_date: value === 'credit' ? prev.due_date : '',
+      notes: value === 'credit' ? prev.notes : ''
+    } : prev);
+  };
+
+  const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editForm) return;
+
+    try {
+      setSavingEdit(true);
+      setEditError('');
+
+      if (!editForm.item_id || !editForm.stall_id) {
+        setEditError('Please select both an item and stall.');
+        setSavingEdit(false);
+        return;
+      }
+
+      const payload: any = {
+        item_id: Number(editForm.item_id),
+        stall_id: Number(editForm.stall_id),
+        quantity_sold: Number(editForm.quantity_sold),
+        unit_price: Number(editForm.unit_price),
+        sale_type: editForm.sale_type
+      };
+
+      if (editForm.sale_type === 'split') {
+        if (!editForm.cash_amount || !editForm.mobile_amount) {
+          setEditError('Please provide both cash and mobile amounts for split sales.');
+          setSavingEdit(false);
+          return;
+        }
+        payload.cash_amount = Number(editForm.cash_amount);
+        payload.mobile_amount = Number(editForm.mobile_amount);
+        const expectedTotal = payload.quantity_sold * payload.unit_price;
+        if (Math.abs((payload.cash_amount || 0) + (payload.mobile_amount || 0) - expectedTotal) > 0.01) {
+          setEditError('Cash and mobile amounts must equal the total amount.');
+          setSavingEdit(false);
+          return;
+        }
+      } else {
+        payload.cash_amount = null;
+        payload.mobile_amount = null;
+      }
+
+      if (editForm.sale_type === 'credit') {
+        if (!editForm.customer_name || !editForm.customer_contact) {
+          setEditError('Customer name and contact are required for credit sales.');
+          setSavingEdit(false);
+          return;
+        }
+        payload.customer_name = editForm.customer_name;
+        payload.customer_contact = editForm.customer_contact;
+        payload.due_date = editForm.due_date || null;
+        payload.notes = editForm.notes || null;
+      } else {
+        payload.customer_name = null;
+        payload.customer_contact = null;
+        payload.due_date = null;
+        payload.notes = null;
+      }
+
+      await dataApi.updateSale(editForm.sale_id, payload);
+      await fetchSales();
+      await fetchItems();
+      closeEditModal();
+    } catch (error: any) {
+      console.error('Error updating sale:', error);
+      setEditError(error?.message || 'Failed to update sale. Please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   if (loading) {
@@ -422,6 +579,11 @@ const Sales: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Recorded By
                 </th>
+                {user?.role === 'admin' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -473,6 +635,16 @@ const Sales: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.recorded_by_name}
                   </td>
+                  {user?.role === 'admin' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                      <button
+                        onClick={() => openEditModal(sale)}
+                        className="text-sm font-semibold hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -499,6 +671,221 @@ const Sales: React.FC = () => {
               ➕ Record Your First Sale
             </button>
           )}
+        </div>
+      )}
+
+      {isEditModalOpen && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Sale</h3>
+              <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="px-6 py-4 space-y-4">
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
+                  {editError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
+                  <select
+                    value={editForm.item_id ? String(editForm.item_id) : ''}
+                    onChange={(e) => updateEditForm('item_id', e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={savingEdit}
+                  >
+                    <option value="">Select item</option>
+                    {items.map(item => (
+                      <option key={item.item_id} value={item.item_id}>
+                        {item.item_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stall</label>
+                  <select
+                    value={editForm.stall_id ? String(editForm.stall_id) : ''}
+                    onChange={(e) => updateEditForm('stall_id', e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={savingEdit}
+                  >
+                    <option value="">Select stall</option>
+                    {stalls.map(stall => (
+                      <option key={stall.stall_id} value={stall.stall_id}>{stall.stall_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Sold</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editForm.quantity_sold}
+                    onChange={(e) => updateEditForm('quantity_sold', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={savingEdit}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editForm.unit_price}
+                    onChange={(e) => updateEditForm('unit_price', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={savingEdit}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sale Type</label>
+                  <select
+                    value={editForm.sale_type}
+                    onChange={(e) => handleSaleTypeChange(e.target.value as EditFormState['sale_type'])}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={savingEdit}
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="mobile">Mobile</option>
+                    <option value="split">Split</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
+                  <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700">
+                    {formatCurrency(Number(editForm.quantity_sold || '0') * Number(editForm.unit_price || '0'))}
+                  </div>
+                </div>
+              </div>
+
+              {editForm.sale_type === 'split' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cash Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.cash_amount}
+                      onChange={(e) => updateEditForm('cash_amount', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={savingEdit}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.mobile_amount}
+                      onChange={(e) => updateEditForm('mobile_amount', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={savingEdit}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {editForm.sale_type === 'credit' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+                      <input
+                        type="text"
+                        value={editForm.customer_name}
+                        onChange={(e) => updateEditForm('customer_name', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={savingEdit}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Customer Contact</label>
+                      <input
+                        type="text"
+                        value={editForm.customer_contact}
+                        onChange={(e) => updateEditForm('customer_contact', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={savingEdit}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                      <input
+                        type="date"
+                        value={editForm.due_date}
+                        onChange={(e) => updateEditForm('due_date', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={savingEdit}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                      <input
+                        type="text"
+                        value={editForm.notes}
+                        onChange={(e) => updateEditForm('notes', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={savingEdit}
+                      />
+                    </div>
+                  </div>
+                  {(() => {
+                    const currentSale = sales.find(s => s.sale_id === editForm.sale_id);
+                    if (!currentSale || currentSale.sale_type !== 'credit') return null;
+                    return (
+                      <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 text-sm text-blue-700">
+                        <p><strong>Payment Status:</strong> {currentSale.payment_status || 'unpaid'}</p>
+                        <p><strong>Amount Paid:</strong> {formatCurrency(currentSale.amount_paid || 0)}</p>
+                        <p><strong>Balance Due:</strong> {formatCurrency(currentSale.balance_due || 0)}</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  disabled={savingEdit}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary px-4 py-2"
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

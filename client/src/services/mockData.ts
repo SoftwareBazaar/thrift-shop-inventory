@@ -25,6 +25,7 @@ export interface Sale {
   item_name: string;
   category: string;
   item_id?: number;
+  stall_id?: number;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
@@ -40,6 +41,9 @@ export interface Sale {
   balance_due?: number;
   cash_amount?: number | null;
   mobile_amount?: number | null;
+  due_date?: string | null;
+  notes?: string | null;
+  amount_paid?: number | null;
 }
 
 export interface SaleInput {
@@ -56,6 +60,8 @@ export interface SaleInput {
   balance_due?: number;
   cash_amount?: number | null;
   mobile_amount?: number | null;
+  due_date?: string | null;
+  notes?: string | null;
 }
 
 export interface InventoryItem {
@@ -343,6 +349,8 @@ export const mockApi = {
           const totalSold = stallSales.reduce((sum, s) => sum + s.quantity_sold, 0);
           
           // Calculate initial_stock and total_added based on distribution history
+          // Initial stock = stock the user had at the time of the most recent distribution
+          // Total added = quantity from the most recent distribution
           let initialStock = 0;
           let totalAdded = 0;
           
@@ -351,26 +359,30 @@ export const mockApi = {
             totalAdded = mostRecentDistribution.quantity_allocated;
             
             if (stallDistributions.length === 1) {
-              // First distribution: initial = 0
+              // First distribution: initial = 0 (no stock before first distribution)
               initialStock = 0;
             } else {
-              // Calculate stock before the most recent distribution
+              // For subsequent distributions: calculate stock at the time of the most recent distribution
+              // This is: all previous distributions minus all sales up to that point
               const previousDistributions = stallDistributions.slice(0, -1);
               const totalPreviousDistributed = previousDistributions.reduce(
                 (sum, d) => sum + d.quantity_allocated, 0
               );
               
-              // Calculate sales that happened before the most recent distribution
+              // Calculate all sales that happened strictly before the most recent distribution
+              // We use < (not <=) to ensure we get the stock at the moment before the new distribution
               const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
-              const salesBeforeLast = stallSales.filter(
+              const salesBeforeDistribution = stallSales.filter(
                 s => new Date(s.date_time) < lastDistributionDate
               );
-              const totalSalesBeforeLast = salesBeforeLast.reduce(
+              const totalSalesBeforeDistribution = salesBeforeDistribution.reduce(
                 (sum, s) => sum + s.quantity_sold, 0
               );
               
-              // Initial stock = previous distributions - sales before last distribution
-              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeLast);
+              // Initial stock = stock the user had at that moment (before the new distribution)
+              // This represents their "present stock" at the time they received the new stock
+              // This is: previous distributions - sales before that point
+              initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeDistribution);
             }
           }
           
@@ -487,10 +499,13 @@ export const mockApi = {
       item_id: itemId,
       item_name: item.item_name,
       category: item.category,
+      stall_id: stallId ?? undefined,
       quantity_sold: saleData.quantity_sold,
       unit_price: saleData.unit_price,
       total_amount: saleData.quantity_sold * saleData.unit_price,
       sale_type: saleData.sale_type,
+      cash_amount: saleData.sale_type === 'split' ? saleData.cash_amount || null : null,
+      mobile_amount: saleData.sale_type === 'split' ? saleData.mobile_amount || null : null,
       date_time: new Date().toISOString(),
       recorded_by: saleData.recorded_by,
       recorded_by_name: user ? user.full_name : 'Unknown',
@@ -498,9 +513,10 @@ export const mockApi = {
       customer_name: saleData.customer_name,
       customer_contact: saleData.customer_contact,
       payment_status: saleData.sale_type === 'credit' ? 'unpaid' : undefined,
-      balance_due: saleData.sale_type === 'credit' ? saleData.total_amount : undefined,
-      cash_amount: saleData.cash_amount || null,
-      mobile_amount: saleData.mobile_amount || null
+      balance_due: saleData.sale_type === 'credit' ? (saleData.quantity_sold * saleData.unit_price) : undefined,
+      due_date: saleData.due_date || null,
+      notes: saleData.notes || null,
+      amount_paid: saleData.sale_type === 'credit' ? 0 : null
     };
     
     sales.push(newSale);
@@ -519,34 +535,75 @@ export const mockApi = {
   updateSale: async (saleId: number, saleData: Partial<Sale>): Promise<{ sale: Sale }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
     const saleIndex = sales.findIndex(s => s.sale_id === saleId);
     if (saleIndex === -1) {
       throw new Error('Sale not found');
     }
-    // Update sale with new data, preserving existing fields
-    const updatedRecordedBy = saleData.recorded_by !== undefined ? saleData.recorded_by : sales[saleIndex].recorded_by;
-    // Find the user name for the updated recorded_by
-    const users = getStorageData<User[]>('users', mockUsers);
-    const recordedByUser = users.find(u => u.user_id === updatedRecordedBy);
-    const recordedByName = recordedByUser ? recordedByUser.full_name : sales[saleIndex].recorded_by_name;
-    
-    sales[saleIndex] = { 
-      ...sales[saleIndex], 
+    const existingSale = sales[saleIndex];
+
+    const newItemId = saleData.item_id !== undefined ? saleData.item_id : existingSale.item_id;
+    const newQuantity = saleData.quantity_sold !== undefined ? saleData.quantity_sold : existingSale.quantity_sold;
+    const newUnitPrice = saleData.unit_price !== undefined ? saleData.unit_price : existingSale.unit_price;
+    const newSaleType = saleData.sale_type !== undefined ? saleData.sale_type : existingSale.sale_type;
+    const newStallId = saleData.stall_id !== undefined ? saleData.stall_id : existingSale.stall_id;
+
+    // Update stock levels
+    if (newItemId !== existingSale.item_id) {
+      const previousItemIndex = items.findIndex(i => i.item_id === existingSale.item_id);
+      if (previousItemIndex !== -1) {
+        items[previousItemIndex].current_stock += existingSale.quantity_sold;
+      }
+
+      const newItemIndex = items.findIndex(i => i.item_id === newItemId);
+      if (newItemIndex !== -1) {
+        items[newItemIndex].current_stock = Math.max(
+          0,
+          items[newItemIndex].current_stock - newQuantity
+        );
+      }
+    } else if (newQuantity !== existingSale.quantity_sold) {
+      const itemIndex = items.findIndex(i => i.item_id === existingSale.item_id);
+      if (itemIndex !== -1) {
+        const difference = newQuantity - existingSale.quantity_sold;
+        items[itemIndex].current_stock = Math.max(
+          0,
+          items[itemIndex].current_stock - difference
+        );
+      }
+    }
+
+    const newItem = items.find(i => i.item_id === newItemId);
+    const newStall = newStallId ? stalls.find(s => s.stall_id === newStallId) : null;
+
+    const updatedSale: Sale = {
+      ...existingSale,
       ...saleData,
-      // Preserve fields that shouldn't change
-      sale_id: sales[saleIndex].sale_id,
-      item_name: sales[saleIndex].item_name,
-      category: sales[saleIndex].category,
-      date_time: sales[saleIndex].date_time,
-      recorded_by: updatedRecordedBy,
-      recorded_by_name: recordedByName,
-      stall_name: sales[saleIndex].stall_name,
-      customer_name: sales[saleIndex].customer_name,
-      customer_contact: sales[saleIndex].customer_contact,
-      buying_price: sales[saleIndex].buying_price
+      item_id: newItemId,
+      stall_id: newStallId,
+      quantity_sold: newQuantity,
+      unit_price: newUnitPrice,
+      total_amount: newQuantity * newUnitPrice,
+      sale_type: newSaleType,
+      cash_amount: newSaleType === 'split' ? (saleData.cash_amount ?? existingSale.cash_amount ?? null) : null,
+      mobile_amount: newSaleType === 'split' ? (saleData.mobile_amount ?? existingSale.mobile_amount ?? null) : null,
+      item_name: newItem ? newItem.item_name : existingSale.item_name,
+      category: newItem ? newItem.category : existingSale.category,
+      stall_name: newStall ? newStall.stall_name : existingSale.stall_name,
+      customer_name: newSaleType === 'credit' ? (saleData.customer_name ?? existingSale.customer_name) : undefined,
+      customer_contact: newSaleType === 'credit' ? (saleData.customer_contact ?? existingSale.customer_contact) : undefined,
+      due_date: newSaleType === 'credit' ? (saleData.due_date ?? existingSale.due_date ?? null) : null,
+      notes: newSaleType === 'credit' ? (saleData.notes ?? existingSale.notes ?? null) : null,
+      payment_status: newSaleType === 'credit' ? (existingSale.payment_status || 'unpaid') : undefined,
+      balance_due: newSaleType === 'credit' ? (newQuantity * newUnitPrice) - (existingSale.amount_paid || 0) : undefined,
+      amount_paid: newSaleType === 'credit' ? existingSale.amount_paid || 0 : null
     };
+
+    sales[saleIndex] = updatedSale;
     setStorageData('sales', sales);
-    return { sale: sales[saleIndex] };
+    setStorageData('items', items);
+    return { sale: updatedSale };
   },
 
   getSalesSummary: async (period: string): Promise<Analytics> => {
