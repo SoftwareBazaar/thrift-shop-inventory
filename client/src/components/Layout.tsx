@@ -8,6 +8,7 @@ const Layout: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordVisibility, setPasswordVisibility] = useState({ old: false, new: false, confirm: false });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const { user, logout, changePassword } = useAuth();
@@ -63,6 +64,7 @@ const Layout: React.FC = () => {
     if (success) {
       setPasswordSuccess(true);
       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordVisibility({ old: false, new: false, confirm: false });
       setTimeout(() => {
         setShowPasswordModal(false);
         setPasswordSuccess(false);
@@ -128,7 +130,10 @@ const Layout: React.FC = () => {
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => setShowPasswordModal(true)}
+                onClick={() => {
+                  setPasswordVisibility({ old: false, new: false, confirm: false });
+                  setShowPasswordModal(true);
+                }}
                 className="p-2 text-gray-400 hover:text-gray-600"
                 title="Change Password"
               >
@@ -184,33 +189,60 @@ const Layout: React.FC = () => {
               <form onSubmit={handlePasswordChange}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                  <input
-                    type="password"
-                    value={passwordForm.oldPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={passwordVisibility.old ? 'text' : 'password'}
+                      value={passwordForm.oldPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisibility(prev => ({ ...prev, old: !prev.old }))}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                    >
+                      {passwordVisibility.old ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                  <input
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={passwordVisibility.new ? 'text' : 'password'}
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisibility(prev => ({ ...prev, new: !prev.new }))}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                    >
+                      {passwordVisibility.new ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={passwordVisibility.confirm ? 'text' : 'password'}
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisibility(prev => ({ ...prev, confirm: !prev.confirm }))}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                    >
+                      {passwordVisibility.confirm ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
                 {passwordError && (
                   <div className="text-red-600 mb-4 text-sm">{passwordError}</div>
@@ -222,6 +254,7 @@ const Layout: React.FC = () => {
                       setShowPasswordModal(false);
                       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
                       setPasswordError('');
+                      setPasswordVisibility({ old: false, new: false, confirm: false });
                     }}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
                   >

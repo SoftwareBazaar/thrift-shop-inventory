@@ -101,8 +101,8 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const changePassword = async (username: string, oldPassword: string, newPassword: string): Promise<boolean> => {
     try {
-      const storedPassword = getPasswordForUser(username);
-      if (!storedPassword || storedPassword !== oldPassword) {
+      const storedPassword = getPasswordForUser(username) ?? 'admin123';
+      if (storedPassword !== oldPassword) {
         return false;
       }
       setPasswordForUser(username, newPassword);
