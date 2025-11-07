@@ -111,15 +111,6 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-900 mb-2">Demo Credentials:</h3>
-            <div className="space-y-1 text-sm text-blue-700">
-              <p><strong>Admin:</strong> admin / admin123</p>
-              <p><strong>Kelvin (Stall 316):</strong> kelvin / admin123</p>
-              <p><strong>Manuel (Stall 309):</strong> manuel / admin123</p>
-            </div>
-          </div>
-
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">
               Professional inventory management system for multi-stall operations
