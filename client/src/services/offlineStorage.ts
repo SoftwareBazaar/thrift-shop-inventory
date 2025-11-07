@@ -181,7 +181,7 @@ class OfflineStorageService {
       const transaction = this.db!.transaction(['offline_queue'], 'readonly');
       const store = transaction.objectStore('offline_queue');
       const index = store.index('synced');
-      const request = index.getAll(false); // Get unsynced operations
+      const request = index.getAll(IDBKeyRange.only(false)); // Get unsynced operations
 
       request.onsuccess = () => {
         resolve(request.result || []);
