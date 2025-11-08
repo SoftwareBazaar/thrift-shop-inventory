@@ -60,7 +60,7 @@ const readCredentialCache = (): Record<string, CredentialCacheEntry> => {
   if (typeof window === 'undefined') return {};
   try {
     const stored = window.localStorage.getItem(CREDENTIAL_CACHE_KEY);
-    return stored ? JSON.parse(stored) : {};
+  return stored ? JSON.parse(stored) : {};
   } catch {
     return {};
   }
@@ -206,7 +206,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       if (fetchError || !userRow) {
         throw new Error('Invalid credentials');
-      }
+          }
 
       const matches = await bcrypt.compare(password, userRow.password_hash || '');
       if (!matches) {
@@ -216,15 +216,15 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       const { password_hash, ...authUser } = userRow;
 
       const authToken = `supabase_token_${Date.now()}_${username}`;
-      localStorage.setItem('token', authToken);
-      localStorage.setItem('user', JSON.stringify(authUser));
-      setToken(authToken);
-      setUser(authUser);
-      persistAuthMode('server');
+        localStorage.setItem('token', authToken);
+        localStorage.setItem('user', JSON.stringify(authUser));
+        setToken(authToken);
+        setUser(authUser);
+        persistAuthMode('server');
       const passwordVersion = await derivePasswordHash(username, password);
       persistPasswordVersion(passwordVersion);
       await cacheCredentials(authUser, password, passwordVersion);
-      return;
+        return;
 
       const cachedEntry = getCredentialEntry(username);
       if (!cachedEntry || !cachedEntry.passwordHash) {
@@ -235,11 +235,11 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (offlineHash !== cachedEntry.passwordHash) {
         throw new Error('Invalid password');
       }
-
+      
       const offlineToken = `offline_token_${Date.now()}_${username}`;
       localStorage.setItem('token', offlineToken);
       localStorage.setItem('user', JSON.stringify(cachedEntry.user));
-
+      
       setToken(offlineToken);
       setUser(cachedEntry.user);
       persistAuthMode('server');
@@ -247,7 +247,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     } catch (error) {
       console.error('Login error:', error);
       if (error instanceof Error) {
-        throw error;
+      throw error;
       }
       throw new Error('Login failed');
     } finally {
@@ -266,10 +266,10 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
 
     if (!token || !user) {
-      throw new Error('You must be signed in to change your password');
-    }
+        throw new Error('You must be signed in to change your password');
+      }
 
-    try {
+      try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error('You are currently offline. Connect to the internet to change your password.');
       }
