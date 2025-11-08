@@ -320,28 +320,23 @@ export const dbApi = {
           
           return userItem;
         } else {
-          // For admin: calculate total available stock (initial + added)
-          // Distributions do NOT reduce admin's displayed stock
-          
-          // Get total_added from stock_additions table
+          // For admin view: rely on current_stock maintained in items table (handles sales + additions)
+          const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
+          const currentStock = item.current_stock != null ? Number(item.current_stock) : 0;
+
+          // Derive total_added from stock_additions for display purposes
           const { data: stockAdditions } = await (supabase as any)
             .from('stock_additions')
             .select('quantity_added')
             .eq('item_id', item.item_id);
 
           const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + a.quantity_added, 0) || 0;
-          
-          // Admin sees: initial_stock + total_added (distributions do NOT reduce admin's displayed stock)
-          // Ensure initial_stock is a valid number (handle null, undefined, or string)
-          const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
-          const adminStock = initialStock + totalAdded;
 
-          // Debug logging
-          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, adminStock: ${adminStock}`);
+          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, current_stock: ${currentStock}`);
 
           return {
             ...item,
-            current_stock: Math.max(0, adminStock),
+            current_stock: Math.max(0, currentStock),
             initial_stock: initialStock,
             total_added: totalAdded
           };
