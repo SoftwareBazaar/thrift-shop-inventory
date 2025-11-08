@@ -6,6 +6,14 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+const MIN_PASSWORD_LENGTH = 6;
+const MIN_SPECIAL_CHARS = 2;
+
+const hasRequiredSpecialChars = (password = '') => {
+  const specialChars = password.replace(/[A-Za-z0-9]/g, '');
+  return specialChars.length >= MIN_SPECIAL_CHARS;
+};
+
 // Register new user (Admin only)
 router.post('/register', authenticateToken, async (req, res) => {
   try {
@@ -105,6 +113,55 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Change password
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long` });
+    }
+
+    if (!hasRequiredSpecialChars(newPassword)) {
+      return res.status(400).json({ message: `Password must include at least ${MIN_SPECIAL_CHARS} non-alphanumeric characters` });
+    }
+
+    const userId = req.user.user_id;
+
+    const userResult = await pool.query(
+      'SELECT password_hash FROM users WHERE user_id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    const isValidPassword = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ message: 'Incorrect current password' });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE user_id = $2',
+      [newPasswordHash, userId]
+    );
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
