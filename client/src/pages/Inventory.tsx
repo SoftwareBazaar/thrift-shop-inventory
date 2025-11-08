@@ -46,7 +46,8 @@ const Inventory: React.FC = () => {
     category: '',
     unit_price: '',
     initial_stock: '',
-    total_added: ''
+    total_added: '',
+    current_stock: ''
   });
   const [distributionData, setDistributionData] = useState({
     item_id: 0,
@@ -60,7 +61,10 @@ const Inventory: React.FC = () => {
       // For non-admin users, pass their stall_id to get only distributed stock
       const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
       const response = await dataApi.getInventory(stallId);
-      setItems(response.items);
+      const sortedItems = [...(response.items || [])].sort((a, b) =>
+        a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
+      );
+      setItems(sortedItems);
     } catch (error) {
       console.error('Error fetching items:', error);
     } finally {
@@ -96,7 +100,9 @@ const Inventory: React.FC = () => {
     try {
       // Mock categories from inventory data
       const response = await dataApi.getInventory();
-      const categories = [...new Set(response.items.map(item => item.category))];
+      const categories = [...new Set(response.items.map(item => item.category))].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      );
       setCategories(categories);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -227,17 +233,41 @@ const Inventory: React.FC = () => {
     try {
       const initialStock = parseInt(editFormData.initial_stock);
       const totalAdded = parseInt(editFormData.total_added);
+      const currentStock = parseInt(editFormData.current_stock);
       
       // Calculate current_stock based on initial_stock and total_added
       // Note: current_stock = initial_stock + total_added - distributed
       // We'll keep current_stock as is, but update initial_stock and total_added
       
+      if (Number.isNaN(initialStock) || initialStock < 0) {
+        alert('Initial stock must be zero or greater.');
+        return;
+      }
+
+      if (Number.isNaN(totalAdded) || totalAdded < 0) {
+        alert('Total added must be zero or greater.');
+        return;
+      }
+
+      if (Number.isNaN(currentStock) || currentStock < 0) {
+        alert('Current stock must be zero or greater.');
+        return;
+      }
+
+      const unitPrice = parseFloat(editFormData.unit_price);
+
+      if (Number.isNaN(unitPrice) || unitPrice <= 0) {
+        alert('Unit price must be greater than zero.');
+        return;
+      }
+
       await dataApi.updateItem(selectedItem.item_id, {
         item_name: editFormData.item_name,
         category: editFormData.category,
-        unit_price: parseFloat(editFormData.unit_price),
+        unit_price: unitPrice,
         initial_stock: initialStock,
-        total_added: totalAdded
+        total_added: totalAdded,
+        current_stock: currentStock
       });
       
       setShowEditModal(false);
@@ -490,7 +520,8 @@ const Inventory: React.FC = () => {
                               category: item.category,
                               unit_price: item.unit_price.toString(),
                               initial_stock: item.initial_stock.toString(),
-                              total_added: item.total_added.toString()
+                              total_added: item.total_added.toString(),
+                              current_stock: item.current_stock.toString()
                             });
                             setShowEditModal(true);
                           }}
@@ -764,6 +795,19 @@ const Inventory: React.FC = () => {
                   required
                 />
                 <p className="mt-1 text-xs text-gray-500">Original stock quantity when item was added</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock *</label>
+                <input
+                  type="number"
+                  value={editFormData.current_stock}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, current_stock: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">Adjust to correct on-hand quantity.</p>
               </div>
 
               <div>

@@ -68,6 +68,8 @@ const Sales: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
@@ -110,7 +112,12 @@ const Sales: React.FC = () => {
   const fetchItems = async () => {
     try {
       const response = await dataApi.getInventory();
-      setItems(response.items || []);
+      const fetchedItems = response.items || [];
+      setItems(fetchedItems);
+      const uniqueCategories = [...new Set(fetchedItems.map(item => item.category))].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      );
+      setCategories(uniqueCategories);
     } catch (error) {
       console.error('Error fetching items:', error);
     }
@@ -150,6 +157,8 @@ const Sales: React.FC = () => {
       const stall = stalls.find(s => s.stall_id === selectedStall);
       if (!stall || sale.stall_name !== stall.stall_name) return false;
     }
+
+    if (categoryFilter && sale.category !== categoryFilter) return false;
     
     // Filter by sale type
     if (saleTypeFilter && sale.sale_type !== saleTypeFilter) return false;
@@ -483,7 +492,7 @@ const Sales: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
             <input
@@ -519,6 +528,20 @@ const Sales: React.FC = () => {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Categories</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Sale Type</label>
             <select
               value={saleTypeFilter}
@@ -539,6 +562,7 @@ const Sales: React.FC = () => {
               onClick={() => {
                 setSelectedStall('');
                 setSaleTypeFilter('');
+                setCategoryFilter('');
                 setDateRange({ startDate: '', endDate: '' });
               }}
               className="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
