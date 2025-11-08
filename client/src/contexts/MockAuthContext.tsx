@@ -227,7 +227,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
 
       const cachedEntry = getCredentialEntry(username);
-      if (!cachedEntry || !cachedEntry.passwordHash) {
+      if (!cachedEntry) {
         throw new Error('Unable to reach the server. Connect to the internet to sign in for the first time.');
       }
 
