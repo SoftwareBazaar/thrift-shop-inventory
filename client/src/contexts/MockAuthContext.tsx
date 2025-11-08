@@ -232,7 +232,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
 
       const offlineHash = await derivePasswordHash(username, password);
-      if (!cachedEntry || offlineHash !== cachedEntry.passwordHash) {
+      if (!cachedEntry || !cachedEntry.passwordHash || offlineHash !== cachedEntry.passwordHash) {
         throw new Error('Invalid password');
       }
 
