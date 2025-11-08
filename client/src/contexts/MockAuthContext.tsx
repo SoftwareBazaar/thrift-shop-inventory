@@ -227,12 +227,12 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       return;
 
       const cachedEntry = getCredentialEntry(username);
-      if (!cachedEntry) {
+      if (!cachedEntry?.passwordHash) {
         throw new Error('Unable to reach the server. Connect to the internet to sign in for the first time.');
       }
 
       const offlineHash = await derivePasswordHash(username, password);
-      if (!cachedEntry || !cachedEntry.passwordHash || offlineHash !== cachedEntry.passwordHash) {
+      if (offlineHash !== cachedEntry.passwordHash) {
         throw new Error('Invalid password');
       }
 
