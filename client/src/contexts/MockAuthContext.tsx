@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { User } from '../services/dataService';
+import bcrypt from 'bcryptjs';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -290,40 +292,41 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         throw new Error('You are currently offline. Connect to the internet to change your password.');
       }
 
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ oldPassword, newPassword }),
-      });
-
-      if (response.ok) {
-        const result = await response.json().catch(() => ({}));
-        const newPasswordVersion = (result as { passwordVersion?: string | null }).passwordVersion ?? null;
-        await cacheCredentials(user, newPassword, newPasswordVersion);
-        persistPasswordVersion(newPasswordVersion);
-        logout();
-        return true;
+      if (!isSupabaseConfigured()) {
+        throw new Error('Password change service is unavailable because the database is not configured.');
       }
 
-      if (response.status === 401) {
+      const { data: existingUser, error: fetchError } = await (supabase as any)
+        .from('users')
+        .select('password_hash')
+        .eq('user_id', user.user_id)
+        .single();
+
+      if (fetchError || !existingUser) {
+        throw new Error('Unable to verify your account. Please try again.');
+      }
+
+      const matches = await bcrypt.compare(oldPassword, existingUser.password_hash || '');
+      if (!matches) {
         return false;
       }
 
-      if (response.status === 405) {
-        throw new Error('Password change service is unavailable. Please check your deployment configuration and try again.');
+      const newHash = await bcrypt.hash(newPassword, 10);
+      const { error: updateError } = await (supabase as any)
+        .from('users')
+        .update({ password_hash: newHash })
+        .eq('user_id', user.user_id);
+
+      if (updateError) {
+        throw new Error(updateError.message || 'Failed to update password.');
       }
 
-      const errorData = await response.json().catch(() => ({}));
-      const message = (errorData as { message?: string }).message || 'Unable to change password';
-
-      throw new Error(message);
+      const newPasswordVersion = await derivePasswordHash(user.username, newPassword);
+      await cacheCredentials(user, newPassword, newPasswordVersion);
+      persistPasswordVersion(newPasswordVersion);
+      logout();
+      return true;
     } catch (error: any) {
-      if (error?.message && error.message.includes('Failed to fetch')) {
-        throw new Error('Unable to change password while offline. Please reconnect and try again.');
-      }
       throw new Error(error?.message || 'Unable to change password');
     }
   };
