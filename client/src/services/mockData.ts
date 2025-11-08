@@ -409,15 +409,18 @@ export const mockApi = {
       return { items: filteredItems };
     }
     
-    // For admin users: show actual current stock (tracks sales and additions)
+    // For admin users: show actual current stock (initial + additions - sales)
     const itemsWithAdminStock = items.map(item => {
       const initialStock = item.initial_stock || 0;
       const totalAdded = item.total_added || 0;
-      const currentStock = item.current_stock || 0;
+      const totalSold = sales
+        .filter(sale => sale.item_id === item.item_id)
+        .reduce((sum, sale) => sum + sale.quantity_sold, 0);
+      const adminStock = Math.max(0, initialStock + totalAdded - totalSold);
       
       return {
         ...item,
-        current_stock: Math.max(0, currentStock),
+        current_stock: adminStock,
         initial_stock: initialStock,
         total_added: totalAdded
       };

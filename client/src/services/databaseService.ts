@@ -320,23 +320,44 @@ export const dbApi = {
           
           return userItem;
         } else {
-          // For admin view: rely on current_stock maintained in items table (handles sales + additions)
+          // For admin view: calculate actual available stock (initial + additions - total sold)
           const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
-          const currentStock = item.current_stock != null ? Number(item.current_stock) : 0;
+          const existingCurrentStock = item.current_stock != null ? Number(item.current_stock) : 0;
 
-          // Derive total_added from stock_additions for display purposes
+          // Sum stock additions
           const { data: stockAdditions } = await (supabase as any)
             .from('stock_additions')
             .select('quantity_added')
             .eq('item_id', item.item_id);
 
-          const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + a.quantity_added, 0) || 0;
+          const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0) || 0;
 
-          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, current_stock: ${currentStock}`);
+          // Sum sales quantities
+          const { data: itemSales } = await (supabase as any)
+            .from('sales')
+            .select('quantity_sold')
+            .eq('item_id', item.item_id);
+
+          const totalSold = (itemSales as any)?.reduce((sum: number, sale: any) => sum + (sale.quantity_sold || 0), 0) || 0;
+
+          const adminStock = Math.max(0, initialStock + totalAdded - totalSold);
+
+          if (existingCurrentStock !== adminStock) {
+            try {
+              await (supabase as any)
+                .from('items')
+                .update({ current_stock: adminStock })
+                .eq('item_id', item.item_id);
+            } catch (updateError) {
+              console.warn('[Admin Stock Calc] Failed to sync current_stock for item', item.item_id, updateError);
+            }
+          }
+
+          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalSold: ${totalSold}, adminStock: ${adminStock}`);
 
           return {
             ...item,
-            current_stock: Math.max(0, currentStock),
+            current_stock: adminStock,
             initial_stock: initialStock,
             total_added: totalAdded
           };
