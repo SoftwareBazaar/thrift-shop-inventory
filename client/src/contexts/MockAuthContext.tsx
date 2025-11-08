@@ -227,11 +227,11 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
 
       const cachedEntry = getCredentialEntry(username);
-      const passwordHash = cachedEntry?.passwordHash;
-      if (!cachedEntry || !passwordHash) {
+      if (!cachedEntry || !cachedEntry.passwordHash) {
         throw new Error('Unable to reach the server. Connect to the internet to sign in for the first time.');
       }
 
+      const { passwordHash, user: cachedUser, passwordVersion: cachedVersion } = cachedEntry;
       const offlineHash = await derivePasswordHash(username, password);
       if (offlineHash !== passwordHash) {
         throw new Error('Invalid password');
@@ -239,12 +239,12 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       
       const offlineToken = `offline_token_${Date.now()}_${username}`;
       localStorage.setItem('token', offlineToken);
-      localStorage.setItem('user', JSON.stringify(cachedEntry.user));
+      localStorage.setItem('user', JSON.stringify(cachedUser));
       
       setToken(offlineToken);
-      setUser(cachedEntry.user);
+      setUser(cachedUser);
       persistAuthMode('server');
-      persistPasswordVersion(cachedEntry.passwordVersion ?? passwordVersion ?? null);
+      persistPasswordVersion(cachedVersion ?? passwordVersion ?? null);
     } catch (error) {
       console.error('Login error:', error);
       if (error instanceof Error) {
