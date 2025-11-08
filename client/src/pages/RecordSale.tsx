@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
 import { dataApi } from '../services/dataService';
@@ -29,11 +29,7 @@ const RecordSale: React.FC = () => {
     notes: ''
   });
 
-  useEffect(() => {
-    fetchData();
-  }, [user?.role, user?.stall_id]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // For non-admin users, only get items distributed to their stall
       const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
@@ -50,7 +46,11 @@ const RecordSale: React.FC = () => {
       console.error('Error fetching data:', err);
       setError('Failed to load data.');
     }
-  };
+  }, [user?.role, user?.stall_id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
