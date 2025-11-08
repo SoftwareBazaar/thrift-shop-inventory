@@ -198,51 +198,33 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     setLoading(true);
     
     try {
-      const serverAttempt: ServerLoginResult = await (async () => {
-        try {
-          const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ username, password }),
-          });
+      const { data: userRow, error: fetchError } = await (supabase as any)
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
 
-          if (response.ok) {
-            const data = await response.json();
-            return { success: true as const, data: data as { token: string; user: User } };
-          }
-
-          if (response.status === 404 || response.status === 405) {
-            return { unavailable: true as const };
-          }
-
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            error: (errorData as { message?: string }).message || 'Login failed',
-            status: response.status,
-          };
-        } catch (error) {
-          return { unavailable: true as const };
-        }
-      })();
-
-      if ('success' in serverAttempt && serverAttempt.success) {
-        const { token: authToken, user: authUser, passwordVersion: serverPasswordVersion } = serverAttempt.data;
-        localStorage.setItem('token', authToken);
-        localStorage.setItem('user', JSON.stringify(authUser));
-        setToken(authToken);
-        setUser(authUser);
-        persistAuthMode('server');
-        persistPasswordVersion(serverPasswordVersion ?? null);
-        await cacheCredentials(authUser, password, serverPasswordVersion ?? null);
-        return;
+      if (fetchError || !userRow) {
+        throw new Error('Invalid credentials');
       }
 
-      if (!('unavailable' in serverAttempt && serverAttempt.unavailable)) {
-        const message = 'error' in serverAttempt ? serverAttempt.error : 'Login failed';
-        throw new Error(message);
+      const matches = await bcrypt.compare(password, userRow.password_hash || '');
+      if (!matches) {
+        throw new Error('Invalid credentials');
       }
+
+      const { password_hash, ...authUser } = userRow;
+
+      const authToken = `supabase_token_${Date.now()}_${username}`;
+      localStorage.setItem('token', authToken);
+      localStorage.setItem('user', JSON.stringify(authUser));
+      setToken(authToken);
+      setUser(authUser);
+      persistAuthMode('server');
+      const passwordVersion = await derivePasswordHash(username, password);
+      persistPasswordVersion(passwordVersion);
+      await cacheCredentials(authUser, password, passwordVersion);
+      return;
 
       const cachedEntry = getCredentialEntry(username);
       if (!cachedEntry) {
