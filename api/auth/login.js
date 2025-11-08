@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const supabase = require('../../lib/supabase');
 
 module.exports = async (req, res) => {
@@ -39,8 +40,10 @@ module.exports = async (req, res) => {
     }
 
     // Generate JWT token
+    const passwordVersion = crypto.createHash('sha256').update(user.password_hash || '').digest('hex');
+
     const token = jwt.sign(
-      { userId: user.user_id, username: user.username, role: user.role },
+      { userId: user.user_id, username: user.username, role: user.role, passwordVersion },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -51,7 +54,8 @@ module.exports = async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      passwordVersion
     });
   } catch (error) {
     console.error('Login error:', error);
