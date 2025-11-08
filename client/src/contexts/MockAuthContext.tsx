@@ -286,6 +286,10 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
 
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('You are currently offline. Connect to the internet to change your password.');
+      }
+
       const response = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: {
@@ -306,6 +310,10 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       if (response.status === 401) {
         return false;
+      }
+
+      if (response.status === 405) {
+        throw new Error('Password change service is unavailable. Please check your deployment configuration and try again.');
       }
 
       const errorData = await response.json().catch(() => ({}));

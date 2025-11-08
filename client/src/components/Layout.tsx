@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/MockAuthContext';
+import { useAuth, PASSWORD_REQUIREMENTS, validatePasswordStrength } from '../contexts/MockAuthContext';
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +10,8 @@ const Layout: React.FC = () => {
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordVisibility, setPasswordVisibility] = useState({ old: false, new: false, confirm: false });
   const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const { user, logout, changePassword } = useAuth();
   const location = useLocation();
   
@@ -44,33 +45,40 @@ const Layout: React.FC = () => {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
-    setPasswordSuccess(false);
+    setPasswordSuccess('');
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordError('New passwords do not match');
       return;
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (!user) return;
+
+    const strengthError = validatePasswordStrength(passwordForm.newPassword);
+    if (strengthError) {
+      setPasswordError(strengthError);
       return;
     }
 
-    if (!user) return;
+    setPasswordLoading(true);
 
-    const success = await changePassword(user.username, passwordForm.oldPassword, passwordForm.newPassword);
-    if (success) {
-      setPasswordSuccess(true);
-      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-      setPasswordVisibility({ old: false, new: false, confirm: false });
-    setTimeout(() => {
-      setPasswordSuccess(false);
-      setShowPasswordModal(false);
-      logout();
-      navigate('/login', { replace: true });
-    }, 1800);
-    } else {
-      setPasswordError('Incorrect current password');
+    try {
+      const success = await changePassword(user.username, passwordForm.oldPassword, passwordForm.newPassword);
+      if (success) {
+        setPasswordSuccess('Password changed successfully. You will be signed out to apply the update.');
+        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        setPasswordVisibility({ old: false, new: false, confirm: false });
+        setTimeout(() => {
+          logout();
+          navigate('/login', { replace: true });
+        }, 1800);
+      } else {
+        setPasswordError('Incorrect current password');
+      }
+    } catch (error: any) {
+      setPasswordError(error?.message || 'Unable to change password. Please try again later.');
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -183,10 +191,14 @@ const Layout: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Change Password</h2>
             
-            {passwordSuccess ? (
-              <div className="text-green-600 mb-4">✓ Password changed successfully! You'll be signed out to apply the update.</div>
-            ) : (
-              <form onSubmit={handlePasswordChange}>
+            {passwordSuccess && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm p-3 rounded mb-4">
+                {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordChange}>
+              <fieldset disabled={passwordLoading || !!passwordSuccess}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
                   <div className="relative">
@@ -224,6 +236,9 @@ const Layout: React.FC = () => {
                       {passwordVisibility.new ? '🙈' : '👁️'}
                     </button>
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Minimum {PASSWORD_REQUIREMENTS.minLength} characters with at least {PASSWORD_REQUIREMENTS.minSpecial} symbol characters (e.g. !, @, #).
+                  </p>
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
@@ -245,7 +260,9 @@ const Layout: React.FC = () => {
                   </div>
                 </div>
                 {passwordError && (
-                  <div className="text-red-600 mb-4 text-sm">{passwordError}</div>
+                  <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded mb-4">
+                    {passwordError}
+                  </div>
                 )}
                 <div className="flex space-x-3">
                   <button
@@ -262,13 +279,14 @@ const Layout: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    disabled={passwordLoading || !!passwordSuccess}
+                    className={`flex-1 px-4 py-2 bg-blue-600 text-white rounded-md transition-colors ${passwordLoading || passwordSuccess ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-700'}`}
                   >
-                    Change Password
+                    {passwordLoading ? 'Updating...' : 'Change Password'}
                   </button>
                 </div>
-              </form>
-            )}
+              </fieldset>
+            </form>
           </div>
         </div>
       )}
