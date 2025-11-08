@@ -127,13 +127,36 @@ const RecordSale: React.FC = () => {
       // Calculate total amount
       const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
       
+      if (formData.sale_type === 'split') {
+        const cash = parseFloat(formData.cash_amount);
+        const mobile = parseFloat(formData.mobile_amount);
+        
+        if (!formData.cash_amount || !formData.mobile_amount || !Number.isFinite(cash) || !Number.isFinite(mobile)) {
+          setError('Enter both cash and mobile amounts for split payments.');
+          setLoading(false);
+          return;
+        }
+
+        if (cash <= 0 || mobile <= 0) {
+          setError('Split payment amounts must be greater than zero.');
+          setLoading(false);
+          return;
+        }
+
+        if (Math.abs((cash + mobile) - totalAmount) > 0.5) {
+          setError('Cash and mobile totals must equal the negotiated total.');
+          setLoading(false);
+          return;
+        }
+      }
+      
       // Calculate split amounts if needed
       let cash_amount = null;
       let mobile_amount = null;
       
       if (formData.sale_type === 'split') {
-        cash_amount = parseFloat(formData.cash_amount) || totalAmount / 2;
-        mobile_amount = parseFloat(formData.mobile_amount) || totalAmount / 2;
+        cash_amount = parseFloat(formData.cash_amount);
+        mobile_amount = parseFloat(formData.mobile_amount);
       }
       
       // Record the sale
@@ -147,6 +170,10 @@ const RecordSale: React.FC = () => {
         recorded_by: recordedBy,
         customer_name: formData.customer_name || undefined,
         customer_contact: formData.customer_contact || undefined,
+        due_date: formData.sale_type === 'credit' ? (formData.due_date || null) : undefined,
+        notes: formData.sale_type === 'credit' ? (formData.notes || null) : undefined,
+        payment_status: formData.sale_type === 'credit' ? 'unpaid' : undefined,
+        amount_paid: formData.sale_type === 'credit' ? 0 : undefined,
         cash_amount: cash_amount,
         mobile_amount: mobile_amount
       });

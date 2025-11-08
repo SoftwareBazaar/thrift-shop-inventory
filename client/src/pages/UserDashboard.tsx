@@ -34,6 +34,7 @@ const UserDashboard: React.FC = () => {
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SaleItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
+  const [salePrice, setSalePrice] = useState('');
   const [saleType, setSaleType] = useState<'cash' | 'mobile' | 'split'>('cash');
   const [customerName, setCustomerName] = useState('');
   const [cashAmount, setCashAmount] = useState('');
@@ -41,6 +42,7 @@ const UserDashboard: React.FC = () => {
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
+  const [saleError, setSaleError] = useState('');
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -101,6 +103,8 @@ const UserDashboard: React.FC = () => {
   const handleItemSelect = (item: SaleItem) => {
     setSelectedItem(item);
     setSaleQuantity(1);
+    setSalePrice(item.unit_price.toString());
+    setSaleError('');
     setShowSaleForm(true);
   };
 
@@ -109,22 +113,64 @@ const UserDashboard: React.FC = () => {
     if (!selectedItem || !user) return;
 
     try {
-      // Calculate split amounts if needed
+      if (!selectedItem || !user) return;
+
+      const quantity = Number.isFinite(saleQuantity) ? saleQuantity : 0;
+      const price = parseFloat(salePrice);
+
+      if (!quantity || quantity <= 0) {
+        setSaleError('Quantity must be at least 1.');
+        return;
+      }
+
+      if (quantity > (selectedItem.current_stock || 0)) {
+        setSaleError('Insufficient stock available for this item.');
+        return;
+      }
+
+      if (!Number.isFinite(price) || price <= 0) {
+        setSaleError('Enter a valid selling price greater than zero.');
+        return;
+      }
+
+      const totalAmount = quantity * price;
+
       let cash_amount = null;
       let mobile_amount = null;
-      const totalAmount = saleQuantity * selectedItem.unit_price;
-      
+
       if (saleType === 'split') {
-        cash_amount = parseFloat(cashAmount) || totalAmount / 2;
-        mobile_amount = parseFloat(mobileAmount) || totalAmount / 2;
+        const cashValue = parseFloat(cashAmount);
+        const mobileValue = parseFloat(mobileAmount);
+
+        if (!cashAmount || !mobileAmount || !Number.isFinite(cashValue) || !Number.isFinite(mobileValue)) {
+          setSaleError('Enter both cash and mobile amounts for split payments.');
+          return;
+        }
+
+        if (cashValue <= 0 || mobileValue <= 0) {
+          setSaleError('Split payment amounts must be greater than zero.');
+          return;
+        }
+
+        if (Math.abs((cashValue + mobileValue) - totalAmount) > 0.5) {
+          setSaleError('Cash and mobile totals must equal the negotiated amount.');
+          return;
+        }
+
+        cash_amount = cashValue;
+        mobile_amount = mobileValue;
       }
-      
+
+      setSaleError('');
+
+      // Calculate split amounts if needed
       // Use mockApi to persist the sale
       await dataApi.createSale({
         item_id: selectedItem.item_id,
         stall_id: user.stall_id || 0,
-        quantity_sold: saleQuantity,
-        unit_price: selectedItem.unit_price,
+        quantity_sold: quantity,
+        unit_price: price,
+        total_amount: totalAmount,
         sale_type: saleType,
         recorded_by: user.user_id,
         customer_name: saleType === 'mobile' ? customerName : undefined,
@@ -140,14 +186,16 @@ const UserDashboard: React.FC = () => {
       setShowSaleForm(false);
       setSelectedItem(null);
       setSaleQuantity(1);
+      setSalePrice('');
       setCustomerName('');
       setSaleType('cash');
       setCashAmount('');
       setMobileAmount('');
+      setSaleError('');
 
     } catch (error) {
       console.error('Error recording sale:', error);
-      alert('Failed to record sale');
+      setSaleError(error instanceof Error ? error.message : 'Failed to record sale');
     }
   };
 
@@ -365,6 +413,8 @@ const UserDashboard: React.FC = () => {
                         setSelectedItem(item || null);
                         if (item) {
                           setSaleQuantity(1);
+                          setSalePrice(item.unit_price.toString());
+                          setSaleError('');
                         }
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -404,17 +454,43 @@ const UserDashboard: React.FC = () => {
                         min="1"
                         max={selectedItem.current_stock}
                         value={saleQuantity}
-                        onChange={(e) => setSaleQuantity(parseInt(e.target.value))}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
+                          setSaleQuantity(Number.isNaN(value) ? 0 : Math.max(0, value));
+                          setSaleError('');
+                        }}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
 
                     <div>
+                      <label className="block text-sm font-medium text-gray-700">Negotiated Price (KES)</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={salePrice}
+                        onChange={(e) => {
+                          setSalePrice(e.target.value);
+                          setSaleError('');
+                        }}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Default price: {formatCurrency(selectedItem.unit_price)} — adjust if negotiated.
+                      </p>
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-gray-700">Sale Type</label>
                       <select
                         value={saleType}
-                        onChange={(e) => setSaleType(e.target.value as 'cash' | 'mobile' | 'split')}
+                        onChange={(e) => {
+                          setSaleType(e.target.value as 'cash' | 'mobile' | 'split');
+                          setSaleError('');
+                        }}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="cash">Cash</option>
@@ -432,7 +508,10 @@ const UserDashboard: React.FC = () => {
                             min="0.01"
                             step="0.01"
                             value={cashAmount}
-                            onChange={(e) => setCashAmount(e.target.value)}
+                            onChange={(e) => {
+                              setCashAmount(e.target.value);
+                              setSaleError('');
+                            }}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             required
                             placeholder="Enter cash amount"
@@ -445,7 +524,10 @@ const UserDashboard: React.FC = () => {
                             min="0.01"
                             step="0.01"
                             value={mobileAmount}
-                            onChange={(e) => setMobileAmount(e.target.value)}
+                            onChange={(e) => {
+                              setMobileAmount(e.target.value);
+                              setSaleError('');
+                            }}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             required
                             placeholder="Enter mobile amount"
@@ -454,7 +536,7 @@ const UserDashboard: React.FC = () => {
                         <div className="bg-blue-50 p-3 rounded-lg">
                           <p className="text-sm text-blue-800">
                             Total: {formatCurrency((parseFloat(cashAmount) || 0) + (parseFloat(mobileAmount) || 0))} | 
-                            Expected: {formatCurrency(saleQuantity * selectedItem.unit_price)}
+                            Expected: {formatCurrency((saleQuantity || 0) * (parseFloat(salePrice) || 0))}
                           </p>
                         </div>
                       </>
@@ -476,10 +558,16 @@ const UserDashboard: React.FC = () => {
                   </div>
                 )}
 
+                {saleError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
+                    {saleError}
+                  </div>
+                )}
+
                 {selectedItem && (
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      <strong>Total: {formatCurrency((selectedItem.unit_price * saleQuantity))}</strong>
+                      <strong>Total: {formatCurrency((parseFloat(salePrice) || 0) * (saleQuantity || 0))}</strong>
                     </p>
                   </div>
                 )}

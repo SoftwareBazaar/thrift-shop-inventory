@@ -476,11 +476,38 @@ export const mockApi = {
     const sales = getStorageData<Sale[]>('sales', mockSales);
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
     
+    if (!saleData.quantity_sold || saleData.quantity_sold <= 0) {
+      throw new Error('Quantity must be greater than zero.');
+    }
+
+    if (!saleData.unit_price || saleData.unit_price <= 0) {
+      throw new Error('Selling price must be greater than zero.');
+    }
+
     // Find the item to get its details
     const itemId = typeof saleData.item_id === 'number' ? saleData.item_id : parseInt(saleData.item_id.toString());
     const item = items.find(i => i.item_id === itemId);
     if (!item) {
       throw new Error('Item not found');
+    }
+
+    if (item.current_stock < saleData.quantity_sold) {
+      throw new Error('Insufficient stock available.');
+    }
+
+    const negotiatedTotal = saleData.total_amount ?? (saleData.quantity_sold * saleData.unit_price);
+
+    if (saleData.sale_type === 'split') {
+      const cashAmount = saleData.cash_amount ?? 0;
+      const mobileAmount = saleData.mobile_amount ?? 0;
+
+      if (cashAmount <= 0 || mobileAmount <= 0) {
+        throw new Error('Cash and mobile amounts must be greater than zero for split sales.');
+      }
+
+      if (Math.abs((cashAmount + mobileAmount) - negotiatedTotal) > 0.5) {
+        throw new Error('Split payment totals must equal the negotiated total.');
+      }
     }
 
     // Get user info for recorded_by_name
@@ -502,7 +529,7 @@ export const mockApi = {
       stall_id: stallId ?? undefined,
       quantity_sold: saleData.quantity_sold,
       unit_price: saleData.unit_price,
-      total_amount: saleData.quantity_sold * saleData.unit_price,
+      total_amount: negotiatedTotal,
       sale_type: saleData.sale_type,
       cash_amount: saleData.sale_type === 'split' ? saleData.cash_amount || null : null,
       mobile_amount: saleData.sale_type === 'split' ? saleData.mobile_amount || null : null,

@@ -570,16 +570,44 @@ export const dbApi = {
     }
 
     try {
+      if (!saleData.quantity_sold || saleData.quantity_sold <= 0) {
+        throw new Error('Quantity must be greater than zero.');
+      }
+
+      if (!saleData.unit_price || saleData.unit_price <= 0) {
+        throw new Error('Selling price must be greater than zero.');
+      }
+
       // Calculate total_amount if not provided
       const totalAmount = saleData.total_amount || (saleData.quantity_sold * saleData.unit_price);
+      const itemId = typeof saleData.item_id === 'number' ? saleData.item_id : parseInt(saleData.item_id.toString(), 10);
+      const stallId = saleData.stall_id === null || saleData.stall_id === undefined
+        ? null
+        : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString(), 10));
+
+      if (saleData.sale_type === 'split') {
+        const cashAmount = saleData.cash_amount ?? 0;
+        const mobileAmount = saleData.mobile_amount ?? 0;
+
+        if (cashAmount <= 0 || mobileAmount <= 0) {
+          throw new Error('Split payment amounts must be greater than zero.');
+        }
+
+        if (Math.abs((cashAmount + mobileAmount) - totalAmount) > 0.5) {
+          throw new Error('Split payment totals must equal the negotiated total.');
+        }
+      }
       
       const saleToInsert = {
-        ...saleData,
+        item_id: itemId,
+        stall_id: stallId,
+        quantity_sold: saleData.quantity_sold,
+        unit_price: saleData.unit_price,
         total_amount: totalAmount,
-        // Convert stall_id to number or null
-        stall_id: saleData.stall_id === null || saleData.stall_id === undefined 
-          ? null 
-          : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString()))
+        sale_type: saleData.sale_type,
+        cash_amount: saleData.sale_type === 'split' ? (saleData.cash_amount ?? null) : null,
+        mobile_amount: saleData.sale_type === 'split' ? (saleData.mobile_amount ?? null) : null,
+        recorded_by: saleData.recorded_by
       };
 
       const { data, error } = await (supabase as any)
@@ -589,6 +617,28 @@ export const dbApi = {
         .single();
 
       if (error) throw error;
+
+      if (saleData.sale_type === 'credit') {
+        const amountPaid = saleData.amount_paid ?? 0;
+        const paymentStatus = saleData.payment_status
+          ?? (amountPaid >= totalAmount ? 'fully_paid' : amountPaid > 0 ? 'partially_paid' : 'unpaid');
+
+        const { error: creditError } = await (supabase as any)
+          .from('credit_sales')
+          .insert([{
+            sale_id: data.sale_id,
+            customer_name: saleData.customer_name || 'Customer',
+            customer_contact: saleData.customer_contact || 'N/A',
+            total_credit_amount: totalAmount,
+            amount_paid: amountPaid,
+            payment_status: paymentStatus,
+            due_date: saleData.due_date || null,
+            notes: saleData.notes || null
+          }]);
+
+        if (creditError) throw creditError;
+      }
+
       return { sale: data as Sale };
     } catch (error) {
       console.error('Error creating sale:', error);
@@ -603,14 +653,116 @@ export const dbApi = {
     }
 
     try {
+      const { data: existingSale, error: existingError } = await (supabase as any)
+        .from('sales')
+        .select('*')
+        .eq('sale_id', saleId)
+        .single();
+
+      if (existingError) throw existingError;
+
+      const quantity = saleData.quantity_sold !== undefined ? saleData.quantity_sold : existingSale.quantity_sold;
+      const unitPrice = saleData.unit_price !== undefined ? saleData.unit_price : existingSale.unit_price;
+      const saleType = saleData.sale_type || existingSale.sale_type;
+
+      if (!quantity || quantity <= 0) {
+        throw new Error('Quantity must be greater than zero.');
+      }
+
+      if (!unitPrice || unitPrice <= 0) {
+        throw new Error('Selling price must be greater than zero.');
+      }
+
+      const totalAmount = saleData.total_amount !== undefined
+        ? saleData.total_amount
+        : quantity * unitPrice;
+
+      const stallId = saleData.stall_id === undefined
+        ? existingSale.stall_id
+        : (saleData.stall_id === null
+            ? null
+            : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString(), 10)));
+
+      const itemId = saleData.item_id === undefined
+        ? existingSale.item_id
+        : (typeof saleData.item_id === 'number' ? saleData.item_id : parseInt(saleData.item_id.toString(), 10));
+
+      if (saleType === 'split') {
+        const cashAmount = saleData.cash_amount ?? existingSale.cash_amount ?? 0;
+        const mobileAmount = saleData.mobile_amount ?? existingSale.mobile_amount ?? 0;
+
+        if (cashAmount <= 0 || mobileAmount <= 0) {
+          throw new Error('Split payment amounts must be greater than zero.');
+        }
+
+        if (Math.abs((cashAmount + mobileAmount) - totalAmount) > 0.5) {
+          throw new Error('Split payment totals must equal the negotiated total.');
+        }
+      }
+
+      const updatePayload: any = {
+        item_id: itemId,
+        stall_id: stallId,
+        quantity_sold: quantity,
+        unit_price: unitPrice,
+        total_amount: totalAmount,
+        sale_type: saleType,
+        cash_amount: saleType === 'split' ? (saleData.cash_amount ?? existingSale.cash_amount ?? null) : null,
+        mobile_amount: saleType === 'split' ? (saleData.mobile_amount ?? existingSale.mobile_amount ?? null) : null,
+        recorded_by: saleData.recorded_by ?? existingSale.recorded_by
+      };
+
       const { data, error } = await (supabase as any)
         .from('sales')
-        .update(saleData)
+        .update(updatePayload)
         .eq('sale_id', saleId)
         .select()
         .single();
 
       if (error) throw error;
+
+      const { data: existingCreditRows, error: existingCreditError } = await (supabase as any)
+        .from('credit_sales')
+        .select('*')
+        .eq('sale_id', saleId)
+        .limit(1);
+
+      if (existingCreditError) throw existingCreditError;
+
+      const existingCredit = Array.isArray(existingCreditRows) ? existingCreditRows[0] : null;
+
+      if (saleType === 'credit') {
+        const amountPaid = saleData.amount_paid ?? existingCredit?.amount_paid ?? 0;
+        const paymentStatus = saleData.payment_status
+          ?? (amountPaid >= totalAmount ? 'fully_paid' : amountPaid > 0 ? 'partially_paid' : 'unpaid');
+
+        const creditPayload: any = {
+          customer_name: saleData.customer_name ?? existingCredit?.customer_name ?? 'Customer',
+          customer_contact: saleData.customer_contact ?? existingCredit?.customer_contact ?? 'N/A',
+          total_credit_amount: totalAmount,
+          amount_paid: amountPaid,
+          payment_status: paymentStatus,
+          due_date: saleData.due_date ?? existingCredit?.due_date ?? null,
+          notes: saleData.notes ?? existingCredit?.notes ?? null
+        };
+
+        if (existingCredit) {
+          await (supabase as any)
+            .from('credit_sales')
+            .update(creditPayload)
+            .eq('sale_id', saleId);
+        } else {
+          await (supabase as any)
+            .from('credit_sales')
+            .insert([{ sale_id: saleId, ...creditPayload }]);
+        }
+      } else if (existingCredit) {
+        await (supabase as any)
+          .from('credit_sales')
+          .delete()
+          .eq('sale_id', saleId);
+      }
+
       return { sale: data as Sale };
     } catch (error) {
       console.error('Error updating sale:', error);
