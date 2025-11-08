@@ -130,13 +130,6 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
-  }, []);
-
   useEffect(() => {
     // Check for existing session
     const savedToken = localStorage.getItem('token');
