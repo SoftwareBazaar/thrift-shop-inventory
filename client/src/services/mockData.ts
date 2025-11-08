@@ -236,6 +236,9 @@ const initStorage = () => {
     if (!localStorage.getItem('thrift_shop_sales')) {
       localStorage.setItem('thrift_shop_sales', JSON.stringify(mockSales));
     }
+    if (!localStorage.getItem('thrift_shop_stock_additions')) {
+      localStorage.setItem('thrift_shop_stock_additions', JSON.stringify([]));
+    }
   } catch (error) {
     console.error('Error initializing storage:', error);
     // Force reset on error
@@ -447,22 +450,72 @@ export const mockApi = {
   updateItem: async (itemId: number, itemData: Partial<InventoryItem>): Promise<{ item: InventoryItem }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const stockAdditions = getStorageData<any[]>('stock_additions', []);
     const itemIndex = items.findIndex(i => i.item_id === itemId);
     if (itemIndex === -1) {
       throw new Error('Item not found');
     }
+
+    const currentItem = items[itemIndex];
+
+    if (itemData.unit_price !== undefined) {
+      const unitPrice = Number(itemData.unit_price);
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+        throw new Error('Selling price must be greater than zero.');
+      }
+    }
+
+    if (itemData.initial_stock !== undefined) {
+      const initialStock = Number(itemData.initial_stock);
+      if (!Number.isFinite(initialStock) || initialStock < 0) {
+        throw new Error('Initial stock must be zero or greater.');
+      }
+    }
+
+    if (itemData.current_stock !== undefined) {
+      const currentStock = Number(itemData.current_stock);
+      if (!Number.isFinite(currentStock) || currentStock < 0) {
+        throw new Error('Current stock cannot be negative.');
+      }
+    }
+
+    if (itemData.total_added !== undefined) {
+      const newTotalAdded = Number(itemData.total_added);
+      const currentTotalAdded = Number(currentItem.total_added || 0);
+      if (!Number.isFinite(newTotalAdded) || newTotalAdded < currentTotalAdded) {
+        throw new Error('Cannot reduce added stock. Use distributions or edit the item instead.');
+      }
+
+      const quantityToAdd = newTotalAdded - currentTotalAdded;
+      if (quantityToAdd > 0) {
+        currentItem.current_stock = Math.max(0, (currentItem.current_stock || 0) + quantityToAdd);
+        stockAdditions.push({
+          addition_id: Date.now(),
+          item_id: itemId,
+          quantity_added: quantityToAdd,
+          date_added: new Date().toISOString(),
+          added_by: 1
+        });
+      }
+      currentItem.total_added = newTotalAdded;
+    }
+
+    setStorageData('stock_additions', stockAdditions);
+
     // Update the item with new data
     items[itemIndex] = { 
-      ...items[itemIndex], 
+      ...currentItem, 
       ...itemData,
       // Preserve existing fields that shouldn't be changed
-      item_id: items[itemIndex].item_id,
-      date_added: items[itemIndex].date_added,
-      initial_stock: itemData.initial_stock !== undefined ? itemData.initial_stock : items[itemIndex].initial_stock,
-      current_stock: itemData.current_stock !== undefined ? itemData.current_stock : items[itemIndex].current_stock,
-      total_allocated: items[itemIndex].total_allocated,
-      total_added: itemData.total_added !== undefined ? itemData.total_added : items[itemIndex].total_added,
-      buying_price: items[itemIndex].buying_price
+      item_id: currentItem.item_id,
+      date_added: currentItem.date_added,
+      initial_stock: itemData.initial_stock !== undefined ? Number(itemData.initial_stock) : currentItem.initial_stock,
+      current_stock: itemData.total_added !== undefined
+        ? currentItem.current_stock
+        : (itemData.current_stock !== undefined ? Number(itemData.current_stock) : currentItem.current_stock),
+      total_allocated: currentItem.total_allocated,
+      total_added: itemData.total_added !== undefined ? Number(itemData.total_added) : currentItem.total_added,
+      buying_price: currentItem.buying_price
     };
     setStorageData('items', items);
     return { item: items[itemIndex] };

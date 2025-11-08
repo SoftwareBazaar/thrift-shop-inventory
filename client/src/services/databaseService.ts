@@ -417,49 +417,95 @@ export const dbApi = {
     }
 
     try {
-      // If total_added is being updated, also create a stock_additions record
+      const numericItemId = typeof itemId === 'number' ? itemId : parseInt(itemId as any, 10);
+      if (!Number.isFinite(numericItemId)) {
+        throw new Error('Invalid item reference.');
+      }
+
+      const { data: existingItem, error: fetchError } = await (supabase as any)
+        .from('items')
+        .select('item_id, item_name, category, unit_price, initial_stock, total_added, current_stock')
+        .eq('item_id', numericItemId)
+        .single();
+
+      if (fetchError || !existingItem) {
+        throw new Error('Item not found.');
+      }
+
+      const updateData: Record<string, any> = {};
+
+      if (itemData.item_name !== undefined) {
+        updateData.item_name = String(itemData.item_name).trim();
+      }
+
+      if (itemData.category !== undefined) {
+        updateData.category = String(itemData.category).trim();
+      }
+
+      if (itemData.unit_price !== undefined) {
+        const unitPrice = Number(itemData.unit_price);
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          throw new Error('Selling price must be greater than zero.');
+        }
+        updateData.unit_price = unitPrice;
+      }
+
+      if (itemData.initial_stock !== undefined) {
+        const initialStock = Number(itemData.initial_stock);
+        if (!Number.isFinite(initialStock) || initialStock < 0) {
+          throw new Error('Initial stock must be zero or greater.');
+        }
+        updateData.initial_stock = initialStock;
+      }
+
+      if (itemData.current_stock !== undefined) {
+        const currentStock = Number(itemData.current_stock);
+        if (!Number.isFinite(currentStock) || currentStock < 0) {
+          throw new Error('Current stock cannot be negative.');
+        }
+        updateData.current_stock = currentStock;
+      }
+
       if (itemData.total_added !== undefined) {
-        // Get current item to calculate the difference
-        const { data: currentItem } = await (supabase as any)
-          .from('items')
-          .select('total_added')
-          .eq('item_id', itemId)
-          .single();
-        
-        const currentTotalAdded = Number(currentItem?.total_added || 0);
+        const currentTotalAdded = Number(existingItem.total_added || 0);
         const newTotalAdded = Number(itemData.total_added);
+        if (!Number.isFinite(newTotalAdded) || newTotalAdded < currentTotalAdded) {
+          throw new Error('Cannot reduce added stock. Use distributions or edits to adjust stock instead.');
+        }
+
         const quantityToAdd = newTotalAdded - currentTotalAdded;
-        
-        console.log(`[Update Item] Item ID: ${itemId}, currentTotalAdded: ${currentTotalAdded}, newTotalAdded: ${newTotalAdded}, quantityToAdd: ${quantityToAdd}`);
-        
-        // If quantity is positive, create a stock_additions record
+        console.log(`[Update Item] Item ID: ${numericItemId}, currentTotalAdded: ${currentTotalAdded}, newTotalAdded: ${newTotalAdded}, quantityToAdd: ${quantityToAdd}`);
+
         if (quantityToAdd > 0) {
-          // Get current user for added_by (from localStorage or default to 1 for admin)
           const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-          
           const { error: insertError } = await (supabase as any)
             .from('stock_additions')
             .insert([{
-              item_id: itemId,
+              item_id: numericItemId,
               quantity_added: quantityToAdd,
               added_by: currentUser.user_id || 1
             }]);
-          
+
           if (insertError) {
             console.error('Error creating stock_additions record:', insertError);
-            throw insertError;
+            throw new Error(insertError.message || 'Failed to record added stock.');
           }
-          
-          console.log(`[Update Item] Created stock_additions record: ${quantityToAdd} units`);
+
+          const newCurrentStock = Number(existingItem.current_stock || 0) + quantityToAdd;
+          updateData.current_stock = newCurrentStock;
         }
+
+        updateData.total_added = newTotalAdded;
       }
-      
-      // Update the item (remove total_added from update since we handle it via stock_additions)
-      const { total_added, ...updateData } = itemData;
+
+      if (Object.keys(updateData).length === 0) {
+        return { item: existingItem as Item };
+      }
+
       const { data, error } = await (supabase as any)
         .from('items')
         .update(updateData)
-        .eq('item_id', itemId)
+        .eq('item_id', numericItemId)
         .select()
         .single();
 
@@ -467,7 +513,7 @@ export const dbApi = {
       return { item: data as Item };
     } catch (error) {
       console.error('Error updating item:', error);
-      throw error;
+      throw new Error((error as any)?.message || 'Failed to update item.');
     }
   },
 
