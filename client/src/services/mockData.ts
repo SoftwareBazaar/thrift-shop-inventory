@@ -58,6 +58,7 @@ export interface SaleInput {
   customer_contact?: string;
   payment_status?: string;
   balance_due?: number;
+  amount_paid?: number | null;
   cash_amount?: number | null;
   mobile_amount?: number | null;
   due_date?: string | null;
