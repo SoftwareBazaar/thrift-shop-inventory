@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
       return res.status(adminError.error.status).json({ message: adminError.error.message });
     }
 
-    const { username, password, full_name, role, stall_id } = req.body;
+    const { username, password, full_name, role, stall_id, phone_number, email, recovery_hint } = req.body;
 
     // Validate required fields
     if (!username || !password || !full_name || !role) {
@@ -59,10 +59,14 @@ module.exports = async (req, res) => {
           full_name,
           role,
           stall_id: stall_id || null,
-          status: 'active'
+          status: 'active',
+          phone_number: phone_number ? String(phone_number) : null,
+          email: email ? String(email).toLowerCase() : null,
+          recovery_hint: recovery_hint ? String(recovery_hint) : null,
+          recovery_updated_at: phone_number || email || recovery_hint ? new Date().toISOString() : null
         }
       ])
-      .select('user_id, username, full_name, role, stall_id, status')
+      .select('user_id, username, full_name, role, stall_id, status, phone_number, email, recovery_hint')
       .single();
 
     if (error) {

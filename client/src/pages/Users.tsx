@@ -10,6 +10,9 @@ interface User {
   status: string;
   created_date: string;
   stall_name?: string;
+  phone_number?: string | null;
+  email?: string | null;
+  recovery_hint?: string | null;
 }
 
 interface Stall {
@@ -38,7 +41,10 @@ const Users: React.FC = () => {
     password: '',
     full_name: '',
     role: 'user' as 'admin' | 'user',
-    stall_id: ''
+    stall_id: '',
+    phone_number: '',
+    email: '',
+    recovery_hint: ''
   });
   const [newStall, setNewStall] = useState({
     stall_name: '',
@@ -81,10 +87,22 @@ const Users: React.FC = () => {
         full_name: newUser.full_name,
         role: newUser.role,
         stall_id: stallId,
-        status: 'active'
+        status: 'active',
+        phone_number: newUser.phone_number || null,
+        email: newUser.email || null,
+        recovery_hint: newUser.recovery_hint || null
       });
       setShowAddModal(false);
-      setNewUser({ username: '', password: '', full_name: '', role: 'user', stall_id: '' });
+      setNewUser({
+        username: '',
+        password: '',
+        full_name: '',
+        role: 'user',
+        stall_id: '',
+        phone_number: '',
+        email: '',
+        recovery_hint: ''
+      });
       fetchUsers();
       alert('User created successfully!');
     } catch (error: any) {
@@ -132,7 +150,10 @@ const Users: React.FC = () => {
         full_name: editingUser.full_name,
         role: editingUser.role,
         stall_id: editingUser.stall_id,
-        status: editingUser.status
+        status: editingUser.status,
+        phone_number: editingUser.phone_number || null,
+        email: editingUser.email || null,
+        recovery_hint: editingUser.recovery_hint || null
       });
       setShowEditUserModal(false);
       setEditingUser(null);
@@ -230,6 +251,12 @@ const Users: React.FC = () => {
                     <div>
                       <div className="text-sm font-medium text-gray-900">{userItem.full_name}</div>
                       <div className="text-sm text-gray-500">{userItem.username}</div>
+                      {userItem.email && (
+                        <div className="text-xs text-gray-400">{userItem.email}</div>
+                      )}
+                      {userItem.phone_number && (
+                        <div className="text-xs text-gray-400">{userItem.phone_number}</div>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -367,6 +394,36 @@ const Users: React.FC = () => {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number (for recovery)</label>
+                <input
+                  type="tel"
+                  value={newUser.phone_number}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, phone_number: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="+2547XXXXXXXX"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email (for recovery)</label>
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Recovery Hint (visible to admins)</label>
+                <input
+                  type="text"
+                  value={newUser.recovery_hint}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, recovery_hint: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Main market contact"
+                />
+              </div>
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
@@ -456,6 +513,16 @@ const Users: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit User</h3>
             <form onSubmit={handleUpdateUser} className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.username}
+                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                 <input
                   type="text"
@@ -475,6 +542,57 @@ const Users: React.FC = () => {
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stall (Optional)</label>
+                <select
+                  value={editingUser.stall_id ? editingUser.stall_id.toString() : ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, stall_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">No stall assigned</option>
+                  {stalls.map(stall => (
+                    <option key={stall.stall_id} value={stall.stall_id}>{stall.stall_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={editingUser.status}
+                  onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={editingUser.phone_number ?? ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, phone_number: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={editingUser.email ?? ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Recovery Hint</label>
+                <input
+                  type="text"
+                  value={editingUser.recovery_hint ?? ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, recovery_hint: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               <div className="flex justify-end space-x-3">
                 <button

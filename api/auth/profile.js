@@ -22,11 +22,24 @@ module.exports = async (req, res) => {
         return res.status(authResult.error.status).json({ message: authResult.error.message });
       }
 
-      const { full_name, password } = req.body;
+      const { full_name, password, phone_number, email, recovery_hint } = req.body;
       const userId = authResult.user.user_id;
 
       const updateData = {};
       if (full_name) updateData.full_name = full_name;
+      if (phone_number !== undefined) {
+        updateData.phone_number = phone_number ? String(phone_number) : null;
+      }
+      if (email !== undefined) {
+        updateData.email = email ? String(email).toLowerCase() : null;
+      }
+      if (recovery_hint !== undefined) {
+        updateData.recovery_hint = recovery_hint ? String(recovery_hint) : null;
+      }
+
+      if (updateData.phone_number || updateData.email || updateData.recovery_hint) {
+        updateData.recovery_updated_at = new Date().toISOString();
+      }
 
       // Update password if provided
       if (password) {
@@ -39,7 +52,7 @@ module.exports = async (req, res) => {
         .from('users')
         .update(updateData)
         .eq('user_id', userId)
-        .select('user_id, username, full_name, role, stall_id, status')
+        .select('user_id, username, full_name, role, stall_id, status, phone_number, email, recovery_hint')
         .single();
 
       if (error) {

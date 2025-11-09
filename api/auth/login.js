@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
     // Get user from Supabase
     const { data: users, error } = await supabase
       .from('users')
-      .select('user_id, username, password_hash, full_name, role, stall_id, status')
+      .select('user_id, username, password_hash, full_name, role, stall_id, status, phone_number, email')
       .eq('username', username)
       .single();
 

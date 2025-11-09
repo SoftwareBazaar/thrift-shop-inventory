@@ -1,6 +1,8 @@
 // Mock data service for offline demonstration
 // NOTE: In production, this is automatically replaced by databaseService.ts
 // when Supabase credentials are configured
+import { upsertOfflineCredentialFromPassword, syncOfflineUserProfile } from '../utils/offlineCredentials';
+
 export interface User {
   user_id: number;
   username: string;
@@ -9,6 +11,9 @@ export interface User {
   stall_id?: number;
   status: string;
   created_date: string;
+  phone_number?: string | null;
+  email?: string | null;
+  recovery_hint?: string | null;
 }
 
 export interface Stall {
@@ -107,7 +112,10 @@ export const mockUsers: User[] = [
     full_name: 'System Administrator',
     role: 'admin',
     status: 'active',
-    created_date: '2024-01-01'
+    created_date: '2024-01-01',
+    phone_number: '+254700000000',
+    email: 'admin@example.com',
+    recovery_hint: 'Primary admin contact'
   },
   {
     user_id: 2,
@@ -116,7 +124,10 @@ export const mockUsers: User[] = [
     role: 'user',
     stall_id: 316,
     status: 'active',
-    created_date: '2024-01-01'
+    created_date: '2024-01-01',
+    phone_number: '+254711111111',
+    email: 'kelvin@example.com',
+    recovery_hint: 'Kelvin stall 316 phone'
   },
   {
     user_id: 3,
@@ -125,7 +136,10 @@ export const mockUsers: User[] = [
     role: 'user',
     stall_id: 309,
     status: 'active',
-    created_date: '2024-01-01'
+    created_date: '2024-01-01',
+    phone_number: '+254722222222',
+    email: 'manuel@example.com',
+    recovery_hint: 'Manuel stall 309 phone'
   }
 ];
 
@@ -261,16 +275,46 @@ export const mockApi = {
     return { users };
   },
 
-  createUser: async (userData: Omit<User, 'user_id' | 'created_date'> & { password: string }): Promise<{ user: User }> => {
+  createUser: async (
+    userData: Omit<User, 'user_id' | 'created_date'> & { password: string }
+  ): Promise<{ user: User }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const users = getStorageData<User[]>('users', mockUsers);
+    const { password, ...profile } = userData;
     const newUser: User = {
       user_id: Math.max(...users.map(u => u.user_id), 0) + 1,
-      ...userData,
-      created_date: new Date().toISOString()
+      ...profile,
+      created_date: new Date().toISOString(),
+      phone_number: profile.phone_number ?? null,
+      email: profile.email ?? null,
+      recovery_hint: profile.recovery_hint ?? null
     };
     users.push(newUser);
     setStorageData('users', users);
+
+    if (password) {
+      await upsertOfflineCredentialFromPassword(
+        {
+          user_id: newUser.user_id,
+          username: newUser.username,
+          full_name: newUser.full_name,
+          role: newUser.role,
+          stall_id: newUser.stall_id,
+          status: newUser.status,
+          created_date: newUser.created_date,
+          phone_number: newUser.phone_number ?? null,
+          email: newUser.email ?? null
+        },
+        password,
+        {
+          phone: newUser.phone_number ?? undefined,
+          email: newUser.email ?? undefined,
+          hint: newUser.recovery_hint ?? undefined
+        },
+        'manual'
+      );
+    }
+
     return { user: newUser };
   },
 
@@ -281,8 +325,25 @@ export const mockApi = {
     if (userIndex === -1) {
       throw new Error('User not found');
     }
-    users[userIndex] = { ...users[userIndex], ...userData };
+    users[userIndex] = {
+      ...users[userIndex],
+      ...userData,
+      phone_number: userData.phone_number ?? users[userIndex].phone_number ?? null,
+      email: userData.email ?? users[userIndex].email ?? null,
+      recovery_hint: userData.recovery_hint ?? users[userIndex].recovery_hint ?? null
+    };
     setStorageData('users', users);
+    syncOfflineUserProfile({
+      user_id: users[userIndex].user_id,
+      username: users[userIndex].username,
+      full_name: users[userIndex].full_name,
+      role: users[userIndex].role,
+      stall_id: users[userIndex].stall_id,
+      status: users[userIndex].status,
+      created_date: users[userIndex].created_date,
+      phone_number: users[userIndex].phone_number ?? null,
+      email: users[userIndex].email ?? null
+    });
     return { user: users[userIndex] };
   },
 

@@ -29,6 +29,9 @@ module.exports = async (req, res) => {
         role,
         stall_id,
         status,
+        phone_number,
+        email,
+        recovery_hint,
         created_date,
         stalls(stall_name)
       `)

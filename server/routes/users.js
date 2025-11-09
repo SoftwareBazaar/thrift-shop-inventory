@@ -43,6 +43,9 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
         u.role,
         u.stall_id,
         u.status,
+        u.phone_number,
+        u.email,
+        u.recovery_hint,
         u.created_date,
         s.stall_name
       FROM users u
@@ -88,6 +91,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
         u.role,
         u.stall_id,
         u.status,
+        u.phone_number,
+        u.email,
+        u.recovery_hint,
         u.created_date,
         s.stall_name
       FROM users u
@@ -112,7 +118,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, role, stall_id, status, password } = req.body;
+    const { full_name, role, stall_id, status, password, phone_number, email, recovery_hint } = req.body;
 
     // Check if user exists
     const existingUser = await pool.query(
@@ -139,6 +145,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     let updateQuery = 'UPDATE users SET';
     const updateParams = [];
     let paramIndex = 1;
+    let recoveryMetaNeedsUpdate = false;
 
     // Build dynamic update query
     if (full_name) {
@@ -174,6 +181,37 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const password_hash = await bcrypt.hash(password, saltRounds);
       updateQuery += ` password_hash = $${paramIndex}`;
       updateParams.push(password_hash);
+      paramIndex++;
+    }
+
+    if (phone_number !== undefined) {
+      if (paramIndex > 1) updateQuery += ',';
+      updateQuery += ` phone_number = $${paramIndex}`;
+      updateParams.push(phone_number ? String(phone_number) : null);
+      paramIndex++;
+      recoveryMetaNeedsUpdate = true;
+    }
+
+    if (email !== undefined) {
+      if (paramIndex > 1) updateQuery += ',';
+      updateQuery += ` email = $${paramIndex}`;
+      updateParams.push(email ? String(email).toLowerCase() : null);
+      paramIndex++;
+      recoveryMetaNeedsUpdate = true;
+    }
+
+    if (recovery_hint !== undefined) {
+      if (paramIndex > 1) updateQuery += ',';
+      updateQuery += ` recovery_hint = $${paramIndex}`;
+      updateParams.push(recovery_hint ? String(recovery_hint) : null);
+      paramIndex++;
+      recoveryMetaNeedsUpdate = true;
+    }
+
+    if (recoveryMetaNeedsUpdate) {
+      if (paramIndex > 1) updateQuery += ',';
+      updateQuery += ` recovery_updated_at = $${paramIndex}`;
+      updateParams.push(new Date());
       paramIndex++;
     }
 

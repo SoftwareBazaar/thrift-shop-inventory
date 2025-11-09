@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'user')),
     stall_id INTEGER,
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    phone_number VARCHAR(30),
+    email VARCHAR(255),
+    recovery_hint TEXT,
+    recovery_updated_at TIMESTAMP,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

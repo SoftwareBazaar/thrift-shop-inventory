@@ -1,6 +1,7 @@
 // Database Service - Uses Supabase with real-time sync, falls back to mockData
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
+import { syncOfflineUserProfile } from '../utils/offlineCredentials';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -133,6 +134,21 @@ export const dbApi = {
         .single();
 
       if (error) throw error;
+
+      if (data) {
+        syncOfflineUserProfile({
+          user_id: data.user_id,
+          username: data.username,
+          full_name: data.full_name,
+          role: data.role,
+          stall_id: data.stall_id,
+          status: data.status,
+          created_date: data.created_date,
+          phone_number: data.phone_number ?? null,
+          email: data.email ?? null
+        });
+      }
+
       return { user: data as User };
     } catch (error) {
       console.error('Error creating user:', error);
@@ -154,6 +170,21 @@ export const dbApi = {
         .single();
 
       if (error) throw error;
+
+      if (data) {
+        syncOfflineUserProfile({
+          user_id: data.user_id,
+          username: data.username,
+          full_name: data.full_name,
+          role: data.role,
+          stall_id: data.stall_id,
+          status: data.status,
+          created_date: data.created_date,
+          phone_number: data.phone_number ?? null,
+          email: data.email ?? null
+        });
+      }
+
       return { user: data as User };
     } catch (error) {
       console.error('Error updating user:', error);
