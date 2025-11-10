@@ -364,33 +364,44 @@ export const dbApi = {
           const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0) || 0;
 
           // Sum sales quantities
-          const { data: itemSales } = await (supabase as any)
-            .from('sales')
-            .select('quantity_sold')
+          const { data: itemDistributions, error: distError } = await (supabase as any)
+            .from('stock_distribution')
+            .select('quantity_allocated')
             .eq('item_id', item.item_id);
 
-          const totalSold = (itemSales as any)?.reduce((sum: number, sale: any) => sum + (sale.quantity_sold || 0), 0) || 0;
+          if (distError) {
+            console.warn('[Admin Stock Calc] Failed to fetch distributions for item', item.item_id, distError);
+          }
 
-          const adminStock = Math.max(0, initialStock + totalAdded - totalSold);
+          const totalDistributed = (itemDistributions as any)?.reduce(
+            (sum: number, distribution: any) => sum + (distribution.quantity_allocated || 0),
+            0
+          ) || 0;
+
+          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed);
 
           if (existingCurrentStock !== adminStock) {
             try {
               await (supabase as any)
                 .from('items')
-                .update({ current_stock: adminStock })
+                .update({
+                  current_stock: adminStock,
+                  total_allocated: totalDistributed
+                })
                 .eq('item_id', item.item_id);
             } catch (updateError) {
               console.warn('[Admin Stock Calc] Failed to sync current_stock for item', item.item_id, updateError);
             }
           }
 
-          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalSold: ${totalSold}, adminStock: ${adminStock}`);
+          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, adminStock: ${adminStock}`);
 
           return {
             ...item,
             current_stock: adminStock,
             initial_stock: initialStock,
-            total_added: totalAdded
+            total_added: totalAdded,
+            total_allocated: totalDistributed
           };
         }
       }));
@@ -577,6 +588,27 @@ export const dbApi = {
       
       console.log('[Distribute Stock] Current user:', currentUser);
       console.log('[Distribute Stock] distributed_by:', distributedBy);
+
+      const totalToDistribute = distributionData.distributions.reduce((sum, dist) => sum + (dist.quantity || 0), 0);
+      if (totalToDistribute <= 0) {
+        throw new Error('Distribution quantity must be greater than zero.');
+      }
+
+      const { data: itemRecord, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('item_id, current_stock, total_allocated')
+        .eq('item_id', distributionData.item_id)
+        .single();
+
+      if (itemError || !itemRecord) {
+        console.error('[Distribute Stock] Failed to load item:', itemError);
+        throw new Error('Item not found.');
+      }
+
+      const currentStock = Number(itemRecord.current_stock || 0);
+      if (currentStock < totalToDistribute) {
+        throw new Error(`Insufficient stock! Available: ${currentStock}, Requested: ${totalToDistribute}`);
+      }
       
       const distributions = distributionData.distributions.map(dist => {
         const distRecord = {
@@ -604,6 +636,29 @@ export const dbApi = {
       }
       
       console.log('[Distribute Stock] Success:', data);
+
+      const newCurrentStock = Math.max(0, currentStock - totalToDistribute);
+      const newTotalAllocated = Number(itemRecord.total_allocated || 0) + totalToDistribute;
+
+      const { error: updateError } = await (supabase as any)
+        .from('items')
+        .update({
+          current_stock: newCurrentStock,
+          total_allocated: newTotalAllocated
+        })
+        .eq('item_id', distributionData.item_id);
+
+      if (updateError) {
+        console.error('[Distribute Stock] Failed to update item stock:', updateError);
+        throw updateError;
+      }
+
+      console.log('[Distribute Stock] Updated item stock:', {
+        item_id: distributionData.item_id,
+        current_stock: newCurrentStock,
+        total_allocated: newTotalAllocated
+      });
+
       return { distributions: data };
     } catch (error) {
       console.error('Error distributing stock:', error);
