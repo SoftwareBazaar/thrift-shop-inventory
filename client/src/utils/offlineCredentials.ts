@@ -63,6 +63,46 @@ const seedUsers: Array<{
     },
     source: 'seed',
   },
+  {
+    user: {
+      user_id: 2,
+      username: 'kelvin',
+      full_name: 'Kelvin',
+      role: 'user',
+      stall_id: 316,
+      status: 'active',
+      created_date: '2024-01-01T00:00:00.000Z',
+      phone_number: '+254711111111',
+      email: 'kelvin@example.com',
+    },
+    password: 'admin123',
+    recovery: {
+      phone: '+254711111111',
+      email: 'kelvin@example.com',
+      hint: 'Kelvin stall 316 phone',
+    },
+    source: 'seed',
+  },
+  {
+    user: {
+      user_id: 3,
+      username: 'manuel',
+      full_name: 'Manuel',
+      role: 'user',
+      stall_id: 309,
+      status: 'active',
+      created_date: '2024-01-01T00:00:00.000Z',
+      phone_number: '+254722222222',
+      email: 'manuel@example.com',
+    },
+    password: 'admin123',
+    recovery: {
+      phone: '+254722222222',
+      email: 'manuel@example.com',
+      hint: 'Manuel stall 309 phone',
+    },
+    source: 'seed',
+  },
 ];
 
 const safeParse = (value: string | null): OfflineCredentialMap => {
