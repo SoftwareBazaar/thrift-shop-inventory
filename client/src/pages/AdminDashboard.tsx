@@ -288,7 +288,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -296,22 +296,9 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-blue-600 leading-tight">
                 {formatCurrency(analytics?.totalRevenue || 0)}
               </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-green-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-3xl">📈</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Sales Orders</h3>
-              <p className="text-xs text-gray-500">Completed sale receipts</p>
-              <p className="text-2xl font-bold text-green-600">{analytics?.totalSales || 0}</p>
             </div>
           </div>
         </div>
@@ -323,7 +310,9 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Units Sold</h3>
-              <p className="text-xs text-gray-500">Physical items moved</p>
+              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
+                Physical items moved
+              </p>
               <p className="text-2xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
             </div>
           </div>
@@ -337,7 +326,7 @@ const AdminDashboard: React.FC = () => {
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Available Stock</h3>
               <p className="text-sm font-semibold text-indigo-600">{totalAvailableUnits} units</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
                 Potential sales value: {formatCurrency(totalAvailableValue)}
               </p>
             </div>
@@ -352,7 +341,7 @@ const AdminDashboard: React.FC = () => {
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Gross Profit</h3>
               <p className={`text-2xl font-bold ${profitTone}`}>{formatCurrency(grossProfit)}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
                 Revenue {formatCurrency(revenue)} − Cost {formatCurrency(costOfGoodsSold)}
               </p>
             </div>
