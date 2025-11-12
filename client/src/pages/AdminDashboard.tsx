@@ -296,7 +296,7 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
-              <p className="text-2xl font-bold text-blue-600 leading-tight break-words">
+              <p className="text-xl font-bold text-blue-600 leading-tight break-words">
                 {formatCurrency(analytics?.totalRevenue || 0)}
               </p>
             </div>
@@ -315,7 +315,7 @@ const AdminDashboard: React.FC = () => {
               <p className="text-xs text-gray-500 leading-tight whitespace-normal">
                 Physical items moved
               </p>
-              <p className="text-2xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+              <p className="text-xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
             </div>
           </div>
         </div>
@@ -329,7 +329,7 @@ const AdminDashboard: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
                 Available Stock
               </h3>
-              <p className="text-sm font-semibold text-indigo-600 break-words">
+              <p className="text-xs font-semibold text-indigo-600 break-words">
                 {totalAvailableUnits} units
               </p>
               <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
@@ -348,7 +348,7 @@ const AdminDashboard: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
                 Gross Profit
               </h3>
-              <p className={`text-2xl font-bold break-words ${profitTone}`}>
+              <p className={`text-xl font-bold break-words ${profitTone}`}>
                 {formatCurrency(grossProfit)}
               </p>
               <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
