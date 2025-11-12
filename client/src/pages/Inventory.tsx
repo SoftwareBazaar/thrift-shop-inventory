@@ -55,6 +55,7 @@ const Inventory: React.FC = () => {
     notes: ''
   });
   const [addStockQuantity, setAddStockQuantity] = useState('');
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -312,10 +313,15 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const getItemsSold = (itemName: string) => {
+  const getItemsSold = (itemId: number, fallbackName: string) => {
     return salesData
-      .filter(sale => sale.item_name === itemName)
-      .reduce((total, sale) => total + sale.quantity_sold, 0);
+      .filter((sale) => {
+        if (sale.item_id != null) {
+          return Number(sale.item_id) === itemId;
+        }
+        return sale.item_name === fallbackName;
+      })
+      .reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
   };
 
   const formatCurrency = (amount: number) => {
@@ -324,6 +330,26 @@ const Inventory: React.FC = () => {
       currency: 'KES'
     }).format(amount);
   };
+
+  const selectedItemSold = selectedItem ? getItemsSold(selectedItem.item_id, selectedItem.item_name) : 0;
+  const selectedItemDistributed = selectedItem
+    ? Math.max(0, (selectedItem.total_allocated || 0) - selectedItemSold)
+    : 0;
+  const selectedItemAvailable = selectedItem ? Math.max(0, selectedItem.current_stock || 0) : 0;
+  const selectedItemTotalInventory = selectedItem
+    ? selectedItemAvailable + selectedItemDistributed + selectedItemSold
+    : 0;
+  const quantityToAddPreview = addStockQuantity ? parseInt(addStockQuantity, 10) || 0 : 0;
+  const previewAvailableAfterAdd = selectedItemAvailable + quantityToAddPreview;
+  const previewTotalInventory = selectedItemTotalInventory + quantityToAddPreview;
+  const totalQuantityPendingDistribution = distributionData.distributions.reduce(
+    (sum, dist) => sum + (parseInt(dist.quantity) || 0),
+    0
+  );
+  const remainingAfterPendingDistribution = Math.max(
+    0,
+    selectedItemAvailable - totalQuantityPendingDistribution
+  );
 
 
   if (loading) {
@@ -457,81 +483,223 @@ const Inventory: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item) => {
+                const totalSoldForItem = getItemsSold(item.item_id, item.item_name);
+                const distributedLive = Math.max(0, (item.total_allocated || 0) - totalSoldForItem);
+                const centralStock = Math.max(0, item.current_stock || 0);
+                const managedTotal = centralStock + distributedLive;
+                const centralPercent = managedTotal > 0 ? Math.round((centralStock / managedTotal) * 100) : 0;
+                const distributedPercent = managedTotal > 0 ? Math.max(0, 100 - centralPercent) : 0;
+                const totalInventory = centralStock + distributedLive + totalSoldForItem;
+                const isExpanded = expandedItemId === item.item_id;
+                const columnSpan = user?.role === 'admin' ? 7 : 4;
+
                 return (
-                  <tr key={item.item_id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{item.current_stock}</div>
-                      <div className="text-xs text-gray-500">
-                        Initial: {item.initial_stock} | New Items Added: {item.total_added}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getItemsSold(item.item_name)}
-                    </td>
-                    {user?.role === 'admin' && (
+                  <React.Fragment key={item.item_id}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                          >
+                            {isExpanded ? 'v' : '>'}
+                          </button>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
+                            <div className="text-xs text-gray-500">
+                              Total inventory in system: {totalInventory}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(item.buying_price || 0)}
+                        {item.category}
                       </td>
-                    )}
-                    {user?.role === 'admin' && (
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        {user?.role === 'admin' ? (
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>Available (central)</span>
+                              <span className="text-sm font-semibold text-gray-900">{centralStock}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-blue-600">
+                              <span>Out at stalls</span>
+                              <span className="text-sm font-semibold">{distributedLive}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-purple-600">
+                              <span>Sold</span>
+                              <span className="text-sm font-semibold">{totalSoldForItem}</span>
+                            </div>
+                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-indigo-500"
+                                style={{ width: `${centralPercent}%` }}
+                              ></div>
+                              <div
+                                className="h-full bg-blue-400"
+                                style={{ width: `${distributedPercent}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-[11px] text-gray-400">
+                              <span>Total received</span>
+                              <span>{(item.initial_stock || 0) + (item.total_added || 0)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-sm text-gray-900">{item.current_stock}</div>
+                            <div className="text-xs text-gray-500">
+                              Initial: {item.initial_stock} | New items added: {item.total_added}
+                            </div>
+                          </>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(item.current_stock * (item.buying_price || 0))}
+                        {totalSoldForItem}
                       </td>
+                      {user?.role === 'admin' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(item.buying_price || 0)}
+                        </td>
+                      )}
+                      {user?.role === 'admin' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(item.current_stock * (item.buying_price || 0))}
+                        </td>
+                      )}
+                      {user?.role === 'admin' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setDistributionData({
+                                item_id: item.item_id,
+                                distributions: [],
+                                notes: ''
+                              });
+                              setShowDistributeModal(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 mr-3"
+                          >
+                            Distribute
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setAddStockQuantity('');
+                              setShowAddStockModal(true);
+                            }}
+                            className="text-green-600 hover:text-green-900 mr-3"
+                          >
+                            Add Stock
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setEditFormData({
+                                item_name: item.item_name,
+                                category: item.category,
+                                unit_price: item.unit_price.toString(),
+                                initial_stock: item.initial_stock.toString(),
+                                total_added: item.total_added.toString(),
+                                current_stock: item.current_stock.toString()
+                              });
+                              setShowEditModal(true);
+                            }}
+                            className="text-purple-600 hover:text-purple-900"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-gray-50">
+                        <td className="px-6 pb-6 pt-0" colSpan={columnSpan}>
+                          <div className="pt-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                                <div className="text-xs font-semibold uppercase text-emerald-700">
+                                  Available to distribute
+                                </div>
+                                <div className="mt-2 text-2xl font-bold text-emerald-900">
+                                  {centralStock}
+                                </div>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  Ready in central store
+                                </p>
+                              </div>
+                              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                                <div className="text-xs font-semibold uppercase text-blue-700">
+                                  At stalls (unsold)
+                                </div>
+                                <div className="mt-2 text-2xl font-bold text-blue-900">
+                                  {distributedLive}
+                                </div>
+                                <p className="mt-1 text-xs text-blue-700">
+                                  Stock currently with Kelvin, Manuel and other stalls
+                                </p>
+                              </div>
+                              <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+                                <div className="text-xs font-semibold uppercase text-purple-700">
+                                  Sold
+                                </div>
+                                <div className="mt-2 text-2xl font-bold text-purple-900">
+                                  {totalSoldForItem}
+                                </div>
+                                <p className="mt-1 text-xs text-purple-700">
+                                  Recorded sales so far
+                                </p>
+                              </div>
+                              <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+                                <div className="text-xs font-semibold uppercase text-indigo-700">
+                                  Total inventory
+                                </div>
+                                <div className="mt-2 text-2xl font-bold text-indigo-900">
+                                  {totalInventory}
+                                </div>
+                                <p className="mt-1 text-xs text-indigo-700">
+                                  Available + distributed + sold
+                                </p>
+                              </div>
+                            </div>
+
+                            {centralStock === 0 && (
+                              <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                No stock left in the central store. Add new stock before distributing again.
+                              </div>
+                            )}
+
+                            <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+                              <h4 className="text-sm font-semibold text-gray-900">Stock flow</h4>
+                              <p className="mt-1 text-xs text-gray-500">
+                                {(item.initial_stock || 0)} initial + {(item.total_added || 0)} added ={' '}
+                                {(item.initial_stock || 0) + (item.total_added || 0)} received overall.{' '}
+                                {distributedLive} currently at stalls, {totalSoldForItem} sold, leaving {centralStock}{' '}
+                                back at the hub.
+                              </p>
+                              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                <div className="rounded border border-gray-100 bg-gray-50 p-3">
+                                  <div className="text-xs uppercase text-gray-500">Initial stock</div>
+                                  <div className="mt-1 text-lg font-semibold text-gray-900">{item.initial_stock}</div>
+                                </div>
+                                <div className="rounded border border-gray-100 bg-gray-50 p-3">
+                                  <div className="text-xs uppercase text-gray-500">New items added</div>
+                                  <div className="mt-1 text-lg font-semibold text-gray-900">{item.total_added}</div>
+                                </div>
+                                <div className="rounded border border-gray-100 bg-gray-50 p-3">
+                                  <div className="text-xs uppercase text-gray-500">Allocated so far</div>
+                                  <div className="mt-1 text-lg font-semibold text-gray-900">{item.total_allocated || 0}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                    {user?.role === 'admin' && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setDistributionData({
-                              item_id: item.item_id,
-                              distributions: [],
-                              notes: ''
-                            });
-                            setShowDistributeModal(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
-                        >
-                          Distribute
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setAddStockQuantity('');
-                            setShowAddStockModal(true);
-                          }}
-                          className="text-green-600 hover:text-green-900 mr-3"
-                        >
-                          Add Stock
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setEditFormData({
-                              item_name: item.item_name,
-                              category: item.category,
-                              unit_price: item.unit_price.toString(),
-                              initial_stock: item.initial_stock.toString(),
-                              total_added: item.total_added.toString(),
-                              current_stock: item.current_stock.toString()
-                            });
-                            setShowEditModal(true);
-                          }}
-                          className="text-purple-600 hover:text-purple-900"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    )}
-                  </tr>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -571,15 +739,28 @@ const Inventory: React.FC = () => {
               Distribute Stock - {selectedItem.item_name}
             </h3>
             <form onSubmit={handleDistributionSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Available Stock: {selectedItem.current_stock}
-                </label>
-                <p className="text-xs text-gray-500 mt-1">
-                  Total to distribute: {
-                    distributionData.distributions.reduce((sum, dist) => sum + (parseInt(dist.quantity) || 0), 0)
-                  } / {selectedItem.current_stock}
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Available to distribute: {selectedItemAvailable}
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Total inventory: {selectedItemTotalInventory} | At stalls (unsold): {selectedItemDistributed} | Sold: {selectedItemSold}
+                    </p>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Remaining after this plan: {remainingAfterPendingDistribution}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Total to distribute: {totalQuantityPendingDistribution} / {selectedItemAvailable}
                 </p>
+                {selectedItemAvailable === 0 && (
+                  <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    No more stock is available to distribute. Add stock before allocating to stalls.
+                  </div>
+                )}
               </div>
               
               <div>
@@ -588,7 +769,8 @@ const Inventory: React.FC = () => {
                   <button
                     type="button"
                     onClick={addDistributionRow}
-                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={selectedItemAvailable === 0}
                   >
                     + Add Stall
                   </button>
@@ -672,7 +854,8 @@ const Inventory: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  disabled={selectedItemAvailable === 0 || totalQuantityPendingDistribution === 0}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Distribute Stock
                 </button>
@@ -702,7 +885,7 @@ const Inventory: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
                 <input
                   type="text"
-                  value={selectedItem.current_stock}
+                  value={selectedItemAvailable}
                   disabled
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 />
@@ -718,6 +901,20 @@ const Inventory: React.FC = () => {
                   min="1"
                   required
                 />
+              </div>
+
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="flex justify-between">
+                  <span>Will be available to distribute</span>
+                  <span className="font-semibold">{previewAvailableAfterAdd}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span>Total inventory in system</span>
+                  <span className="font-semibold">{previewTotalInventory}</span>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Currently at stalls (unsold): {selectedItemDistributed}. Sold so far: {selectedItemSold}.
+                </p>
               </div>
 
               <div className="flex justify-end space-x-3">
