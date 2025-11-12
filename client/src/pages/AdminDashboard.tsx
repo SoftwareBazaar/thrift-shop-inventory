@@ -296,7 +296,7 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
-              <p className="text-2xl font-bold text-blue-600 leading-tight">
+              <p className="text-2xl font-bold text-blue-600 leading-tight break-words">
                 {formatCurrency(analytics?.totalRevenue || 0)}
               </p>
             </div>
@@ -309,7 +309,9 @@ const AdminDashboard: React.FC = () => {
               <span className="text-3xl">📦</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Units Sold</h3>
+              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
+                Units Sold
+              </h3>
               <p className="text-xs text-gray-500 leading-tight whitespace-normal">
                 Physical items moved
               </p>
@@ -324,9 +326,13 @@ const AdminDashboard: React.FC = () => {
               <span className="text-3xl">🏬</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Available Stock</h3>
-              <p className="text-sm font-semibold text-indigo-600">{totalAvailableUnits} units</p>
-              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
+              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
+                Available Stock
+              </h3>
+              <p className="text-sm font-semibold text-indigo-600 break-words">
+                {totalAvailableUnits} units
+              </p>
+              <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
                 Potential sales value: {formatCurrency(totalAvailableValue)}
               </p>
             </div>
@@ -339,9 +345,13 @@ const AdminDashboard: React.FC = () => {
               <span className="text-3xl">💹</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Gross Profit</h3>
-              <p className={`text-2xl font-bold ${profitTone}`}>{formatCurrency(grossProfit)}</p>
-              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
+              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
+                Gross Profit
+              </h3>
+              <p className={`text-2xl font-bold break-words ${profitTone}`}>
+                {formatCurrency(grossProfit)}
+              </p>
+              <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
                 Revenue {formatCurrency(revenue)} − Cost {formatCurrency(costOfGoodsSold)}
               </p>
             </div>
