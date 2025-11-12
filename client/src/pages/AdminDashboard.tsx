@@ -215,6 +215,33 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const items = inventoryResponse?.items || [];
+  const itemCostMap = new Map<number, number>();
+  items.forEach((item: any) => {
+    if (item?.item_id != null) {
+      itemCostMap.set(item.item_id, Number(item.buying_price) || 0);
+    }
+  });
+
+  const totalAvailableUnits = items.reduce((sum: number, item: any) => {
+    return sum + Number(item?.current_stock || 0);
+  }, 0);
+
+  const totalAvailableValue = items.reduce((sum: number, item: any) => {
+    const unitValue = Number(item?.unit_price ?? item?.buying_price ?? 0);
+    return sum + Number(item?.current_stock || 0) * unitValue;
+  }, 0);
+
+  const revenue = analytics?.totalRevenue || 0;
+  const salesForProfit = allSales.length > 0 ? allSales : recentSales;
+  const costOfGoodsSold = salesForProfit.reduce((sum, sale) => {
+    const unitCost = Number(sale.buying_price ?? itemCostMap.get(Number(sale.item_id)) ?? 0);
+    return sum + unitCost * Number(sale.quantity_sold || 0);
+  }, 0);
+  const grossProfit = revenue - costOfGoodsSold;
+  const profitTone =
+    grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-gray-600';
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -261,7 +288,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -282,7 +309,8 @@ const AdminDashboard: React.FC = () => {
               <span className="text-3xl">📈</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Total Sales</h3>
+              <h3 className="text-lg font-medium text-gray-900">Sales Orders</h3>
+              <p className="text-xs text-gray-500">Completed sale receipts</p>
               <p className="text-2xl font-bold text-green-600">{analytics?.totalSales || 0}</p>
             </div>
           </div>
@@ -295,7 +323,23 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Units Sold</h3>
+              <p className="text-xs text-gray-500">Physical items moved</p>
               <p className="text-2xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-indigo-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">🏬</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Available Stock</h3>
+              <p className="text-sm font-semibold text-indigo-600">{totalAvailableUnits} units</p>
+              <p className="text-xs text-gray-500">
+                Potential sales value: {formatCurrency(totalAvailableValue)}
+              </p>
             </div>
           </div>
         </div>
@@ -303,26 +347,13 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <span className="text-3xl">📊</span>
+              <span className="text-3xl">💹</span>
             </div>
-            <div className="ml-4 flex-1 min-w-0">
-              <h3 className="text-lg font-medium text-gray-900">Stock Value</h3>
-              <p className={`text-xl sm:text-2xl font-bold break-words ${(() => {
-                const items = inventoryResponse?.items || [];
-                const totalStockInvestment = items.reduce((sum: number, item: any) => {
-                  return sum + (item.current_stock * (item.buying_price || 0));
-                }, 0);
-                const stockValue = (analytics?.totalRevenue || 0) - totalStockInvestment;
-                return stockValue < 0 ? 'text-red-600' : 'text-green-600';
-              })()}`}>
-                {(() => {
-                  const items = inventoryResponse?.items || [];
-                  const totalStockInvestment = items.reduce((sum: number, item: any) => {
-                    return sum + (item.current_stock * (item.buying_price || 0));
-                  }, 0);
-                  const stockValue = (analytics?.totalRevenue || 0) - totalStockInvestment;
-                  return formatCurrency(stockValue);
-                })()}
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Gross Profit</h3>
+              <p className={`text-2xl font-bold ${profitTone}`}>{formatCurrency(grossProfit)}</p>
+              <p className="text-xs text-gray-500">
+                Revenue {formatCurrency(revenue)} − Cost {formatCurrency(costOfGoodsSold)}
               </p>
             </div>
           </div>
