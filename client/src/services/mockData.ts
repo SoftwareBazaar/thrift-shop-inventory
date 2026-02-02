@@ -98,10 +98,10 @@ export interface Analytics {
   totalSales: number;
   totalUnits: number;
   averageSale: number;
-  topSellingItems: Array<{item_name: string; total_sold: number; revenue: number}>;
-  userPerformance: Array<{user_name: string; sales: number; revenue: number}>;
-  dailySales: Array<{date: string; sales: number; revenue: number}>;
-  commissionData: Array<{user_name: string; sales: number; commission: number}>;
+  topSellingItems: Array<{ item_name: string; total_sold: number; revenue: number }>;
+  userPerformance: Array<{ user_name: string; sales: number; revenue: number }>;
+  dailySales: Array<{ date: string; sales: number; revenue: number }>;
+  commissionData: Array<{ user_name: string; sales: number; commission: number }>;
 }
 
 // Mock Users Data - Start with admin and assigned users
@@ -205,7 +205,7 @@ const initStorage = () => {
     // Always ensure demo users exist (admin, kelvin, manuel)
     const existingUsers = localStorage.getItem('thrift_shop_users');
     let users: User[] = [];
-    
+
     if (existingUsers) {
       try {
         users = JSON.parse(existingUsers);
@@ -213,10 +213,10 @@ const initStorage = () => {
         users = [];
       }
     }
-    
+
     // Ensure demo users always exist
     let needsUpdate = false;
-    
+
     for (const demoUser of mockUsers) {
       const exists = users.find(u => u.username.toLowerCase() === demoUser.username.toLowerCase());
       if (!exists) {
@@ -232,17 +232,17 @@ const initStorage = () => {
         }
       }
     }
-    
+
     if (needsUpdate || users.length === 0) {
       localStorage.setItem('thrift_shop_users', JSON.stringify(users.length > 0 ? users : mockUsers));
     }
-    
+
     // Always ensure stalls are initialized
     const existingStalls = localStorage.getItem('thrift_shop_stalls');
     if (!existingStalls || JSON.parse(existingStalls).length === 0) {
       localStorage.setItem('thrift_shop_stalls', JSON.stringify(mockStalls));
     }
-    
+
     // Only initialize empty if not present
     if (!localStorage.getItem('thrift_shop_items')) {
       localStorage.setItem('thrift_shop_items', JSON.stringify(mockInventory));
@@ -385,7 +385,7 @@ export const mockApi = {
     const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
     const sales = getStorageData<Sale[]>('sales', []);
     const stalls = getStorageData<Stall[]>('stalls', []);
-    
+
     // If stallId is provided (for non-admin users), filter to show only distributed stock
     if (stallId !== undefined) {
       const filteredItems = items
@@ -394,35 +394,35 @@ export const mockApi = {
           const stallDistributions = distributions
             .filter(d => d.item_id === item.item_id && d.stall_id === stallId)
             .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
-          
+
           const totalDistributedToStall = stallDistributions.reduce(
             (sum, d) => sum + d.quantity_allocated, 0
           );
-          
+
           // If no stock distributed to this stall, exclude this item
           if (totalDistributedToStall === 0) {
             return null;
           }
-          
+
           // Calculate sales from this stall for this item
           // Get stall name from stall_id to match with sales
           const stall = stalls.find(s => s.stall_id === stallId);
           const stallSales = stall ? sales.filter(
             s => s.item_id === item.item_id && s.stall_name === stall.stall_name
           ) : [];
-          
+
           const totalSold = stallSales.reduce((sum, s) => sum + s.quantity_sold, 0);
-          
+
           // Calculate initial_stock and total_added based on distribution history
           // Initial stock = stock the user had at the time of the most recent distribution
           // Total added = quantity from the most recent distribution
           let initialStock = 0;
           let totalAdded = 0;
-          
+
           if (stallDistributions.length > 0) {
             const mostRecentDistribution = stallDistributions[stallDistributions.length - 1];
             totalAdded = mostRecentDistribution.quantity_allocated;
-            
+
             if (stallDistributions.length === 1) {
               // First distribution: initial = 0 (no stock before first distribution)
               initialStock = 0;
@@ -433,7 +433,7 @@ export const mockApi = {
               const totalPreviousDistributed = previousDistributions.reduce(
                 (sum, d) => sum + d.quantity_allocated, 0
               );
-              
+
               // Calculate all sales that happened strictly before the most recent distribution
               // We use < (not <=) to ensure we get the stock at the moment before the new distribution
               const lastDistributionDate = new Date(mostRecentDistribution.date_distributed);
@@ -443,16 +443,16 @@ export const mockApi = {
               const totalSalesBeforeDistribution = salesBeforeDistribution.reduce(
                 (sum, s) => sum + s.quantity_sold, 0
               );
-              
+
               // Initial stock = stock the user had at that moment (before the new distribution)
               // This represents their "present stock" at the time they received the new stock
               // This is: previous distributions - sales before that point
               initialStock = Math.max(0, totalPreviousDistributed - totalSalesBeforeDistribution);
             }
           }
-          
+
           const currentStock = Math.max(0, totalDistributedToStall - totalSold);
-          
+
           // IMPORTANT: Explicitly create new object WITHOUT original initial_stock
           // Remove initial_stock from item before spreading to ensure calculated value is used
           const { initial_stock: _, total_added: __, current_stock: ___, total_allocated: ____, ...itemWithoutStockFields } = item;
@@ -463,33 +463,43 @@ export const mockApi = {
             total_added: totalAdded,
             total_allocated: totalDistributedToStall
           };
-          
+
           console.log(`[Mock User Stock] Item: ${userItem.item_name}, Stall: ${stallId}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);
-          
+
           return userItem;
         })
         .filter((item): item is InventoryItem => item !== null);
-      
+
       return { items: filteredItems };
     }
-    
-    // For admin users: show actual current stock (initial + additions - sales)
+
+    // For admin users: show actual current stock (initial + additions - distributions - sales)
     const itemsWithAdminStock = items.map(item => {
       const initialStock = item.initial_stock || 0;
       const totalAdded = item.total_added || 0;
+
+      // Calculate total distributed to all stalls
+      const totalDistributed = distributions
+        .filter(d => d.item_id === item.item_id)
+        .reduce((sum, d) => sum + d.quantity_allocated, 0);
+
+      // Calculate total sold (all sales for this item)
       const totalSold = sales
         .filter(sale => sale.item_id === item.item_id)
         .reduce((sum, sale) => sum + sale.quantity_sold, 0);
-      const adminStock = Math.max(0, initialStock + totalAdded - totalSold);
-      
+
+      // Admin's remaining stock = initial + added - distributed - sales
+      const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalSold);
+
       return {
         ...item,
         current_stock: adminStock,
         initial_stock: initialStock,
-        total_added: totalAdded
+        total_added: totalAdded,
+        total_allocated: totalDistributed
       };
     });
-    
+
     return { items: itemsWithAdminStock };
   },
 
@@ -564,8 +574,8 @@ export const mockApi = {
     setStorageData('stock_additions', stockAdditions);
 
     // Update the item with new data
-    items[itemIndex] = { 
-      ...currentItem, 
+    items[itemIndex] = {
+      ...currentItem,
       ...itemData,
       // Preserve existing fields that shouldn't be changed
       item_id: currentItem.item_id,
@@ -593,7 +603,7 @@ export const mockApi = {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
-    
+
     if (!saleData.quantity_sold || saleData.quantity_sold <= 0) {
       throw new Error('Quantity must be greater than zero.');
     }
@@ -631,14 +641,14 @@ export const mockApi = {
     // Get user info for recorded_by_name
     const users = getStorageData<User[]>('users', mockUsers);
     const user = users.find(u => u.user_id === saleData.recorded_by);
-    
+
     // Get stall info (stall_id can be null for admin sales)
-    const stallId = saleData.stall_id === null || saleData.stall_id === undefined 
-      ? null 
+    const stallId = saleData.stall_id === null || saleData.stall_id === undefined
+      ? null
       : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString()));
     const stalls = getStorageData<Stall[]>('stalls', mockStalls);
     const stall = stallId ? stalls.find(s => s.stall_id === stallId) : null;
-    
+
     const newSale: Sale = {
       sale_id: Math.max(...sales.map(s => s.sale_id), 0) + 1,
       item_id: itemId,
@@ -663,17 +673,17 @@ export const mockApi = {
       notes: saleData.notes || null,
       amount_paid: saleData.sale_type === 'credit' ? 0 : null
     };
-    
+
     sales.push(newSale);
     setStorageData('sales', sales);
-    
+
     // Update item stock
     item.current_stock -= saleData.quantity_sold;
     if (item.current_stock < 0) item.current_stock = 0;
     const allItems = getStorageData<InventoryItem[]>('items', mockInventory);
     const updatedItems = allItems.map(i => i.item_id === item.item_id ? item : i);
     setStorageData('items', updatedItems);
-    
+
     return { sale: newSale };
   },
 
@@ -767,32 +777,32 @@ export const mockApi = {
     await new Promise(resolve => setTimeout(resolve, 500));
     const items = getStorageData<InventoryItem[]>('items', mockInventory);
     const item = items.find(i => i.item_id === itemId);
-    
+
     if (!item) {
       throw new Error('Item not found');
     }
-    
+
     // Get existing distributions to calculate total already distributed
     const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
     const existingDistributions = distributions.filter(d => d.item_id === itemId);
     const totalAlreadyDistributed = existingDistributions.reduce(
       (sum, d) => sum + d.quantity_allocated, 0
     );
-    
+
     // Calculate total available stock (initial + added - already distributed)
     const totalAvailableStock = item.initial_stock + item.total_added - totalAlreadyDistributed;
-    
+
     if (totalAvailableStock < distribution.quantity_allocated) {
       throw new Error(`Insufficient stock! Available: ${totalAvailableStock}, Requested: ${distribution.quantity_allocated}`);
     }
-    
+
     // Update item stock (subtract from main stock for tracking purposes)
     // Note: Admin will still see initial_stock + total_added in display
     item.current_stock -= distribution.quantity_allocated;
     item.total_allocated += distribution.quantity_allocated;
-    
+
     setStorageData('items', items);
-    
+
     // Create stock_distribution record
     const newDistribution: StockDistribution = {
       distribution_id: Math.max(...distributions.map(d => d.distribution_id), 0) + 1,
