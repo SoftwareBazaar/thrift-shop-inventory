@@ -35,7 +35,7 @@ type OfflineCredentialRecord = {
 
 type OfflineCredentialMap = Record<string, OfflineCredentialRecord>;
 
-const STORAGE_KEY = 'thrift_shop_offline_credentials_v2';
+const STORAGE_KEY = 'thrift_shop_offline_credentials_v3';
 
 const seedUsers: Array<{
   user: OfflineCredentialRecord['user'];
@@ -75,7 +75,7 @@ const seedUsers: Array<{
         phone_number: '+254711111111',
         email: 'kelvin@example.com',
       },
-      password: 'admin123',
+      password: '@Sta123$',
       recovery: {
         phone: '+254711111111',
         email: 'kelvin@example.com',
@@ -95,7 +95,7 @@ const seedUsers: Array<{
         phone_number: '+254722222222',
         email: 'manuel@example.com',
       },
-      password: 'admin123',
+      password: '@Sta123$',
       recovery: {
         phone: '+254722222222',
         email: 'manuel@example.com',
