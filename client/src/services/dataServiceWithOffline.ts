@@ -101,6 +101,36 @@ export const offlineDataApi = {
     }
   },
 
+  // Update sale - queue if offline
+  updateSale: async (saleId: number, saleData: any) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.updateSale(saleId, saleData);
+        await offlineStorage.saveSale(result.sale);
+        return result;
+      } else {
+        // Offline: update in IndexedDB and queue for sync
+        console.log('[OfflineDataApi] Updating sale offline, queuing for sync');
+        // Retrieve existing sale to ensure we don't lose data
+        const styles = await offlineStorage.getSales();
+        const existingSale = styles.find((s: any) => s.sale_id === saleId) || {};
+
+        const updatedSale = {
+          ...existingSale,
+          ...saleData,
+          sale_id: saleId
+        };
+
+        await offlineStorage.saveSale(updatedSale);
+        await syncService.queueOperation('UPDATE', 'sales', updatedSale);
+        return { sale: updatedSale };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error updating sale:', error);
+      throw error;
+    }
+  },
+
   // Get sales - try online first, fallback to offline
   getSales: async () => {
     try {
