@@ -43,67 +43,67 @@ const seedUsers: Array<{
   recovery?: RecoveryInfo;
   source?: OfflineCredentialRecord['source'];
 }> = [
-  {
-    user: {
-      user_id: 1,
-      username: 'admin',
-      full_name: 'System Administrator',
-      role: 'admin',
-      status: 'active',
-      created_date: '2024-01-01T00:00:00.000Z',
-      phone_number: '+254700000000',
-      email: 'admin@example.com',
+    {
+      user: {
+        user_id: 1,
+        username: 'admin',
+        full_name: 'System Administrator',
+        role: 'admin',
+        status: 'active',
+        created_date: '2024-01-01T00:00:00.000Z',
+        phone_number: '+254700000000',
+        email: 'admin@example.com',
+      },
+      password: 'admin123',
+      recovery: {
+        phone: '+254700000000',
+        email: 'admin@example.com',
+        hint:
+          'Default admin contact. Update to your real phone/email after first login.',
+      },
+      source: 'seed',
     },
-    password: 'admin123',
-    recovery: {
-      phone: '+254700000000',
-      email: 'admin@example.com',
-      hint:
-        'Default admin contact. Update to your real phone/email after first login.',
+    {
+      user: {
+        user_id: 2,
+        username: 'kelvin',
+        full_name: 'Kelvin',
+        role: 'user',
+        stall_id: 316,
+        status: 'active',
+        created_date: '2024-01-01T00:00:00.000Z',
+        phone_number: '+254711111111',
+        email: 'kelvin@example.com',
+      },
+      password: 'admin123',
+      recovery: {
+        phone: '+254711111111',
+        email: 'kelvin@example.com',
+        hint: 'Kelvin stall 316 phone',
+      },
+      source: 'seed',
     },
-    source: 'seed',
-  },
-  {
-    user: {
-      user_id: 2,
-      username: 'kelvin',
-      full_name: 'Kelvin',
-      role: 'user',
-      stall_id: 316,
-      status: 'active',
-      created_date: '2024-01-01T00:00:00.000Z',
-      phone_number: '+254711111111',
-      email: 'kelvin@example.com',
+    {
+      user: {
+        user_id: 3,
+        username: 'manuel',
+        full_name: 'Manuel',
+        role: 'user',
+        stall_id: 309,
+        status: 'active',
+        created_date: '2024-01-01T00:00:00.000Z',
+        phone_number: '+254722222222',
+        email: 'manuel@example.com',
+      },
+      password: 'admin123',
+      recovery: {
+        phone: '+254722222222',
+        email: 'manuel@example.com',
+        hint: 'Manuel stall 309 phone',
+      },
+      source: 'seed',
     },
-    password: 'admin123',
-    recovery: {
-      phone: '+254711111111',
-      email: 'kelvin@example.com',
-      hint: 'Kelvin stall 316 phone',
-    },
-    source: 'seed',
-  },
-  {
-    user: {
-      user_id: 3,
-      username: 'manuel',
-      full_name: 'Manuel',
-      role: 'user',
-      stall_id: 309,
-      status: 'active',
-      created_date: '2024-01-01T00:00:00.000Z',
-      phone_number: '+254722222222',
-      email: 'manuel@example.com',
-    },
-    password: 'admin123',
-    recovery: {
-      phone: '+254722222222',
-      email: 'manuel@example.com',
-      hint: 'Manuel stall 309 phone',
-    },
-    source: 'seed',
-  },
-];
+  ];
 
 const safeParse = (value: string | null): OfflineCredentialMap => {
   if (!value) return {};
@@ -183,8 +183,20 @@ export const ensureOfflineCredentialSeeds = async () => {
         mergeRecoveryInfo(extractRecoveryInfoFromUser(record.user)),
         seed.recovery
       );
+
+      // If the record is still a seed, ensure the password matches the seed password
+      // This fixes issues where the hash algorithm might have changed or local data is stale
+      let passwordVerifier = record.passwordVerifier;
+      if (record.source === 'seed' || !record.source) {
+        passwordVerifier = await derivePasswordHash(
+          seed.user.username,
+          seed.password
+        );
+      }
+
       map[key] = {
         ...record,
+        passwordVerifier, // Update verifier if it was a seed
         user: {
           ...seed.user,
           ...record.user,
@@ -267,9 +279,9 @@ export const attemptOfflineLogin = async (
   password: string
 ): Promise<
   | {
-      user: OfflineCredentialRecord['user'];
-      passwordVersion: string;
-    }
+    user: OfflineCredentialRecord['user'];
+    passwordVersion: string;
+  }
   | null
 > => {
   await ensureOfflineCredentialSeeds();

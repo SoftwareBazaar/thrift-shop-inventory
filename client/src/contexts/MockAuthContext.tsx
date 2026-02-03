@@ -219,6 +219,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     setLoading(true);
     const normalised = normaliseUsername(username);
     let availabilityError: Error | null = null;
+    let serverReportedInvalid = false;
 
     try {
       await ensureOfflineCredentialSeeds();
@@ -236,11 +237,16 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
           if (fetchError || !userRow) {
             const errorMessage = (fetchError?.message || '').toLowerCase();
-            if (errorMessage.includes('invalid') || fetchError?.code === 'PGRST116') {
-              throw new Error('Invalid credentials');
+            const statusCode = (fetchError as any)?.status || (fetchError as any)?.code;
+            // Treat 406 (Not Acceptable) and other non-auth errors as availability issues, not invalid credentials
+            if (statusCode === 406 || statusCode === '406') {
+              availabilityError = new Error('Server configuration issue. Using offline mode.');
+            } else if (errorMessage.includes('invalid') || fetchError?.code === 'PGRST116') {
+              serverReportedInvalid = true;
+            } else {
+              availabilityError = new Error(fetchError?.message || 'Unable to reach authentication server');
             }
-            availabilityError = new Error(fetchError?.message || 'Unable to reach authentication server');
-            throw availabilityError;
+            throw availabilityError ?? new Error('Unable to reach authentication server');
           }
 
           if (userRow.status && userRow.status !== 'active') {
@@ -249,6 +255,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
           const matches = await bcrypt.compare(password, userRow.password_hash || '');
           if (!matches) {
+            serverReportedInvalid = true;
             throw new Error('Invalid credentials');
           }
 
@@ -265,8 +272,12 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           await cacheCredentials(authUser, password, passwordVersion);
           return;
         } catch (serverError: any) {
-          if (serverError instanceof Error && serverError.message === 'Invalid credentials') {
-            throw serverError;
+          const statusCode = serverError?.status || serverError?.code;
+          // 406 errors should fall back to offline, not be treated as invalid credentials
+          if (statusCode === 406 || statusCode === '406') {
+            availabilityError = new Error('Server configuration issue. Using offline mode.');
+          } else if (serverError instanceof Error && serverError.message === 'Invalid credentials') {
+            serverReportedInvalid = true;
           }
           console.warn('Server login failed, trying offline credentials', serverError);
           if (!availabilityError) {
@@ -316,7 +327,11 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         throw new Error('This account has not been synced for offline access yet. Connect to the internet once while signing in to enable offline login.');
       }
 
-      throw new Error('Invalid credentials');
+      if (serverReportedInvalid) {
+        throw new Error('Invalid credentials');
+      }
+
+      throw new Error('Login failed');
     } catch (error) {
       console.error('Login error:', error);
       if (error instanceof Error) {

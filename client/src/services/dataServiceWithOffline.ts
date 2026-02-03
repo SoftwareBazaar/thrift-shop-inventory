@@ -1,6 +1,6 @@
 // Enhanced Data Service with Offline Support
 // Wraps the main data service to add offline queueing and sync
-import { dataApi } from './dataService';
+import { dataApi } from './baseDataService';
 import { offlineStorage } from './offlineStorage';
 import { syncService } from './syncService';
 
