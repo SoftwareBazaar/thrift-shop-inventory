@@ -32,10 +32,10 @@ interface Analytics {
   totalSales: number;
   totalUnits: number;
   averageSale: number;
-  topSellingItems: Array<{item_name: string; total_sold: number; revenue: number}>;
-  userPerformance: Array<{user_name: string; sales: number; revenue: number}>;
-  dailySales: Array<{date: string; sales: number; revenue: number}>;
-  commissionData: Array<{user_name: string; sales: number; commission: number}>;
+  topSellingItems: Array<{ item_name: string; total_sold: number; revenue: number }>;
+  userPerformance: Array<{ user_name: string; sales: number; revenue: number }>;
+  dailySales: Array<{ date: string; sales: number; revenue: number }>;
+  commissionData: Array<{ user_name: string; sales: number; commission: number }>;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -77,14 +77,14 @@ const AdminDashboard: React.FC = () => {
       // Fetch recent sales
       const recentSalesResponse = await dataApi.getSales();
       const allSales = recentSalesResponse.sales || [];
-      
+
       // Sort sales by date (newest first) for timely display
       const sortedSales = [...allSales].sort((a, b) => {
         const dateA = new Date(a.date_time).getTime();
         const dateB = new Date(b.date_time).getTime();
         return dateB - dateA; // Descending order (newest first)
       });
-      
+
       setAllSales(sortedSales);
       setRecentSales(sortedSales.slice(0, 10));
 
@@ -105,7 +105,7 @@ const AdminDashboard: React.FC = () => {
           revenue: existing.revenue + sale.total_amount
         });
       });
-      
+
       const topSellingItems = Array.from(itemSalesMap.entries())
         .map(([item_name, data]) => ({ item_name, ...data }))
         .sort((a, b) => b.total_sold - a.total_sold)
@@ -121,7 +121,7 @@ const AdminDashboard: React.FC = () => {
           revenue: existing.revenue + sale.total_amount
         });
       });
-      
+
       const userPerformance = Array.from(userSalesMap.entries())
         .map(([user_name, data]) => ({ user_name, ...data }))
         .sort((a, b) => b.revenue - a.revenue);
@@ -156,12 +156,12 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
-    
+
     // Auto-refresh every 5 seconds to sync data across all users
     const interval = setInterval(() => {
       fetchAdminData();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [fetchAdminData]);
 
@@ -176,7 +176,7 @@ const AdminDashboard: React.FC = () => {
     const stallSales = allSales.filter(sale => sale.stall_name === stallName);
     const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
     const count = stallSales.length;
-    
+
     // Get all contributors with their individual contribution amounts
     const contributorMap = new Map<string, number>();
     stallSales.forEach(sale => {
@@ -185,33 +185,46 @@ const AdminDashboard: React.FC = () => {
         contributorMap.set(sale.recorded_by_name, currentAmount + sale.total_amount);
       }
     });
-    
+
     // Convert to array and sort by amount (descending)
     const contributors = Array.from(contributorMap.entries())
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount);
-    
+
     return { revenue, count, contributors };
   };
 
   const downloadReport = async (type: 'pdf' | 'excel') => {
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Create mock report data
-      const mockData = `Mock analytics report for ${selectedPeriod} in ${type.toUpperCase()} format`;
-      const blob = new Blob([mockData], { type: 'text/plain' });
-      
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+      const response = await fetch(`${apiUrl}/reports/performance?format=${type}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `analytics-report-${selectedPeriod}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
+      link.setAttribute('download', `performance-report-${new Date().toISOString().split('T')[0]}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading report:', error);
+      alert('Failed to download report. Please ensure the server is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -233,14 +246,16 @@ const AdminDashboard: React.FC = () => {
   }, 0);
 
   const revenue = analytics?.totalRevenue || 0;
-  const salesForProfit = allSales.length > 0 ? allSales : recentSales;
-  const costOfGoodsSold = salesForProfit.reduce((sum, sale) => {
-    const unitCost = Number(sale.buying_price ?? itemCostMap.get(Number(sale.item_id)) ?? 0);
-    return sum + unitCost * Number(sale.quantity_sold || 0);
+  const totalInvestment = items.reduce((sum: number, item: any) => {
+    // Investment is based on all stock ever added (initial + additions)
+    const totalStockQty = Number(item.initial_stock || 0) + Number(item.total_added || 0);
+    const costPerUnit = Number(item.buying_price || 0);
+    return sum + (totalStockQty * costPerUnit);
   }, 0);
-  const grossProfit = revenue - costOfGoodsSold;
+
+  const grossProfit = revenue - totalInvestment;
   const profitTone =
-    grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-gray-600';
+    grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
 
   if (loading) {
     return (
@@ -352,7 +367,7 @@ const AdminDashboard: React.FC = () => {
                 {formatCurrency(grossProfit)}
               </p>
               <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
-                Revenue {formatCurrency(revenue)} − Cost {formatCurrency(costOfGoodsSold)}
+                Revenue {formatCurrency(revenue)} − Investment {formatCurrency(totalInvestment)}
               </p>
             </div>
           </div>
@@ -444,11 +459,10 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    stall.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${stall.status === 'active'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                    }`}>
                     {stall.status}
                   </span>
                 </div>
@@ -490,16 +504,15 @@ const AdminDashboard: React.FC = () => {
                     {formatCurrency(sale.total_amount)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      sale.sale_type === 'cash' 
-                        ? 'bg-green-100 text-green-800' 
-                        : sale.sale_type === 'mobile'
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${sale.sale_type === 'cash'
+                      ? 'bg-green-100 text-green-800'
+                      : sale.sale_type === 'mobile'
                         ? 'bg-purple-100 text-purple-800'
                         : sale.sale_type === 'split'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {sale.sale_type === 'split' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                      {sale.sale_type === 'split'
                         ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
@@ -601,12 +614,12 @@ const AdminDashboard: React.FC = () => {
                   sale_type: editSaleData.sale_type,
                   recorded_by: parseInt(editSaleData.recorded_by)
                 };
-                
+
                 if (editSaleData.sale_type === 'split') {
                   updateData.cash_amount = parseFloat(editSaleData.cash_amount);
                   updateData.mobile_amount = parseFloat(editSaleData.mobile_amount);
                 }
-                
+
                 await dataApi.updateSale(selectedSale.sale_id, updateData);
                 setShowEditSaleModal(false);
                 fetchAdminData();

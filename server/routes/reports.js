@@ -67,9 +67,9 @@ router.get('/inventory', authenticateToken, async (req, res) => {
       const ws = XLSX.utils.json_to_sheet(inventoryResult.rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Inventory Report');
-      
+
       const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename=inventory_report.xlsx');
       res.send(excelBuffer);
@@ -77,7 +77,7 @@ router.get('/inventory', authenticateToken, async (req, res) => {
       // Generate PDF
       const doc = new jsPDF();
       doc.text('Inventory Report', 20, 20);
-      
+
       const tableData = inventoryResult.rows.map(item => [
         item.item_name,
         item.category,
@@ -109,12 +109,12 @@ router.get('/inventory', authenticateToken, async (req, res) => {
 // Get sales report
 router.get('/sales', authenticateToken, async (req, res) => {
   try {
-    const { 
-      format = 'json', 
-      start_date, 
-      end_date, 
+    const {
+      format = 'json',
+      start_date,
+      end_date,
       stall_id,
-      sale_type 
+      sale_type
     } = req.query;
 
     let whereClause = 'WHERE 1=1';
@@ -182,9 +182,9 @@ router.get('/sales', authenticateToken, async (req, res) => {
       const ws = XLSX.utils.json_to_sheet(salesResult.rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
-      
+
       const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename=sales_report.xlsx');
       res.send(excelBuffer);
@@ -192,7 +192,7 @@ router.get('/sales', authenticateToken, async (req, res) => {
       // Generate PDF
       const doc = new jsPDF();
       doc.text('Sales Report', 20, 20);
-      
+
       const tableData = salesResult.rows.map(sale => [
         sale.date_time,
         sale.item_name,
@@ -272,9 +272,9 @@ router.get('/stall-performance', authenticateToken, requireAdmin, async (req, re
       const ws = XLSX.utils.json_to_sheet(performanceResult.rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Stall Performance');
-      
+
       const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename=stall_performance_report.xlsx');
       res.send(excelBuffer);
@@ -291,12 +291,12 @@ router.get('/stall-performance', authenticateToken, requireAdmin, async (req, re
 // Get top sellers report
 router.get('/top-sellers', authenticateToken, async (req, res) => {
   try {
-    const { 
-      format = 'json', 
-      start_date, 
-      end_date, 
+    const {
+      format = 'json',
+      start_date,
+      end_date,
       limit = 10,
-      sort_by = 'quantity' 
+      sort_by = 'quantity'
     } = req.query;
 
     let dateFilter = '';
@@ -349,9 +349,9 @@ router.get('/top-sellers', authenticateToken, async (req, res) => {
       const ws = XLSX.utils.json_to_sheet(topSellersResult.rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Top Sellers');
-      
+
       const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename=top_sellers_report.xlsx');
       res.send(excelBuffer);
@@ -421,9 +421,9 @@ router.get('/credit-sales', authenticateToken, requireAdmin, async (req, res) =>
       const ws = XLSX.utils.json_to_sheet(creditSalesResult.rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Credit Sales');
-      
+
       const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename=credit_sales_report.xlsx');
       res.send(excelBuffer);
@@ -437,4 +437,177 @@ router.get('/credit-sales', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
+// Get comprehensive performance report
+router.get('/performance', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { format = 'json', period = 'year' } = req.query;
+
+    // 1. Executive Summary Data
+    const summaryQuery = `
+      SELECT 
+        COALESCE(SUM(total_amount), 0) as total_revenue,
+        COUNT(sale_id) as total_sales,
+        COALESCE(SUM(quantity_sold), 0) as total_units_sold
+      FROM sales
+    `;
+    const summaryResult = await pool.query(summaryQuery);
+    const summary = summaryResult.rows[0];
+
+    // 2. Investment Data (Total stock ever added * buying_price)
+    // First, check if buying_price column exists
+    const itemCheck = await pool.query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = 'items' AND COLUMN_NAME = 'buying_price'");
+    const hasBuyingPrice = itemCheck.rows.length > 0;
+    const priceCol = hasBuyingPrice ? 'buying_price' : 'unit_price';
+
+    const investmentQuery = `
+      SELECT 
+        COALESCE(SUM((initial_stock + COALESCE(total_added, 0)) * ${priceCol}), 0) as total_investment
+      FROM (
+        SELECT 
+          i.initial_stock, 
+          i.${priceCol},
+          (SELECT SUM(quantity_added) FROM stock_additions WHERE item_id = i.item_id) as total_added
+        FROM items i
+      ) as investment_calc
+    `;
+    const investmentResult = await pool.query(investmentQuery);
+    const totalInvestment = investmentResult.rows[0].total_investment;
+    const grossProfit = summary.total_revenue - totalInvestment;
+
+    // 3. Monthly Sales Trend
+    const trendQuery = `
+      SELECT 
+        TO_CHAR(date_time, 'YYYY-MM') as month,
+        SUM(total_amount) as revenue,
+        COUNT(sale_id) as sales_count
+      FROM sales
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT 12
+    `;
+    const trendResult = await pool.query(trendQuery);
+
+    // 4. Top Selling Items
+    const topSellersQuery = `
+      SELECT 
+        i.item_name,
+        SUM(s.quantity_sold) as total_sold,
+        SUM(s.total_amount) as total_revenue
+      FROM sales s
+      JOIN items i ON s.item_id = i.item_id
+      GROUP BY i.item_id, i.item_name
+      ORDER BY total_sold DESC
+      LIMIT 10
+    `;
+    const topSellersResult = await pool.query(topSellersQuery);
+
+    if (format === 'excel') {
+      const wb = XLSX.utils.book_new();
+
+      // Summary Sheet
+      const summaryData = [
+        { Metric: 'Total Revenue', Value: Number(summary.total_revenue) },
+        { Metric: 'Total Investment', Value: Number(totalInvestment) },
+        { Metric: 'Gross Profit', Value: Number(grossProfit) },
+        { Metric: 'Total Sales', Value: Number(summary.total_sales) },
+        { Metric: 'Units Sold', Value: Number(summary.total_units_sold) }
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), 'Executive Summary');
+
+      // Monthly Trend Sheet
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trendResult.rows), 'Monthly Trends');
+
+      // Top Sellers Sheet
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topSellersResult.rows), 'Top Sellers');
+
+      const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=performance_report.xlsx');
+      res.send(excelBuffer);
+
+    } else if (format === 'pdf') {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(40, 44, 52);
+      doc.text('Business Performance Report', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, 28, { align: 'center' });
+
+      // 1. Executive Summary
+      doc.setFontSize(16);
+      doc.setTextColor(0);
+      doc.text('1. Executive Summary', 14, 45);
+
+      autoTable(doc, {
+        startY: 50,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Total Revenue', `Ksh ${Number(summary.total_revenue).toLocaleString()}`],
+          ['Total Investment', `Ksh ${Number(totalInvestment).toLocaleString()}`],
+          ['Gross Profit', `Ksh ${Number(grossProfit).toLocaleString()}`],
+          ['Profit Status', grossProfit >= 0 ? 'PROFIT' : 'LOSS'],
+          ['Total Sales', summary.total_sales],
+          ['Units Sold', summary.total_units_sold]
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [63, 81, 181] }
+      });
+
+      // 2. Monthly Trend
+      const currentY = doc.lastAutoTable.finalY + 15;
+      doc.text('2. Monthly Revenue Trends', 14, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['Month', 'Sales Count', 'Revenue']],
+        body: trendResult.rows.map(row => [
+          row.month,
+          row.sales_count,
+          `Ksh ${Number(row.revenue).toLocaleString()}`
+        ]),
+        theme: 'grid'
+      });
+
+      // 3. Top Sellers
+      doc.addPage();
+      doc.text('3. Top Selling Products', 14, 20);
+
+      autoTable(doc, {
+        startY: 25,
+        head: [['Product Name', 'Total Units Sold', 'Total Revenue']],
+        body: topSellersResult.rows.map(row => [
+          row.item_name,
+          row.total_sold,
+          `Ksh ${Number(row.total_revenue).toLocaleString()}`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [46, 125, 50] }
+      });
+
+      const pdfBuffer = doc.output('arraybuffer');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=performance_report.pdf');
+      res.send(Buffer.from(pdfBuffer));
+
+    } else {
+      res.json({
+        summary,
+        totalInvestment,
+        grossProfit,
+        monthlyTrends: trendResult.rows,
+        topSellers: topSellersResult.rows
+      });
+    }
+  } catch (error) {
+    console.error('Performance report error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 module.exports = router;
+
