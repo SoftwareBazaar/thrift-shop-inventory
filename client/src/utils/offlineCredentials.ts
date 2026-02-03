@@ -35,7 +35,7 @@ type OfflineCredentialRecord = {
 
 type OfflineCredentialMap = Record<string, OfflineCredentialRecord>;
 
-const STORAGE_KEY = 'thrift_shop_offline_credentials_v3';
+const STORAGE_KEY = 'thrift_shop_offline_credentials_v4';
 
 const seedUsers: Array<{
   user: OfflineCredentialRecord['user'];
@@ -155,6 +155,18 @@ const extractRecoveryInfoFromUser = (
 
 export const ensureOfflineCredentialSeeds = async () => {
   if (typeof window === 'undefined') return;
+
+  // Check if we are upgrading from an older version
+  const lastVersion = window.localStorage.getItem('thrift_shop_storage_version');
+  const currentVersion = 'v4';
+
+  if (lastVersion !== currentVersion) {
+    console.log(`[OfflineAuth] Upgrading storage from ${lastVersion} to ${currentVersion}`);
+    // Clear old credential cache to prevent hash conflicts
+    window.localStorage.removeItem('thrift_shop_credentials');
+    window.localStorage.setItem('thrift_shop_storage_version', currentVersion);
+  }
+
   const map = loadCredentialMap();
   let didChange = false;
 
