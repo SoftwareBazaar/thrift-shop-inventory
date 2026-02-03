@@ -54,7 +54,7 @@ const seedUsers: Array<{
         phone_number: '+254700000000',
         email: 'admin@example.com',
       },
-      password: 'admin123',
+      password: '@Sta123$',
       recovery: {
         phone: '+254700000000',
         email: 'admin@example.com',
