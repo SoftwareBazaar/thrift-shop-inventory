@@ -394,10 +394,20 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         const currentHashInDb = existingUser.password_hash || '';
 
         // Try derivePasswordHash first
-        const expectedCurrentHash = await derivePasswordHash(dbUsername, oldPassword);
-        let matches = expectedCurrentHash === currentHashInDb;
+        const expectedFromDb = await derivePasswordHash(dbUsername, oldPassword);
+        const expectedFromContext = await derivePasswordHash(user.username, oldPassword);
 
-        console.log(`[ChangePassword] Verifying for user: ${dbUsername}`);
+        let matches = expectedFromDb === currentHashInDb || expectedFromContext === currentHashInDb;
+
+        console.log('[ChangePassword] Debug Info:', {
+          dbUsername,
+          contextUsername: user.username,
+          currentHashInDb: currentHashInDb.substring(0, 8) + '...',
+          expectedFromDb: expectedFromDb.substring(0, 8) + '...',
+          expectedFromContext: expectedFromContext.substring(0, 8) + '...',
+          matchFromDb: expectedFromDb === currentHashInDb,
+          matchFromContext: expectedFromContext === currentHashInDb
+        });
 
         if (!matches) {
           // Fallback to bcrypt for legacy hashes
@@ -410,7 +420,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
 
         if (!matches) {
-          console.warn('[ChangePassword] Password mismatch');
+          console.warn('[ChangePassword] Password mismatch - none of the attempted verifiers worked');
           return false;
         }
 

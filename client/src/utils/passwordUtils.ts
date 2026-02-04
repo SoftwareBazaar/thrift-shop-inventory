@@ -33,13 +33,14 @@ export const derivePasswordHash = async (
   const input = `${normaliseUsername(username)}|${password}`;
 
   if (typeof window !== 'undefined' && window.crypto?.subtle) {
+    console.log('[derivePasswordHash] Using SHA-256 (Secure Context)');
     const buffer = new TextEncoder().encode(input);
     const digest = await window.crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(digest));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Fallback for environments without subtle crypto
+  console.warn('[derivePasswordHash] Using 32-bit Fallback (Insecure Context)');
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     hash = (hash << 5) - hash + input.charCodeAt(i);
