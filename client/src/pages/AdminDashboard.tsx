@@ -186,7 +186,7 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriod]);
+  }, [selectedPeriod, startDate, endDate]);
 
   useEffect(() => {
     fetchAdminData();
