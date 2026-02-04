@@ -16,19 +16,23 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState<'identify' | 'select' | 'verify' | 'reset' | 'success'>('identify');
+  const [recoveryStep, setRecoveryStep] = useState<'identify' | 'select' | 'verify' | 'verify-code' | 'reset' | 'success'>('identify');
   const [recoveryOptions, setRecoveryOptions] = useState<{ phone?: string | null; email?: string | null }>({});
   const [recoveryForm, setRecoveryForm] = useState({
     username: '',
     method: 'phone' as 'phone' | 'email',
     contact: '',
+    verificationCode: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    resetToken: ''
   });
   const [recoveryError, setRecoveryError] = useState('');
   const [recoverySuccess, setRecoverySuccess] = useState('');
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryServerNote, setRecoveryServerNote] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [canResend, setCanResend] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -39,12 +43,16 @@ const Login: React.FC = () => {
     setRecoverySuccess('');
     setRecoveryServerNote('');
     setRecoveryLoading(false);
+    setCountdown(0);
+    setCanResend(false);
     setRecoveryForm({
       username: username || '',
       method: 'phone',
       contact: '',
+      verificationCode: '',
       newPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      resetToken: ''
     });
   };
 
@@ -129,7 +137,7 @@ const Login: React.FC = () => {
     setRecoveryStep('verify');
   };
 
-  const handleVerifyContact = (e: React.FormEvent) => {
+  const handleVerifyContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
     setRecoverySuccess('');
@@ -151,7 +159,97 @@ const Login: React.FC = () => {
       return;
     }
 
-    setRecoveryStep('reset');
+    // Send verification code via email
+    if (recoveryForm.method === 'email') {
+      await sendVerificationCode();
+    } else {
+      // Phone method - skip code for now, go directly to reset
+      setRecoveryStep('reset');
+    }
+  };
+
+  const sendVerificationCode = async () => {
+    setRecoveryLoading(true);
+    setRecoveryError('');
+
+    try {
+      const response = await fetch('/api/auth/send-verification-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: recoveryForm.username,
+          email: recoveryForm.contact.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send verification code');
+      }
+
+      // Start countdown timer
+      setCountdown(30);
+      setCanResend(false);
+
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      setRecoverySuccess('Verification code sent! Check your email.');
+      setRecoveryStep('verify-code');
+
+    } catch (error: any) {
+      setRecoveryError(error.message || 'Failed to send verification code');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoverySuccess('');
+
+    if (!recoveryForm.verificationCode || recoveryForm.verificationCode.length !== 6) {
+      setRecoveryError('Please enter the 6-digit verification code');
+      return;
+    }
+
+    setRecoveryLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: recoveryForm.contact.trim(),
+          code: recoveryForm.verificationCode
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Invalid verification code');
+      }
+
+      // Store reset token
+      setRecoveryForm(prev => ({ ...prev, resetToken: data.resetToken }));
+      setRecoverySuccess('Code verified! Set your new password.');
+      setRecoveryStep('reset');
+    } catch (error: any) {
+      setRecoveryError(error.message || 'Verification failed');
+    } finally {
+      setRecoveryLoading(false);
+    }
   };
 
   const handleRecoveryReset = async (e: React.FormEvent) => {
@@ -274,11 +372,11 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto h-32 sm:h-40 w-auto flex items-center justify-center mb-6">
-            <img 
+            <img
               src={`${process.env.PUBLIC_URL || ''}/sta-logo.png.png`}
-              alt="Street Thrift Apparel Logo" 
+              alt="Street Thrift Apparel Logo"
               className="h-32 sm:h-40 w-auto object-contain"
-              style={{maxWidth: '100%', display: 'block'}}
+              style={{ maxWidth: '100%', display: 'block' }}
             />
           </div>
           <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">
@@ -511,6 +609,58 @@ const Login: React.FC = () => {
                     {recoveryLoading ? 'Checking...' : 'Continue'}
                   </button>
                 </div>
+              </form>
+            )}
+
+            {recoveryStep === 'verify-code' && (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <p className="text-sm text-gray-700">
+                  Enter the 6-digit verification code sent to your email: <strong>{maskEmail(recoveryForm.contact)}</strong>
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+                  <input
+                    type="text"
+                    value={recoveryForm.verificationCode}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                      setRecoveryForm(prev => ({ ...prev, verificationCode: value }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl tracking-widest font-mono"
+                    placeholder="000000"
+                    maxLength={6}
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Code expires in 5 minutes</p>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={sendVerificationCode}
+                    disabled={!canResend || recoveryLoading}
+                    className="text-sm text-blue-600 hover:text-blue-800 focus:outline-none disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {countdown > 0 ? `Resend code in ${countdown}s` : 'Resend code'}
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none disabled:opacity-60"
+                    disabled={recoveryLoading || recoveryForm.verificationCode.length !== 6}
+                  >
+                    {recoveryLoading ? 'Verifying...' : 'Verify Code'}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setRecoveryStep('verify')}
+                  className="w-full px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
+                >
+                  ← Back
+                </button>
               </form>
             )}
 

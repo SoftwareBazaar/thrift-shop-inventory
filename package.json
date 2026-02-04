@@ -27,13 +27,19 @@
     "multer": "^2.0.0-rc.4",
     "xlsx": "^0.18.5",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.6.0"
+    "jspdf-autotable": "^3.6.0",
+    "resend": "^3.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
     "concurrently": "^8.2.2"
   },
-  "keywords": ["inventory", "management", "thrift-shop", "multi-stall"],
+  "keywords": [
+    "inventory",
+    "management",
+    "thrift-shop",
+    "multi-stall"
+  ],
   "author": "Thrift Shop Development Team",
   "license": "MIT"
 }
