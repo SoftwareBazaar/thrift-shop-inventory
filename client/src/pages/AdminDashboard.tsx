@@ -205,10 +205,17 @@ const AdminDashboard: React.FC = () => {
       const apiUrl = process.env.REACT_APP_API_URL || '/api';
 
       const response = await fetch(`${apiUrl}/reports/${endpoint}?format=${type}`, {
-        method: 'GET',
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sales: allSales,
+          items: items,
+          // We can also pass analytics if the backend needs pre-calculated values
+          analytics: analytics
+        })
       });
 
       if (!response.ok) {
