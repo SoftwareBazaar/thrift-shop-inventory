@@ -254,13 +254,6 @@ const AdminDashboard: React.FC = () => {
     return sum + Math.max(0, totalReceived - sold);
   }, 0);
 
-  const totalAvailableValue = items.reduce((sum: number, item: any) => {
-    const sold = itemSoldMap.get(item.item_id) || 0;
-    const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
-    const systemStock = Math.max(0, totalReceived - sold);
-    const unitValue = Number(item?.buying_price || 0); // Use buying price for warehouse value
-    return sum + systemStock * unitValue;
-  }, 0);
 
   const revenue = analytics?.totalRevenue || 0;
   const totalInvestment = items.reduce((sum: number, item: any) => {
