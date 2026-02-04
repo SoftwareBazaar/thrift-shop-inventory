@@ -456,6 +456,9 @@ const Inventory: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-10">
+                  #
+                </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Item
                 </th>
@@ -486,7 +489,7 @@ const Inventory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {filteredItems.map((item) => {
+              {filteredItems.map((item, index) => {
                 const totalSoldForItem = getItemsSold(item.item_id, item.item_name);
                 const distributedLive = Math.max(0, (item.total_allocated || 0) - totalSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
@@ -495,26 +498,25 @@ const Inventory: React.FC = () => {
                 const distributedPercent = managedTotal > 0 ? Math.max(0, 100 - centralPercent) : 0;
                 const totalInventory = centralStock + distributedLive + totalSoldForItem;
                 const isExpanded = expandedItemId === item.item_id;
-                const columnSpan = user?.role === 'admin' ? 7 : 4;
+                const columnSpan = user?.role === 'admin' ? 8 : 5;
 
                 return (
                   <React.Fragment key={item.item_id}>
-                    <tr className="hover:bg-gray-50">
+                    <tr className={`hover:bg-gray-50 ${isExpanded ? 'bg-blue-50/30' : ''}`}>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition-all ${isExpanded ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          {index + 1}
+                        </button>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-100"
-                            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
-                          >
-                            {isExpanded ? 'v' : '>'}
-                          </button>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
-                            <div className="text-xs text-gray-500">
-                              Total inventory in system: {totalInventory}
-                            </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
+                          <div className="text-[11px] font-medium text-gray-500 uppercase tracking-tight">
+                            Total in system: {totalInventory}
                           </div>
                         </div>
                       </td>

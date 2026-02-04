@@ -380,9 +380,6 @@ const AdminDashboard: React.FC = () => {
               <p className={`text-xl font-bold break-words ${profitTone}`}>
                 {formatCurrency(grossProfit)}
               </p>
-              <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
-                Revenue {formatCurrency(revenue)} − Investment {formatCurrency(totalInvestment)}
-              </p>
             </div>
           </div>
         </div>
