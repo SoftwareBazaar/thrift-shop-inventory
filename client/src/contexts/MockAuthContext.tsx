@@ -374,11 +374,17 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           .eq('user_id', user.user_id)
           .single();
 
-        if (fetchError || !existingUser) {
-          throw new Error('Unable to verify your account. Please try again.');
+        const currentHashInDb = existingUser.password_hash || '';
+
+        // Try derivePasswordHash first
+        const expectedCurrentHash = await derivePasswordHash(user.username, oldPassword);
+        let matches = expectedCurrentHash === currentHashInDb;
+
+        if (!matches) {
+          // Fallback to bcrypt for legacy hashes
+          matches = await bcrypt.compare(oldPassword, currentHashInDb);
         }
 
-        const matches = await bcrypt.compare(oldPassword, existingUser.password_hash || '');
         if (!matches) {
           return false;
         }
