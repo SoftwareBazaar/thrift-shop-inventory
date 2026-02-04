@@ -78,6 +78,7 @@ module.exports = async (req, res) => {
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
+    // Update password - this will trigger password_version update and session invalidation
     const { error: updateError } = await supabase
       .from('users')
       .update({ password_hash: newPasswordHash })
@@ -87,9 +88,20 @@ module.exports = async (req, res) => {
       throw updateError;
     }
 
-    const passwordVersion = crypto.createHash('sha256').update(newPasswordHash).digest('hex');
+    // Get the new password version after update
+    const { data: updatedUser, error: versionError } = await supabase
+      .from('users')
+      .select('password_version')
+      .eq('user_id', userId)
+      .single();
 
-    return res.json({ message: 'Password updated successfully', passwordVersion });
+    const passwordVersion = updatedUser?.password_version || crypto.createHash('sha256').update(newPasswordHash).digest('hex');
+
+    return res.json({
+      message: 'Password updated successfully. You will be logged out on all devices.',
+      passwordVersion,
+      sessionsInvalidated: true
+    });
   } catch (error) {
     console.error('Change password error:', error);
     return res.status(500).json({ message: 'Internal server error' });

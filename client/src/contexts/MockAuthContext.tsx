@@ -184,6 +184,17 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
               localStorage.setItem('user', JSON.stringify(data.user));
               persistAuthMode('server');
             } else if (response.status === 401 || response.status === 403) {
+              // Check if session was invalidated due to password change
+              try {
+                const errorData = await response.json();
+                if (errorData.passwordChanged || errorData.sessionInvalidated) {
+                  console.log('Session invalidated - password was changed on another device');
+                }
+              } catch (e) {
+                // Ignore JSON parse errors
+              }
+
+              // Clear invalid session
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               setToken(null);
@@ -403,10 +414,17 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           throw new Error(updateError.message || 'Failed to update password.');
         }
 
+        // Password changed successfully - all sessions are now invalidated
         const newPasswordVersion = newHash;
+
+        // Update offline credentials immediately
         await cacheCredentials(user, newPassword, newPasswordVersion);
+        await updateOfflinePasswordStore(username, newPassword);
         persistPasswordVersion(newPasswordVersion);
+
+        // Force logout immediately - session is now invalid on server
         logout();
+
         return true;
       }
 

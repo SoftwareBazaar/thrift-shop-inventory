@@ -73,9 +73,9 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
-    // Get user from database
+    // Get user from database (including password_version for session tracking)
     const userResult = await pool.query(
-      'SELECT user_id, username, password_hash, full_name, role, stall_id, status FROM users WHERE username = $1',
+      'SELECT user_id, username, password_hash, password_version, full_name, role, stall_id, status FROM users WHERE username = $1',
       [username]
     );
 
@@ -103,13 +103,39 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Remove password_hash from response
-    const { password_hash, ...userWithoutPassword } = user;
+    // Create session record for token validation and password change tracking
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+    // Get client IP and user agent for session tracking
+    const ipAddress = req.ip || req.connection.remoteAddress || null;
+    const userAgent = req.headers['user-agent'] || null;
+
+    try {
+      await pool.query(
+        `INSERT INTO sessions (user_id, token_hash, password_version, ip_address, user_agent, expires_at) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [user.user_id, tokenHash, user.password_version, ipAddress, userAgent, expiresAt]
+      );
+    } catch (sessionError) {
+      console.error('Session creation error:', sessionError);
+      // Continue with login even if session creation fails (for backward compatibility)
+    }
+
+    // Clean up expired sessions periodically
+    pool.query('SELECT cleanup_expired_sessions()').catch(err =>
+      console.warn('Expired session cleanup failed:', err)
+    );
+
+    // Remove password_hash and password_version from response
+    const { password_hash, password_version, ...userWithoutPassword } = user;
 
     res.json({
       message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      passwordVersion: password_version // Send to client for offline sync
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -154,12 +180,27 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
+    // Update password - the trigger will automatically update password_version and invalidate sessions
     await pool.query(
       'UPDATE users SET password_hash = $1 WHERE user_id = $2',
       [newPasswordHash, userId]
     );
 
-    res.json({ message: 'Password updated successfully' });
+    // Get the new password version for the client
+    const updatedUserResult = await pool.query(
+      'SELECT password_version FROM users WHERE user_id = $1',
+      [userId]
+    );
+    const newPasswordVersion = updatedUserResult.rows[0]?.password_version;
+
+    // Log the password change for audit trail
+    console.log(`Password changed for user ${userId}. All sessions invalidated.`);
+
+    res.json({
+      message: 'Password updated successfully. You will be logged out on all devices.',
+      passwordVersion: newPasswordVersion,
+      sessionsInvalidated: true
+    });
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ message: 'Internal server error' });
