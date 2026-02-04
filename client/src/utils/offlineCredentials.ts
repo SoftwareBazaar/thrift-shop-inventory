@@ -190,31 +190,26 @@ export const ensureOfflineCredentialSeeds = async () => {
       };
       didChange = true;
     } else {
-      // Ensure required fields (like recovery hint) stay up to date
+      // CRITICAL FIX: Only update metadata, NEVER overwrite password if it has been changed
       const record = map[key];
       const mergedRecovery = mergeRecoveryInfo(
         mergeRecoveryInfo(extractRecoveryInfoFromUser(record.user)),
         seed.recovery
       );
 
-      // If the record is still a seed, ensure the password matches the seed password
-      // This fixes issues where the hash algorithm might have changed or local data is stale
-      let passwordVerifier = record.passwordVerifier;
-      if (record.source === 'seed' || !record.source) {
-        passwordVerifier = await derivePasswordHash(
-          seed.user.username,
-          seed.password
-        );
-      }
-
+      // Only update user profile fields that don't affect authentication
+      // Preserve the existing passwordVerifier and source - NEVER reset passwords!
       map[key] = {
         ...record,
-        passwordVerifier, // Update verifier if it was a seed
         user: {
-          ...seed.user,
-          ...record.user,
+          ...record.user, // Keep existing user data first
+          // Only update metadata fields that are safe to sync from seed
+          full_name: seed.user.full_name || record.user.full_name,
+          phone_number: record.user.phone_number || seed.user.phone_number,
+          email: record.user.email || seed.user.email,
         },
         recovery: mergedRecovery,
+        // IMPORTANT: Never change passwordVerifier or source for existing records
       };
       didChange = true;
     }

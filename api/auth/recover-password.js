@@ -83,17 +83,24 @@ module.exports = async (req, res) => {
       }
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    // Use derivePasswordHash for password storage (same as client-side)
+    // This ensures compatibility across all authentication flows
+    const normalizedUsername = (username || '').trim().toLowerCase();
+    const derivedHash = crypto.createHash('sha256')
+      .update(normalizedUsername + '|' + newPassword)
+      .digest('hex');
+
     const { error: updateError } = await supabase
       .from('users')
-      .update({ password_hash: newHash })
+      .update({ password_hash: derivedHash })
       .eq('user_id', userRecord.user_id);
 
     if (updateError) {
       throw updateError;
     }
 
-    const passwordVersion = crypto.createHash('sha256').update(newHash).digest('hex');
+    // Return the password version for client sync
+    const passwordVersion = derivedHash;
 
     return res.json({
       message: 'Password updated successfully',

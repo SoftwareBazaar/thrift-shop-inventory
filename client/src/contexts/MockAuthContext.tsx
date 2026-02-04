@@ -479,9 +479,30 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Password changed successfully - all sessions are now invalidated
         const newPasswordVersion = newHash;
 
-        // Update offline credentials immediately
-        await cacheCredentials(user, newPassword, newPasswordVersion);
+        // CRITICAL: Clear the old credential cache to prevent stale password usage
+        if (typeof window !== 'undefined') {
+          const cache = readCredentialCache();
+          const key = normaliseUsername(username);
+          if (cache[key]) {
+            delete cache[key];
+            writeCredentialCache(cache);
+          }
+        }
+
+        // Update offline credentials immediately with proper source marking
         await updateOfflinePasswordStore(username, newPassword);
+        await upsertOfflineCredentialFromPassword(
+          toOfflineUser(user),
+          newPassword,
+          {
+            phone: (user as any)?.phone_number ?? undefined,
+            email: (user as any)?.email ?? undefined
+          },
+          'manual' // Mark as manual to prevent seed logic from overwriting
+        );
+
+        // Update the credential cache with new password
+        await cacheCredentials(user, newPassword, newPasswordVersion);
         persistPasswordVersion(newPasswordVersion);
 
         // Force logout immediately - session is now invalid on server
@@ -490,13 +511,34 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         return true;
       }
 
-      // Offline fallback
+      // Offline fallback - password change without server
       const offlineAuth = await attemptOfflineLogin(username, oldPassword);
       if (!offlineAuth) {
         return false;
       }
 
+      // Clear old credential cache
+      if (typeof window !== 'undefined') {
+        const cache = readCredentialCache();
+        const key = normaliseUsername(username);
+        if (cache[key]) {
+          delete cache[key];
+          writeCredentialCache(cache);
+        }
+      }
+
+      // Update offline password with manual source marking
       await updateOfflinePasswordStore(username, newPassword);
+      await upsertOfflineCredentialFromPassword(
+        toOfflineUser(user),
+        newPassword,
+        {
+          phone: (user as any)?.phone_number ?? undefined,
+          email: (user as any)?.email ?? undefined
+        },
+        'manual'
+      );
+
       const newPasswordVersion = await derivePasswordHash(username, newPassword);
       await cacheCredentials(user, newPassword, newPasswordVersion);
       persistPasswordVersion(newPasswordVersion);
