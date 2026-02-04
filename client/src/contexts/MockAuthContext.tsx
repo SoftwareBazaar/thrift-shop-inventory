@@ -264,16 +264,42 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
             throw new Error('Account is inactive');
           }
 
-          const expectedHash = await derivePasswordHash(username, password);
-          const matches = expectedHash === userRow.password_hash;
+
+          // Robust Hashing Logic (matches changePassword implementation)
+          const dbUsername = userRow.username;
+          const currentHashInDb = (userRow.password_hash || '').trim();
+
+          const expectedHash = await derivePasswordHash(dbUsername, password);
+          let matches = expectedHash === currentHashInDb;
+
+          console.log('[Login] Verifying credentials:', {
+            attemptedUser: username,
+            dbUser: dbUsername,
+            match: matches
+          });
+
+          if (!matches) {
+            // Check if context username derivation works (handle casing mismatch edge case)
+            const alternateHash = await derivePasswordHash(username, password);
+            if (alternateHash === currentHashInDb) {
+              console.log('[Login] Matched via alternate username casing');
+              matches = true;
+            }
+          }
 
           if (!matches) {
             // Fallback: try bcrypt in case some users still have old hashes
-            const bcryptMatches = await bcrypt.compare(password, userRow.password_hash || '');
-            if (!bcryptMatches) {
-              serverReportedInvalid = true;
-              throw new Error('Invalid credentials');
+            const bcryptMatches = await bcrypt.compare(password, currentHashInDb);
+            if (bcryptMatches) {
+              console.log('[Login] Matched via bcrypt fallback');
+              matches = true;
             }
+          }
+
+          if (!matches) {
+            console.warn('[Login] Password mismatch - all verifiers failed');
+            serverReportedInvalid = true;
+            throw new Error('Invalid credentials');
           }
 
           const { password_hash, ...authUser } = userRow;
