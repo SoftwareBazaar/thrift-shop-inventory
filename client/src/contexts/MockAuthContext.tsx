@@ -374,6 +374,10 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           .eq('user_id', user.user_id)
           .single();
 
+        if (fetchError || !existingUser) {
+          throw new Error('Unable to verify your account. Please try again.');
+        }
+
         const currentHashInDb = existingUser.password_hash || '';
 
         // Try derivePasswordHash first
