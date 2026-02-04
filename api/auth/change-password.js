@@ -59,7 +59,7 @@ module.exports = async (req, res) => {
 
     const { data: userRecord, error: fetchError } = await supabase
       .from('users')
-      .select('password_hash')
+      .select('username, password_hash')
       .eq('user_id', userId)
       .single();
 
@@ -67,14 +67,31 @@ module.exports = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const isValidPassword = await bcrypt.compare(
-      oldPassword,
-      userRecord.password_hash
-    );
+    // Try bcrypt verification first (for legacy passwords)
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(oldPassword, userRecord.password_hash);
+    } catch (bcryptError) {
+      // If bcrypt fails, the hash might be from derivePasswordHash
+      console.log('Bcrypt verification failed, trying derivePasswordHash...');
+    }
+
+    // If bcrypt failed, try derivePasswordHash (for newer/client-hashed passwords)
+    if (!isValidPassword) {
+      // Derive hash using the same method as client: normaliseUsername(username)|password
+      const derivedHash = crypto.createHash('sha256')
+        .update(userRecord.username.toLowerCase() + '|' + oldPassword)
+        .digest('hex');
+
+      isValidPassword = derivedHash === userRecord.password_hash;
+    }
 
     if (!isValidPassword) {
+      console.log(`Password verification failed for user ${userId}`);
       return res.status(401).json({ message: 'Incorrect current password' });
     }
+
+    console.log(`Password verified successfully for user ${userId}, updating to new password...`);
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 

@@ -163,7 +163,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     const userId = req.user.user_id;
 
     const userResult = await pool.query(
-      'SELECT password_hash FROM users WHERE user_id = $1',
+      'SELECT username, password_hash FROM users WHERE user_id = $1',
       [userId]
     );
 
@@ -173,11 +173,34 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     const user = userResult.rows[0];
 
-    const isValidPassword = await bcrypt.compare(oldPassword, user.password_hash);
+    // Try bcrypt verification first (for legacy passwords)
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(oldPassword, user.password_hash);
+    } catch (bcryptError) {
+      // If bcrypt fails, the hash might be from derivePasswordHash
+      console.log('Bcrypt verification failed, trying derivePasswordHash...');
+    }
+
+    // If bcrypt failed, try derivePasswordHash (for newer/client-hashed passwords)
     if (!isValidPassword) {
+      const crypto = require('crypto');
+      // Derive hash using the same method as client: normaliseUsername(username)|password
+      const derivedHash = crypto.createHash('sha256')
+        .update(user.username.toLowerCase() + '|' + oldPassword)
+        .digest('hex');
+
+      isValidPassword = derivedHash === user.password_hash;
+    }
+
+    if (!isValidPassword) {
+      console.log(`Password verification failed for user ${userId}`);
       return res.status(401).json({ message: 'Incorrect current password' });
     }
 
+    console.log(`Password verified successfully for user ${userId}, updating to new password...`);
+
+    // Hash the new password with bcrypt for server-side storage
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
     // Update password - the trigger will automatically update password_version and invalidate sessions
