@@ -49,14 +49,14 @@ const UserDashboard: React.FC = () => {
       // Fetch items for this user's stall - pass stall_id to get user-specific stock
       const itemsResponse = await dataApi.getInventory(user?.stall_id);
       const userItems = itemsResponse.items || [];
-      
       // Set items with user's distributed stock (not admin's total stock)
+      console.log(`[UserDashboard] Fetched ${userItems.length} items for stall_id ${user?.stall_id}:`, userItems);
       setItems(userItems);
 
       // Fetch sales
       const salesResponse = await dataApi.getSales();
       const allSales = salesResponse.sales || [];
-      
+
       // Filter sales for this user based on selected period
       const now = new Date();
       const periodStart = new Date();
@@ -65,20 +65,20 @@ const UserDashboard: React.FC = () => {
       } else if (selectedPeriod === 'month') {
         periodStart.setDate(now.getDate() - 30);
       }
-      
+
       const periodSalesData = allSales.filter((sale: any) => {
         const saleDate = new Date(sale.date_time);
         // Filter out credit sales for non-admin users
         if (sale.sale_type === 'credit') return false;
         return saleDate >= periodStart && sale.recorded_by === user?.user_id;
       });
-      
+
       setSales(periodSalesData);
-      
+
       // Calculate totals
       const totalSales = periodSalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
       const totalUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
-      
+
       setTodaySales(totalSales);
       setTodayUnits(totalUnits);
 
@@ -91,12 +91,12 @@ const UserDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
-    
+
     // Auto-refresh every 5 seconds to sync data across all users
     const interval = setInterval(() => {
       fetchDashboardData();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
@@ -300,33 +300,52 @@ const UserDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {items.map((item) => (
-                <tr key={item.item_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {item.current_stock} units
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(item.unit_price)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleItemSelect(item)}
-                      disabled={item.current_stock === 0}
-                      className="text-green-600 hover:text-green-900 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {item.current_stock === 0 ? 'Out of Stock' : 'Sell'}
-                    </button>
+              {items.length > 0 ? (
+                items.map((item) => (
+                  <tr key={item.item_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.current_stock} units
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(item.unit_price)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => handleItemSelect(item)}
+                        disabled={item.current_stock === 0}
+                        className="text-green-600 hover:text-green-900 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      >
+                        {item.current_stock === 0 ? 'Out of Stock' : 'Sell'}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                    <div className="flex flex-col items-center">
+                      <span className="text-4xl mb-2">📥</span>
+                      <p className="text-lg font-medium">No items distributed yet</p>
+                      <p className="text-sm">Contact admin to distribute stock to your stall (ID: {user?.stall_id || 'N/A'})</p>
+                      <p className="text-xs mt-2 text-gray-400">Mode: {navigator.onLine ? 'Online' : 'Offline'}</p>
+                      <button
+                        onClick={fetchDashboardData}
+                        className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Check for updates
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -373,16 +392,15 @@ const UserDashboard: React.FC = () => {
                     {formatCurrency(sale.total_amount)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      sale.sale_type === 'cash' 
-                        ? 'bg-green-100 text-green-800' 
-                        : sale.sale_type === 'mobile'
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${sale.sale_type === 'cash'
+                      ? 'bg-green-100 text-green-800'
+                      : sale.sale_type === 'mobile'
                         ? 'bg-purple-100 text-purple-800'
                         : sale.sale_type === 'split'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {sale.sale_type === 'split' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                      {sale.sale_type === 'split'
                         ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
@@ -498,7 +516,7 @@ const UserDashboard: React.FC = () => {
                         <option value="split">Split (Cash + Mobile)</option>
                       </select>
                     </div>
-                    
+
                     {saleType === 'split' && (
                       <>
                         <div>
@@ -535,7 +553,7 @@ const UserDashboard: React.FC = () => {
                         </div>
                         <div className="bg-blue-50 p-3 rounded-lg">
                           <p className="text-sm text-blue-800">
-                            Total: {formatCurrency((parseFloat(cashAmount) || 0) + (parseFloat(mobileAmount) || 0))} | 
+                            Total: {formatCurrency((parseFloat(cashAmount) || 0) + (parseFloat(mobileAmount) || 0))} |
                             Expected: {formatCurrency((saleQuantity || 0) * (parseFloat(salePrice) || 0))}
                           </p>
                         </div>

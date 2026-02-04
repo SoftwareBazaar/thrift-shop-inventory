@@ -199,34 +199,43 @@ export const dbApi = {
       return mockApi.getInventory(stallId);
     }
 
-    console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
+    // Ensure stallId is a number if provided
+    const numericStallId = stallId != null ? Number(stallId) : undefined;
+    const isInvalidStallId = numericStallId != null && (isNaN(numericStallId) || numericStallId <= 0);
+
+    if (isInvalidStallId) {
+      console.error(`[Get Inventory] Invalid stallId provided:`, stallId);
+      return { items: [] };
+    }
+
+    console.log(`[Get Inventory] Fetching inventory${numericStallId ? ` for stall ${numericStallId}` : ' (admin view)'}`);
 
     try {
       let query = (supabase as any)
         .from('items')
         .select('*');
 
-      if (stallId) {
+      if (numericStallId) {
         // Get items distributed to this stall
-        console.log(`[Get Inventory] Querying distributions for stall ${stallId}...`);
+        console.log(`[Get Inventory] Querying distributions for stall ${numericStallId}...`);
         const { data: distributions, error: distError } = await (supabase as any)
           .from('stock_distribution')
           .select('item_id, quantity_allocated')
-          .eq('stall_id', stallId);
+          .eq('stall_id', numericStallId);
 
         if (distError) {
-          console.error(`[Get Inventory] Error fetching distributions:`, distError);
+          console.error(`[Get Inventory] Error fetching distributions for stall ${numericStallId}:`, distError);
+          // Don't throw, maybe fallback to offline or return empty
         }
 
         const itemIds = (distributions as any)?.map((d: any) => d.item_id).filter((id: any) => id != null) || [];
-        console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
+        console.log(`[Get Inventory] Stall ${numericStallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
 
         if (itemIds.length > 0) {
-          // Use .in() method correctly - ensure itemIds is a non-empty array
           query = (query as any).in('item_id', itemIds);
-          console.log(`[Get Inventory] Querying items with item_ids:`, itemIds);
+          console.log(`[Get Inventory] Querying items from 'items' table where item_id IN:`, itemIds);
         } else {
-          console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
+          console.log(`[Get Inventory] No items distributed to stall ${numericStallId} (no records found in stock_distribution)`);
           return { items: [] };
         }
       }

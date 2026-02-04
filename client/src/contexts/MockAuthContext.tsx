@@ -74,7 +74,7 @@ const toOfflineUser = (user: User): OfflineUser => ({
   username: user.username,
   full_name: user.full_name,
   role: user.role,
-  stall_id: (user as any)?.stall_id ?? null,
+  stall_id: (user as any)?.stall_id != null ? Number((user as any).stall_id) : null,
   status: (user as any)?.status ?? 'active',
   created_date: (user as any)?.created_date ?? new Date().toISOString(),
   phone_number: (user as any)?.phone_number ?? null,
@@ -87,7 +87,7 @@ const fromOfflineUser = (user: OfflineUser): User => ({
   username: user.username,
   full_name: user.full_name,
   role: user.role,
-  stall_id: user.stall_id ?? undefined,
+  stall_id: user.stall_id != null ? Number(user.stall_id) : undefined,
   status: user.status,
   created_date: user.created_date,
   phone_number: user.phone_number ?? null,
@@ -160,7 +160,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     // Check for existing session
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    
+
     const initialise = async () => {
       await ensureOfflineCredentialSeeds();
 
