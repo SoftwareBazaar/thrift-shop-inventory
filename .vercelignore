@@ -1,6 +1,5 @@
-# Exclude API routes from Vercel deployment to avoid function count limit
-# Since we're using mockData.ts, these API routes are not needed
-api/
+# We now need API routes for the authentication endpoints
+# Excluding only server/ since those are for local development
 
 # Exclude server files
 server/
