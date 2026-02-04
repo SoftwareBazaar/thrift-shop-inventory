@@ -119,47 +119,47 @@ export const mockUsers: User[] = [
     recovery_hint: 'Primary admin contact'
   },
   {
-    user_id: 2,
+    user_id: 4,
     username: 'kelvin',
     full_name: 'Kelvin',
     role: 'user',
-    stall_id: 316,
+    stall_id: 1,
     status: 'active',
     created_date: '2024-01-01',
     phone_number: '+254711111111',
     email: 'kelvin@example.com',
-    recovery_hint: 'Kelvin stall 316 phone'
+    recovery_hint: 'Kelvin stall 1 phone'
   },
   {
-    user_id: 3,
+    user_id: 5,
     username: 'manuel',
-    full_name: 'Manuel',
+    full_name: 'Emmanuel',
     role: 'user',
-    stall_id: 309,
+    stall_id: 2,
     status: 'active',
     created_date: '2024-01-01',
     phone_number: '+254722222222',
     email: 'manuel@example.com',
-    recovery_hint: 'Manuel stall 309 phone'
+    recovery_hint: 'Manuel stall 2 phone'
   }
 ];
 
 // Mock Stalls Data - Real stalls for testing
 export const mockStalls: Stall[] = [
   {
-    stall_id: 316,
-    stall_name: 'Stall 316',
-    user_id: 2,
-    location: 'Stall 316',
+    stall_id: 1,
+    stall_name: 'Stall 316,317',
+    user_id: 4,
+    location: 'Location 316',
     manager: 'Kelvin',
     status: 'active'
   },
   {
-    stall_id: 309,
-    stall_name: 'Stall 309',
-    user_id: 3,
-    location: 'Stall 309',
-    manager: 'Manuel',
+    stall_id: 2,
+    stall_name: 'Stall 307',
+    user_id: 5,
+    location: 'Location 309',
+    manager: 'Emmanuel',
     status: 'active'
   }
 ];
