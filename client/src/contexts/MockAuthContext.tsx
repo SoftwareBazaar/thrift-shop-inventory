@@ -306,6 +306,16 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
       }
 
+
+
+      // CRITICAL SECURITY FIX:
+      // If the server was reachable and explicitly rejected the password, 
+      // do NOT fall back to offline credentials (which might be stale).
+      if (serverReportedInvalid) {
+        console.warn('Server explicitly rejected credentials. Skipping offline fallback.');
+        throw new Error('Invalid credentials');
+      }
+
       const offlineResult = await attemptOfflineLogin(username, password);
       if (offlineResult) {
         const offlineToken = `offline_token_${Date.now()}_${normalised}`;
