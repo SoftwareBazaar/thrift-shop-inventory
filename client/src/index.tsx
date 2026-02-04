@@ -5,8 +5,34 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { initializeOfflineSync } from './services/syncLocalStorage';
 
+// APP VERSION - Increment this whenever you want to force ALL devices (especially mobile) to clear old cache/session
+const APP_VERSION = '1.0.1'; // 1.0.1: Stall ID sync fix
+
 // Initialize offline sync before rendering app
-initializeOfflineSync().then(() => {
+const startApp = async () => {
+  // Check for version update to force cache clear
+  const lastVersion = localStorage.getItem('app_version');
+  if (lastVersion !== APP_VERSION) {
+    console.log(`🔄 New App Version (${APP_VERSION}) detected. Clearing local data...`);
+
+    // Clear Local Storage
+    localStorage.clear();
+    localStorage.setItem('app_version', APP_VERSION);
+
+    // Clear IndexedDB
+    try {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) window.indexedDB.deleteDatabase(db.name);
+      }
+    } catch (e) { console.error('Error clearing DB on update', e); }
+
+    console.log('✅ Local data cleared for version update.');
+    window.location.reload(); // Reload once to start fresh
+    return;
+  }
+
+  await initializeOfflineSync();
   console.log('[App] Offline sync initialized');
 
   const root = ReactDOM.createRoot(
@@ -17,7 +43,9 @@ initializeOfflineSync().then(() => {
       <App />
     </React.StrictMode>
   );
-});
+};
+
+startApp();
 
 // Register Service Worker for PWA offline support
 if ('serviceWorker' in navigator) {
