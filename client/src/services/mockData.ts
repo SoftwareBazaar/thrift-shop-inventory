@@ -82,6 +82,7 @@ export interface InventoryItem {
   sku?: string;
   total_allocated: number;
   total_added: number;
+  stall_id?: number; // Added for offline filtering
 }
 
 export interface StockDistribution {
@@ -461,7 +462,8 @@ export const mockApi = {
             current_stock: currentStock,
             initial_stock: initialStock, // Use calculated value (0 for first distribution)
             total_added: totalAdded,
-            total_allocated: totalDistributedToStall
+            total_allocated: totalDistributedToStall,
+            stall_id: stallId // Explicitly include stall_id for offline filtering
           };
 
           console.log(`[Mock User Stock] Item: ${userItem.item_name}, Stall: ${stallId}, initialStock: ${initialStock}, totalAdded: ${totalAdded}, currentStock: ${currentStock}`);

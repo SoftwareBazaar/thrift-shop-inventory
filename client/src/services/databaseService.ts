@@ -27,7 +27,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
 }) => {
   if (!isSupabaseConfigured()) {
     console.log('📝 Supabase not configured, using polling instead');
-    return () => {}; // Return cleanup function
+    return () => { }; // Return cleanup function
   }
 
   updateCallbacks.inventory = callbacks.inventory;
@@ -37,7 +37,7 @@ export const setupRealtimeSubscriptions = (callbacks: {
   // Subscribe to inventory changes
   inventoryChannel = (supabase as any)
     .channel('inventory-changes')
-    .on('postgres_changes', 
+    .on('postgres_changes',
       { event: '*', schema: 'public', table: 'items' },
       async () => {
         if (callbacks.inventory) {
@@ -199,46 +199,46 @@ export const dbApi = {
       return mockApi.getInventory(stallId);
     }
 
-      console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
+    console.log(`[Get Inventory] Fetching inventory${stallId ? ` for stall ${stallId}` : ' (admin view)'}`);
 
-      try {
-        let query = (supabase as any)
-          .from('items')
-          .select('*');
+    try {
+      let query = (supabase as any)
+        .from('items')
+        .select('*');
 
-        if (stallId) {
-          // Get items distributed to this stall
-          console.log(`[Get Inventory] Querying distributions for stall ${stallId}...`);
-          const { data: distributions, error: distError } = await (supabase as any)
-            .from('stock_distribution')
-            .select('item_id, quantity_allocated')
-            .eq('stall_id', stallId);
+      if (stallId) {
+        // Get items distributed to this stall
+        console.log(`[Get Inventory] Querying distributions for stall ${stallId}...`);
+        const { data: distributions, error: distError } = await (supabase as any)
+          .from('stock_distribution')
+          .select('item_id, quantity_allocated')
+          .eq('stall_id', stallId);
 
-          if (distError) {
-            console.error(`[Get Inventory] Error fetching distributions:`, distError);
-          }
-
-          const itemIds = (distributions as any)?.map((d: any) => d.item_id).filter((id: any) => id != null) || [];
-          console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
-          
-          if (itemIds.length > 0) {
-            // Use .in() method correctly - ensure itemIds is a non-empty array
-            query = (query as any).in('item_id', itemIds);
-            console.log(`[Get Inventory] Querying items with item_ids:`, itemIds);
-          } else {
-            console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
-            return { items: [] };
-          }
+        if (distError) {
+          console.error(`[Get Inventory] Error fetching distributions:`, distError);
         }
 
-        const { data, error } = await (query as any).order('date_added', { ascending: false });
-        
-        if (error) {
-          console.error(`[Get Inventory] Error fetching items:`, error);
-          throw error;
+        const itemIds = (distributions as any)?.map((d: any) => d.item_id).filter((id: any) => id != null) || [];
+        console.log(`[Get Inventory] Stall ${stallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
+
+        if (itemIds.length > 0) {
+          // Use .in() method correctly - ensure itemIds is a non-empty array
+          query = (query as any).in('item_id', itemIds);
+          console.log(`[Get Inventory] Querying items with item_ids:`, itemIds);
+        } else {
+          console.log(`[Get Inventory] No items distributed to stall ${stallId}`);
+          return { items: [] };
         }
-        
-        console.log(`[Get Inventory] Fetched ${data?.length || 0} items from database`);
+      }
+
+      const { data, error } = await (query as any).order('date_added', { ascending: false });
+
+      if (error) {
+        console.error(`[Get Inventory] Error fetching items:`, error);
+        throw error;
+      }
+
+      console.log(`[Get Inventory] Fetched ${data?.length || 0} items from database`);
 
       // Calculate current stock based on distributions and sales
       console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${stallId}`);
@@ -254,7 +254,7 @@ export const dbApi = {
             .eq('stall_id', stallId)
             .order('date_distributed', { ascending: true });
 
-          const sortedDistributions = (distributions || []).sort((a: any, b: any) => 
+          const sortedDistributions = (distributions || []).sort((a: any, b: any) =>
             new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime()
           );
 
@@ -299,7 +299,7 @@ export const dbApi = {
               const totalSalesBeforeDistribution = salesBeforeDistribution.reduce(
                 (sum: number, s: any) => sum + s.quantity_sold, 0
               );
-              
+
               // Initial stock = stock the user had at that moment (before the new distribution)
               // This represents their "present stock" at the time they received the new stock
               // This is: previous distributions - sales before that point
@@ -316,6 +316,7 @@ export const dbApi = {
           // DO NOT use spread operator on item - it might include the original initial_stock
           const userItem = {
             item_id: item.item_id,
+            stall_id: stallId, // Explicitly include stall_id for offline storage filtering
             item_name: item.item_name,
             category: item.category,
             sku: item.sku,
@@ -327,7 +328,7 @@ export const dbApi = {
             total_added: totalAdded,
             total_allocated: totalDistributed // For compatibility
           };
-          
+
           console.log(`[User Stock Calc] Returning item:`, {
             item_id: userItem.item_id,
             item_name: userItem.item_name,
@@ -337,18 +338,18 @@ export const dbApi = {
             current_stock: userItem.current_stock,
             distributions_count: sortedDistributions.length
           });
-          
+
           // CRITICAL: Verify the calculated value is actually in the returned object
           if (userItem.initial_stock !== initialStock) {
             console.error(`[ERROR] initial_stock mismatch! Calculated: ${initialStock}, Returned: ${userItem.initial_stock}`);
           }
-          
+
           // Force set the value one more time to be absolutely sure
           userItem.initial_stock = initialStock;
           userItem.total_added = totalAdded;
-          
+
           console.log(`[User Stock Calc] FINAL VERIFICATION - initial_stock: ${userItem.initial_stock}, total_added: ${userItem.total_added}`);
-          
+
           return userItem;
         } else {
           // For admin view: calculate actual available stock (initial + additions - total sold)
@@ -439,13 +440,13 @@ export const dbApi = {
         console.error('[Create Item] Supabase error:', error);
         throw error;
       }
-      
+
       console.log('[Create Item] Item created successfully:', data);
-      
+
       // Note: We don't create stock_additions for initial_stock
       // initial_stock is the starting stock, and stock_additions tracks additional stock added later
       // Admin Stock = initial_stock + total_added (from stock_additions) - total_distributed
-      
+
       return { item: data as Item };
     } catch (error) {
       console.error('Error creating item:', error);
@@ -573,19 +574,21 @@ export const dbApi = {
           quantity_allocated: dist.quantity
         });
       }
-      return { distributions: distributionData.distributions.map(d => ({
-        item_id: distributionData.item_id,
-        stall_id: d.stall_id,
-        quantity_allocated: d.quantity,
-        date_distributed: new Date().toISOString()
-      })) };
+      return {
+        distributions: distributionData.distributions.map(d => ({
+          item_id: distributionData.item_id,
+          stall_id: d.stall_id,
+          quantity_allocated: d.quantity,
+          date_distributed: new Date().toISOString()
+        }))
+      };
     }
 
     try {
       // Get current user ID for distributed_by field
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
       const distributedBy = currentUser.user_id || 1; // Default to admin (1) if not found
-      
+
       console.log('[Distribute Stock] Current user:', currentUser);
       console.log('[Distribute Stock] distributed_by:', distributedBy);
 
@@ -609,7 +612,7 @@ export const dbApi = {
       if (currentStock < totalToDistribute) {
         throw new Error(`Insufficient stock! Available: ${currentStock}, Requested: ${totalToDistribute}`);
       }
-      
+
       const distributions = distributionData.distributions.map(dist => {
         const distRecord = {
           item_id: distributionData.item_id,
@@ -634,7 +637,7 @@ export const dbApi = {
         console.error('[Distribute Stock] Supabase error:', error);
         throw error;
       }
-      
+
       console.log('[Distribute Stock] Success:', data);
 
       const newCurrentStock = Math.max(0, currentStock - totalToDistribute);
@@ -745,7 +748,7 @@ export const dbApi = {
           throw new Error('Split payment totals must equal the negotiated total.');
         }
       }
-      
+
       const saleToInsert = {
         item_id: itemId,
         stall_id: stallId,
@@ -828,8 +831,8 @@ export const dbApi = {
       const stallId = saleData.stall_id === undefined
         ? existingSale.stall_id
         : (saleData.stall_id === null
-            ? null
-            : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString(), 10)));
+          ? null
+          : (typeof saleData.stall_id === 'number' ? saleData.stall_id : parseInt(saleData.stall_id.toString(), 10)));
 
       const itemId = saleData.item_id === undefined
         ? existingSale.item_id

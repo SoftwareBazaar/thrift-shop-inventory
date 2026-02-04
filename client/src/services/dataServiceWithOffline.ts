@@ -14,21 +14,34 @@ export const offlineDataApi = {
         // Save to offline storage
         if (result.items) {
           for (const item of result.items) {
-            await offlineStorage.saveItem(item);
+            // Ensure stall_id is attached if it was a stall-specific fetch
+            const itemToSave = stallId ? { ...item, stall_id: stallId } : item;
+            await offlineStorage.saveItem(itemToSave);
           }
         }
         return result;
       } else {
         // Offline: get from IndexedDB
-        console.log('[OfflineDataApi] Getting inventory from offline storage');
+        console.log(`[OfflineDataApi] Getting inventory from offline storage for stall: ${stallId || 'admin'}`);
         const items = await offlineStorage.getItems();
-        return { items: items.filter(item => !stallId || item.stall_id === stallId) };
+        // Filter: match stall_id if provided OR show items without stall_id if admin (stallId undefined)
+        return {
+          items: items.filter(item => {
+            if (!stallId) return true; // Admin sees all
+            return item.stall_id === stallId;
+          })
+        };
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting inventory:', error);
       // Fallback to offline storage
       const items = await offlineStorage.getItems();
-      return { items: items.filter(item => !stallId || item.stall_id === stallId) };
+      return {
+        items: items.filter(item => {
+          if (!stallId) return true;
+          return item.stall_id === stallId;
+        })
+      };
     }
   },
 
