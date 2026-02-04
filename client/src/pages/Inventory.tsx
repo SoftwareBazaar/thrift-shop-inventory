@@ -61,7 +61,11 @@ const Inventory: React.FC = () => {
     try {
       // For non-admin users, pass their stall_id to get only distributed stock
       const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
+      console.log(`[Inventory] Fetching items. Role: ${user?.role}, stall_id: ${user?.stall_id}, effective stallId: ${stallId}`);
+
       const response = await dataApi.getInventory(stallId);
+      console.log(`[Inventory] Received ${response.items?.length || 0} items from API`);
+
       const sortedItems = [...(response.items || [])].sort((a, b) =>
         a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
       );
@@ -87,13 +91,13 @@ const Inventory: React.FC = () => {
     fetchCategories();
     fetchStalls();
     fetchSales();
-    
+
     // Auto-refresh every 5 seconds to sync data across all users
     const interval = setInterval(() => {
       fetchItems();
       fetchSales();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [fetchItems, fetchSales]);
 
@@ -148,21 +152,21 @@ const Inventory: React.FC = () => {
           stall_id: parseInt(dist.stall_id),
           quantity: parseInt(dist.quantity)
         }));
-      
+
       const totalDistributed = validDistributions.reduce((sum, d) => sum + d.quantity, 0);
-      
+
       if (totalDistributed > selectedItem.current_stock) {
         alert(`Total quantity (${totalDistributed}) exceeds available stock (${selectedItem.current_stock})`);
         return;
       }
-      
+
       // Call API to distribute to all stalls at once
       await dataApi.distributeStock({
         item_id: selectedItem.item_id,
         distributions: validDistributions,
         notes: distributionData.notes
       });
-      
+
       setShowDistributeModal(false);
       setDistributionData({
         item_id: 0,
@@ -193,7 +197,7 @@ const Inventory: React.FC = () => {
   const updateDistribution = (index: number, field: 'stall_id' | 'quantity', value: string) => {
     setDistributionData(prev => ({
       ...prev,
-      distributions: prev.distributions.map((dist, i) => 
+      distributions: prev.distributions.map((dist, i) =>
         i === index ? { ...dist, [field]: value } : dist
       )
     }));
@@ -212,11 +216,11 @@ const Inventory: React.FC = () => {
     try {
       // Calculate new total_added (current + quantity to add)
       const newTotalAdded = (selectedItem.total_added || 0) + quantityToAdd;
-      
+
       await dataApi.updateItem(selectedItem.item_id, {
         total_added: newTotalAdded
       });
-      
+
       setShowAddStockModal(false);
       setAddStockQuantity('');
       fetchItems(); // Refresh items
@@ -235,11 +239,11 @@ const Inventory: React.FC = () => {
       const initialStock = parseInt(editFormData.initial_stock);
       const totalAdded = parseInt(editFormData.total_added);
       const currentStock = parseInt(editFormData.current_stock);
-      
+
       // Calculate current_stock based on initial_stock and total_added
       // Note: current_stock = initial_stock + total_added - distributed
       // We'll keep current_stock as is, but update initial_stock and total_added
-      
+
       if (Number.isNaN(initialStock) || initialStock < 0) {
         alert('Initial stock must be zero or greater.');
         return;
@@ -270,7 +274,7 @@ const Inventory: React.FC = () => {
         total_added: totalAdded,
         current_stock: currentStock
       });
-      
+
       setShowEditModal(false);
       fetchItems(); // Refresh items - this will sync to all users
       alert('Item updated successfully!');
@@ -283,7 +287,7 @@ const Inventory: React.FC = () => {
     const matchesSearch = item.item_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || item.category === selectedCategory;
     const matchesLowStock = !showLowStock || item.current_stock <= 5;
-    
+
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
@@ -363,10 +367,10 @@ const Inventory: React.FC = () => {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Inventory Management</h1>
-            <p className="text-sm sm:text-base" style={{color: 'var(--neutral-600)'}}>Manage your inventory items and stock</p>
-          </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Inventory Management</h1>
+          <p className="text-sm sm:text-base" style={{ color: 'var(--neutral-600)' }}>Manage your inventory items and stock</p>
+        </div>
         {user?.role === 'admin' && (
           <button
             onClick={() => navigate('/add-item')}
@@ -390,14 +394,14 @@ const Inventory: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <VoiceAssistant 
+              <VoiceAssistant
                 onTextReceived={handleVoiceSearch}
                 onCommand={handleVoiceCommand}
                 placeholder="Voice search..."
               />
             </div>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select
@@ -425,7 +429,7 @@ const Inventory: React.FC = () => {
               ))}
             </select>
           </div>
-          
+
           <div className="flex items-center">
             <label className="flex items-center">
               <input
@@ -437,7 +441,7 @@ const Inventory: React.FC = () => {
               <span className="text-sm text-gray-700">Show Low Stock Only</span>
             </label>
           </div>
-          
+
           <div className="flex items-end">
             <span className="text-sm text-gray-600">
               Showing {filteredItems.length} of {items.length} items
@@ -714,12 +718,15 @@ const Inventory: React.FC = () => {
             {loading ? 'Loading items...' : searchTerm || selectedCategory || showLowStock ? 'No items match your filters' : 'No items found'}
           </h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm || selectedCategory || showLowStock 
+            {searchTerm || selectedCategory || showLowStock
               ? 'Try adjusting your search or filter criteria'
-              : user?.role === 'admin' 
+              : user?.role === 'admin'
                 ? 'Start by adding items to your inventory'
-                : 'No items have been distributed to your stall yet'}
+                : `No items have been distributed to your stall yet (Stall ID: ${user?.stall_id || 'N/A'})`}
           </p>
+          <div className="text-xs text-gray-400 mt-2">
+            User: {user?.username} | Role: {user?.role} | Mode: {navigator.onLine ? 'Online' : 'Offline'}
+          </div>
           {user?.role === 'admin' && !searchTerm && !selectedCategory && !showLowStock && (
             <button
               onClick={() => navigate('/add-item')}
@@ -729,317 +736,324 @@ const Inventory: React.FC = () => {
             </button>
           )}
         </div>
-      )}
+      )
+      }
 
       {/* Stock Distribution Modal */}
-      {showDistributeModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Distribute Stock - {selectedItem.item_name}
-            </h3>
-            <form onSubmit={handleDistributionSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Available to distribute: {selectedItemAvailable}
-                    </label>
-                    <p className="text-xs text-gray-500">
-                      Total inventory: {selectedItemTotalInventory} | At stalls (unsold): {selectedItemDistributed} | Sold: {selectedItemSold}
-                    </p>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    Remaining after this plan: {remainingAfterPendingDistribution}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Total to distribute: {totalQuantityPendingDistribution} / {selectedItemAvailable}
-                </p>
-                {selectedItemAvailable === 0 && (
-                  <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    No more stock is available to distribute. Add stock before allocating to stalls.
-                  </div>
-                )}
-              </div>
-              
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Stall Distributions</label>
-                  <button
-                    type="button"
-                    onClick={addDistributionRow}
-                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={selectedItemAvailable === 0}
-                  >
-                    + Add Stall
-                  </button>
-                </div>
-                
-                {distributionData.distributions.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">Click "Add Stall" to start distributing</p>
-                )}
-                
-                {distributionData.distributions.map((dist, index) => (
-                  <div key={index} className="flex gap-2 mb-2 items-end">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Stall</label>
-                      <select
-                        value={dist.stall_id}
-                        onChange={(e) => updateDistribution(index, 'stall_id', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">-- Select stall --</option>
-                        {stalls.map(stall => (
-                          <option key={stall.stall_id} value={stall.stall_id}>
-                            {stall.stall_name} ({stall.manager})
-                          </option>
-                        ))}
-                      </select>
+      {
+        showDistributeModal && selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Distribute Stock - {selectedItem.item_name}
+              </h3>
+              <form onSubmit={handleDistributionSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Available to distribute: {selectedItemAvailable}
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        Total inventory: {selectedItemTotalInventory} | At stalls (unsold): {selectedItemDistributed} | Sold: {selectedItemSold}
+                      </p>
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
-                      <input
-                        type="number"
-                        value={dist.quantity}
-                        onChange={(e) => updateDistribution(index, 'quantity', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="1"
-                        max={selectedItem.current_stock}
-                        required
-                        placeholder="Qty"
-                      />
+                    <div className="text-xs text-gray-600">
+                      Remaining after this plan: {remainingAfterPendingDistribution}
                     </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Total to distribute: {totalQuantityPendingDistribution} / {selectedItemAvailable}
+                  </p>
+                  {selectedItemAvailable === 0 && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      No more stock is available to distribute. Add stock before allocating to stalls.
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Stall Distributions</label>
                     <button
                       type="button"
-                      onClick={() => removeDistributionRow(index)}
-                      className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                      onClick={addDistributionRow}
+                      className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={selectedItemAvailable === 0}
                     >
-                      Remove
+                      + Add Stall
                     </button>
                   </div>
-                ))}
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
-                <textarea
-                  value={distributionData.notes}
-                  onChange={(e) => setDistributionData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="Add distribution notes..."
-                />
-              </div>
+                  {distributionData.distributions.length === 0 && (
+                    <p className="text-sm text-gray-500 italic">Click "Add Stall" to start distributing</p>
+                  )}
 
-              {/* AI Automation Section */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <h4 className="text-sm font-semibold text-blue-900 mb-1">🤖 AI Stock Optimization</h4>
-                <p className="text-xs text-blue-700">
-                  AI suggests optimal distribution based on sales history and demand patterns.
-                </p>
-                <div className="mt-2 text-xs text-blue-600">
-                  💡 Recommended: Distribute 60% to Chuka Town, 40% to Ndagani
+                  {distributionData.distributions.map((dist, index) => (
+                    <div key={index} className="flex gap-2 mb-2 items-end">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Stall</label>
+                        <select
+                          value={dist.stall_id}
+                          onChange={(e) => updateDistribution(index, 'stall_id', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">-- Select stall --</option>
+                          {stalls.map(stall => (
+                            <option key={stall.stall_id} value={stall.stall_id}>
+                              {stall.stall_name} ({stall.manager})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
+                        <input
+                          type="number"
+                          value={dist.quantity}
+                          onChange={(e) => updateDistribution(index, 'quantity', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          min="1"
+                          max={selectedItem.current_stock}
+                          required
+                          placeholder="Qty"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeDistributionRow(index)}
+                        className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </div>
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowDistributeModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={selectedItemAvailable === 0 || totalQuantityPendingDistribution === 0}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Distribute Stock
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                  <textarea
+                    value={distributionData.notes}
+                    onChange={(e) => setDistributionData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                    placeholder="Add distribution notes..."
+                  />
+                </div>
+
+                {/* AI Automation Section */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-1">🤖 AI Stock Optimization</h4>
+                  <p className="text-xs text-blue-700">
+                    AI suggests optimal distribution based on sales history and demand patterns.
+                  </p>
+                  <div className="mt-2 text-xs text-blue-600">
+                    💡 Recommended: Distribute 60% to Chuka Town, 40% to Ndagani
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDistributeModal(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={selectedItemAvailable === 0 || totalQuantityPendingDistribution === 0}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Distribute Stock
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Add Stock Modal */}
-      {showAddStockModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Stock</h3>
-            <form onSubmit={handleAddStockSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
-                <input
-                  type="text"
-                  value={selectedItem.item_name}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
-                <input
-                  type="text"
-                  value={selectedItemAvailable}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New Items to Add *</label>
-                <input
-                  type="number"
-                  value={addStockQuantity}
-                  onChange={(e) => setAddStockQuantity(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="1"
-                  required
-                />
-              </div>
-
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-                <div className="flex justify-between">
-                  <span>Will be available to distribute</span>
-                  <span className="font-semibold">{previewAvailableAfterAdd}</span>
+      {
+        showAddStockModal && selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Stock</h3>
+              <form onSubmit={handleAddStockSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
+                  <input
+                    type="text"
+                    value={selectedItem.item_name}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  />
                 </div>
-                <div className="mt-1 flex justify-between">
-                  <span>Total inventory in system</span>
-                  <span className="font-semibold">{previewTotalInventory}</span>
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  Currently at stalls (unsold): {selectedItemDistributed}. Sold so far: {selectedItemSold}.
-                </p>
-              </div>
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddStockModal(false);
-                    setAddStockQuantity('');
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                >
-                  Add Stock
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
+                  <input
+                    type="text"
+                    value={selectedItemAvailable}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New Items to Add *</label>
+                  <input
+                    type="number"
+                    value={addStockQuantity}
+                    onChange={(e) => setAddStockQuantity(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="1"
+                    required
+                  />
+                </div>
+
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  <div className="flex justify-between">
+                    <span>Will be available to distribute</span>
+                    <span className="font-semibold">{previewAvailableAfterAdd}</span>
+                  </div>
+                  <div className="mt-1 flex justify-between">
+                    <span>Total inventory in system</span>
+                    <span className="font-semibold">{previewTotalInventory}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Currently at stalls (unsold): {selectedItemDistributed}. Sold so far: {selectedItemSold}.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddStockModal(false);
+                      setAddStockQuantity('');
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    Add Stock
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Item Modal */}
-      {showEditModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Item</h3>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
-                <input
-                  type="text"
-                  value={editFormData.item_name}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, item_name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+      {
+        showEditModal && selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Item</h3>
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                  <input
+                    type="text"
+                    value={editFormData.item_name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, item_name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                <input
-                  type="text"
-                  value={editFormData.category}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                  <input
+                    type="text"
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
-                <input
-                  type="number"
-                  value={editFormData.unit_price}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, unit_price: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0.01"
-                  step="0.01"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
+                  <input
+                    type="number"
+                    value={editFormData.unit_price}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, unit_price: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0.01"
+                    step="0.01"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Initial Stock *</label>
-                <input
-                  type="number"
-                  value={editFormData.initial_stock}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, initial_stock: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">Original stock quantity when item was added</p>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Initial Stock *</label>
+                  <input
+                    type="number"
+                    value={editFormData.initial_stock}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, initial_stock: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Original stock quantity when item was added</p>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock *</label>
-                <input
-                  type="number"
-                  value={editFormData.current_stock}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, current_stock: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">Adjust to correct on-hand quantity.</p>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock *</label>
+                  <input
+                    type="number"
+                    value={editFormData.current_stock}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, current_stock: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Adjust to correct on-hand quantity.</p>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Items Added (Total) *</label>
-                <input
-                  type="number"
-                  value={editFormData.total_added}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, total_added: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">Total quantity added after initial stock</p>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Items Added (Total) *</label>
+                  <input
+                    type="number"
+                    value={editFormData.total_added}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, total_added: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Total quantity added after initial stock</p>
+                </div>
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-                >
-                  Update Item
-                </button>
-              </div>
-            </form>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                  >
+                    Update Item
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

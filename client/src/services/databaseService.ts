@@ -250,17 +250,17 @@ export const dbApi = {
       console.log(`[Get Inventory] Fetched ${data?.length || 0} items from database`);
 
       // Calculate current stock based on distributions and sales
-      console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${stallId}`);
+      console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${numericStallId}`);
       const items = await Promise.all((data || []).map(async (item: any) => {
-        if (stallId !== undefined) {
-          console.log(`[Get Inventory] Processing item ${item.item_id} (${item.item_name}) for stall ${stallId}`);
+        if (numericStallId !== undefined) {
+          console.log(`[Get Inventory] Processing item ${item.item_id} (${item.item_name}) for stall ${numericStallId}`);
           // For specific stall: calculate distributed - sold for that stall
           // Get all distributions sorted by date
           const { data: distributions } = await (supabase as any)
             .from('stock_distribution')
             .select('quantity_allocated, date_distributed')
             .eq('item_id', item.item_id)
-            .eq('stall_id', stallId)
+            .eq('stall_id', numericStallId)
             .order('date_distributed', { ascending: true });
 
           const sortedDistributions = (distributions || []).sort((a: any, b: any) =>
@@ -274,7 +274,7 @@ export const dbApi = {
             .from('sales')
             .select('quantity_sold, date_time')
             .eq('item_id', item.item_id)
-            .eq('stall_id', stallId);
+            .eq('stall_id', numericStallId);
 
           const totalSold = (sales || []).reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
 
@@ -325,7 +325,7 @@ export const dbApi = {
           // DO NOT use spread operator on item - it might include the original initial_stock
           const userItem = {
             item_id: item.item_id,
-            stall_id: stallId, // Explicitly include stall_id for offline storage filtering
+            stall_id: numericStallId, // Explicitly include stall_id for offline storage filtering
             item_name: item.item_name,
             category: item.category,
             sku: item.sku,
@@ -419,7 +419,7 @@ export const dbApi = {
       return { items };
     } catch (error) {
       console.error('Error fetching inventory:', error);
-      return mockApi.getInventory(stallId); // Fallback
+      return mockApi.getInventory(numericStallId); // Fallback
     }
   },
 
