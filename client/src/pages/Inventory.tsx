@@ -401,7 +401,7 @@ const Inventory: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className={`grid grid-cols-1 ${user?.role === 'admin' ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search Items</label>
             <div className="flex gap-2">
@@ -434,19 +434,21 @@ const Inventory: React.FC = () => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Stall</label>
-            <select
-              value={selectedStall}
-              onChange={(e) => setSelectedStall(e.target.value === '' ? '' : parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Stalls</option>
-              {stalls.map(stall => (
-                <option key={stall.stall_id} value={stall.stall_id}>{stall.stall_name}</option>
-              ))}
-            </select>
-          </div>
+          {user?.role === 'admin' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Stall</label>
+              <select
+                value={selectedStall}
+                onChange={(e) => setSelectedStall(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Stalls</option>
+                {stalls.map(stall => (
+                  <option key={stall.stall_id} value={stall.stall_id}>{stall.stall_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex items-center">
             <label className="flex items-center">
