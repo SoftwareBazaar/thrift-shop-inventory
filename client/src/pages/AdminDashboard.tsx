@@ -72,7 +72,10 @@ const AdminDashboard: React.FC = () => {
 
       // Fetch inventory for stock value calculation
       const inventoryResp = await dataApi.getInventory();
-      setInventoryResponse(inventoryResp);
+      const sortedItems = [...(inventoryResp.items || [])].sort((a, b) =>
+        a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
+      );
+      setInventoryResponse({ ...inventoryResp, items: sortedItems });
 
       // Fetch recent sales
       const recentSalesResponse = await dataApi.getSales();
@@ -321,7 +324,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <span className="text-3xl">💰</span>
+              <span className="text-xl">💰</span>
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
@@ -335,7 +338,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <span className="text-3xl">📦</span>
+              <span className="text-xl">📦</span>
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
@@ -352,7 +355,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-indigo-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <span className="text-3xl">🏬</span>
+              <span className="text-xl">🏬</span>
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
@@ -361,9 +364,6 @@ const AdminDashboard: React.FC = () => {
               <p className="text-xs font-semibold text-indigo-600 break-words">
                 {totalAvailableUnits} units
               </p>
-              <p className="text-xs text-gray-500 leading-tight whitespace-normal break-words">
-                Potential sales value: {formatCurrency(totalAvailableValue)}
-              </p>
             </div>
           </div>
         </div>
@@ -371,7 +371,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <span className="text-3xl">💹</span>
+              <span className="text-xl">💹</span>
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
