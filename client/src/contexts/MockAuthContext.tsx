@@ -391,36 +391,42 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
 
         const dbUsername = existingUser.username || user.username;
-        const currentHashInDb = existingUser.password_hash || '';
+        const currentHashInDb = (existingUser.password_hash || '').trim();
 
-        // Try derivePasswordHash first
-        const expectedFromDb = await derivePasswordHash(dbUsername, oldPassword);
-        const expectedFromContext = await derivePasswordHash(user.username, oldPassword);
+        // Step 1: Check against the local session's password version
+        // This is the most reliable check if they were able to log in
+        const enteredVersion = await derivePasswordHash(user.username, oldPassword);
+        let matches = enteredVersion === passwordVersion;
 
-        let matches = expectedFromDb === currentHashInDb || expectedFromContext === currentHashInDb;
+        if (matches) {
+          console.log('[ChangePassword] Verified via session password version');
+        } else {
+          // Step 2: Fallback to DB hash check (custom derivation)
+          const expectedFromDb = await derivePasswordHash(dbUsername, oldPassword);
+          matches = expectedFromDb === currentHashInDb;
 
-        console.log('[ChangePassword] Debug Info:', {
-          dbUsername,
-          contextUsername: user.username,
-          currentHashInDb: currentHashInDb.substring(0, 8) + '...',
-          expectedFromDb: expectedFromDb.substring(0, 8) + '...',
-          expectedFromContext: expectedFromContext.substring(0, 8) + '...',
-          matchFromDb: expectedFromDb === currentHashInDb,
-          matchFromContext: expectedFromContext === currentHashInDb
-        });
-
-        if (!matches) {
-          // Fallback to bcrypt for legacy hashes
-          try {
-            matches = await bcrypt.compare(oldPassword, currentHashInDb);
-            if (matches) console.log('[ChangePassword] Matched via bcrypt fallback');
-          } catch (e) {
-            console.warn('[ChangePassword] Bcrypt comparison failed:', e);
+          if (matches) {
+            console.log('[ChangePassword] Verified via DB custom hash');
+          } else {
+            // Step 3: Fallback to bcrypt for legacy hashes
+            try {
+              matches = await bcrypt.compare(oldPassword, currentHashInDb);
+              if (matches) console.log('[ChangePassword] Verified via bcrypt fallback');
+            } catch (e) {
+              console.warn('[ChangePassword] Bcrypt comparison failed:', e);
+            }
           }
         }
 
         if (!matches) {
-          console.warn('[ChangePassword] Password mismatch - none of the attempted verifiers worked');
+          console.warn('[ChangePassword] Debug Final Failure:', {
+            dbUsername,
+            sessionUsername: user.username,
+            hasPasswordVersion: !!passwordVersion,
+            passwordVersionPrefix: passwordVersion?.substring(0, 8),
+            enteredVersionPrefix: enteredVersion.substring(0, 8),
+            dbHashPrefix: currentHashInDb.substring(0, 8)
+          });
           return false;
         }
 
