@@ -43,10 +43,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export { supabase };
 
 // Check if Supabase is configured
-// TEMPORARILY DISABLED - Force mock data usage to access localStorage distributions
 export const isSupabaseConfigured = () => {
-  console.warn('🔧 [OVERRIDE] Forcing mock data mode to use localStorage distributions');
-  return false; // FORCE MOCK DATA - distributions are in localStorage, not Supabase
-  // return !!(supabaseUrl && supabaseAnonKey); // Original code - uncomment to re-enable Supabase
+  const isConfigured = !!(supabaseUrl && supabaseAnonKey);
+  console.log('[Supabase Config] Is configured:', isConfigured);
+  return isConfigured; // Use real Supabase where admin distributed the data
 };
 

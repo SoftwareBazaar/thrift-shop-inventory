@@ -65,11 +65,11 @@ const seedUsers: Array<{
     },
     {
       user: {
-        user_id: 2,
+        user_id: 4,
         username: 'kelvin',
         full_name: 'Kelvin',
         role: 'user',
-        stall_id: 316,
+        stall_id: 1,
         status: 'active',
         created_date: '2024-01-01T00:00:00.000Z',
         phone_number: '+254711111111',
@@ -79,17 +79,17 @@ const seedUsers: Array<{
       recovery: {
         phone: '+254711111111',
         email: 'kelvin@example.com',
-        hint: 'Kelvin stall 316 phone',
+        hint: 'Kelvin stall 1 (326,317) phone',
       },
       source: 'seed',
     },
     {
       user: {
-        user_id: 3,
+        user_id: 5,
         username: 'manuel',
-        full_name: 'Manuel',
+        full_name: 'Emmanuel',
         role: 'user',
-        stall_id: 309,
+        stall_id: 2,
         status: 'active',
         created_date: '2024-01-01T00:00:00.000Z',
         phone_number: '+254722222222',
@@ -99,7 +99,7 @@ const seedUsers: Array<{
       recovery: {
         phone: '+254722222222',
         email: 'manuel@example.com',
-        hint: 'Manuel stall 309 phone',
+        hint: 'Manuel stall 2 (307) phone',
       },
       source: 'seed',
     },
