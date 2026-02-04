@@ -1,7 +1,7 @@
 // Database Service - Uses Supabase with real-time sync, falls back to mockData
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
-import { syncOfflineUserProfile, updateOfflinePassword } from '../utils/offlineCredentials';
+import { syncOfflineUserProfile } from '../utils/offlineCredentials';
 import { derivePasswordHash } from '../utils/passwordUtils';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
