@@ -197,14 +197,14 @@ const AdminDashboard: React.FC = () => {
     return { revenue, count, contributors };
   };
 
-  const downloadReport = async (type: 'pdf' | 'excel') => {
+  const downloadReport = async (type: 'pdf' | 'excel', endpoint: 'performance' | 'inventory' | 'sales' = 'performance') => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       // Using /api as the default base for reports - this works on Vercel and locally if proxied
       const apiUrl = process.env.REACT_APP_API_URL || '/api';
 
-      const response = await fetch(`${apiUrl}/reports/performance?format=${type}`, {
+      const response = await fetch(`${apiUrl}/reports/${endpoint}?format=${type}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -212,21 +212,22 @@ const AdminDashboard: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate report');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to generate ${endpoint} report`);
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `performance-report-${new Date().toISOString().split('T')[0]}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
+      link.setAttribute('download', `${endpoint}-report-${new Date().toISOString().split('T')[0]}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading report:', error);
-      alert('Failed to download report. Please ensure the server is running.');
+      console.error(`Error downloading ${endpoint} report:`, error);
+      alert(error instanceof Error ? error.message : `Failed to download ${endpoint} report. Please ensure the server is running.`);
     } finally {
       setLoading(false);
     }
@@ -297,17 +298,35 @@ const AdminDashboard: React.FC = () => {
               <option value="month">This Month</option>
               <option value="year">This Year</option>
             </select>
+            <div className="flex bg-white/10 rounded-lg p-1 gap-1">
+              <button
+                onClick={() => downloadReport('pdf', 'performance')}
+                className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
+                title="Performance Report"
+              >
+                📊 Performance
+              </button>
+              <button
+                onClick={() => downloadReport('pdf', 'inventory')}
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
+                title="Stock Inventory"
+              >
+                📋 Inventory
+              </button>
+              <button
+                onClick={() => downloadReport('pdf', 'sales')}
+                className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
+                title="Sales Transactions"
+              >
+                💰 Sales
+              </button>
+            </div>
             <button
-              onClick={() => downloadReport('pdf')}
-              className="bg-red-600 hover:bg-red-700 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap"
+              onClick={() => downloadReport('excel', 'performance')}
+              className="bg-green-500 hover:bg-green-600 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap hidden sm:block"
+              title="Performance Excel"
             >
-              <span className="hidden sm:inline">📄 </span>PDF
-            </button>
-            <button
-              onClick={() => downloadReport('excel')}
-              className="bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap"
-            >
-              <span className="hidden sm:inline">📊 </span>Excel
+              📊 Excel
             </button>
           </div>
         </div>
