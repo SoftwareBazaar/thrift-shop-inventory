@@ -5,12 +5,22 @@ const { jsPDF } = require('jspdf');
 require('jspdf-autotable');
 
 module.exports = async (req, res) => {
-    // Support both GET (Supabase lookup) and POST (Direct data from client)
+    // 1. Handle CORS Preflight / OPTIONS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    // 2. Validate Method
     if (req.method !== 'GET' && req.method !== 'POST') {
         return res.status(405).json({ message: 'Method not allowed' });
     }
 
     try {
+        // 3. Authenticate
         const authResult = await authenticateToken(req);
         if (authResult.error) {
             return res.status(authResult.error.status).json({ message: authResult.error.message });
@@ -23,21 +33,19 @@ module.exports = async (req, res) => {
         }
 
         const { format = 'json' } = req.query;
-
         let sales = [];
         let items = [];
         let additions = [];
         let additionsMap = {};
 
-        // Use provided data if POSTed, otherwise fetch from Supabase
+        // 4. Extract Data
         if (req.method === 'POST' && req.body && req.body.sales) {
-            console.log('📝 Generating report using client-provided data');
+            console.log('[Performance Report] Using client-provided data');
             sales = req.body.sales || [];
             items = req.body.items || [];
-            // If client provides items, they might already have calculated additions or we use them as is
             additions = req.body.additions || [];
         } else {
-            console.log('🔍 Generating report using Supabase data');
+            console.log('[Performance Report] Fetching from Supabase');
             const [salesResponse, itemsResponse, additionsResponse] = await Promise.all([
                 supabase.from('sales').select('*, items:item_id(item_name)'),
                 supabase.from('items').select('*'),
