@@ -1,7 +1,8 @@
 // Database Service - Uses Supabase with real-time sync, falls back to mockData
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
-import { syncOfflineUserProfile } from '../utils/offlineCredentials';
+import { syncOfflineUserProfile, updateOfflinePassword } from '../utils/offlineCredentials';
+import { derivePasswordHash } from '../utils/passwordUtils';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -114,6 +115,25 @@ export const dbApi = {
         .order('created_date', { ascending: false });
 
       if (error) throw error;
+
+      // Sync offline profiles for all users to ensure password changes are propagated
+      if (data) {
+        data.forEach((user: any) => {
+          syncOfflineUserProfile({
+            user_id: user.user_id,
+            username: user.username,
+            full_name: user.full_name,
+            role: user.role,
+            stall_id: user.stall_id,
+            status: user.status,
+            created_date: user.created_date,
+            phone_number: user.phone_number ?? null,
+            email: user.email ?? null,
+            password_hash: user.password_hash
+          });
+        });
+      }
+
       return { users: data as User[] };
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -127,13 +147,26 @@ export const dbApi = {
     }
 
     try {
+      // Map password to password_hash for Supabase
+      const insertData = { ...userData };
+      if (insertData.password) {
+        // Generate the verifier used by the offline auth system
+        insertData.password_hash = await derivePasswordHash(insertData.username, insertData.password);
+        delete insertData.password;
+      }
+
+      console.log('[Create User] Inserting user into Supabase:', { ...insertData, password_hash: '***' });
+
       const { data, error } = await (supabase as any)
         .from('users')
-        .insert([userData])
+        .insert([insertData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Create User] Supabase error:', error);
+        throw error;
+      }
 
       if (data) {
         syncOfflineUserProfile({
@@ -145,7 +178,8 @@ export const dbApi = {
           status: data.status,
           created_date: data.created_date,
           phone_number: data.phone_number ?? null,
-          email: data.email ?? null
+          email: data.email ?? null,
+          password_hash: data.password_hash // Include hash for sync
         });
       }
 
@@ -162,9 +196,26 @@ export const dbApi = {
     }
 
     try {
+      const updateData = { ...userData };
+
+      // Handle password update if provided
+      if ((updateData as any).password) {
+        // We need the username to derive the hash
+        const { data: userRecord } = await (supabase as any)
+          .from('users')
+          .select('username')
+          .eq('user_id', userId)
+          .single();
+
+        if (userRecord?.username) {
+          updateData.password_hash = await derivePasswordHash(userRecord.username, (updateData as any).password);
+        }
+        delete (updateData as any).password;
+      }
+
       const { data, error } = await (supabase as any)
         .from('users')
-        .update(userData)
+        .update(updateData)
         .eq('user_id', userId)
         .select()
         .single();
@@ -181,7 +232,8 @@ export const dbApi = {
           status: data.status,
           created_date: data.created_date,
           phone_number: data.phone_number ?? null,
-          email: data.email ?? null
+          email: data.email ?? null,
+          password_hash: data.password_hash // Include hash for sync
         });
       }
 
@@ -956,9 +1008,17 @@ export const dbApi = {
     }
 
     try {
+      // Filter stallData to only include what's in the database schema
+      const { stall_name, user_id, status } = stallData;
+      const filteredData = {
+        stall_name,
+        user_id: user_id ? (typeof user_id === 'number' ? user_id : parseInt(user_id)) : null,
+        status: status || 'active'
+      };
+
       const { data, error } = await (supabase as any)
         .from('stalls')
-        .insert([stallData])
+        .insert([filteredData])
         .select()
         .single();
 

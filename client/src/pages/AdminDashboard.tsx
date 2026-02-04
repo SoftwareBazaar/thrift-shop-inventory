@@ -91,17 +91,37 @@ const AdminDashboard: React.FC = () => {
       setAllSales(sortedSales);
       setRecentSales(sortedSales.slice(0, 10));
 
-      // Calculate total revenue from sales
-      const totalRevenue = recentSalesResponse.sales.reduce((sum: number, sale: any) => {
+      // Filter sales based on selected period
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      let filteredSales = allSales;
+      if (selectedPeriod === 'today') {
+        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
+      } else if (selectedPeriod === 'week') {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfWeek);
+      } else if (selectedPeriod === 'month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfMonth);
+      } else if (selectedPeriod === 'year') {
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfYear);
+      }
+
+      // Calculate total revenue from filtered sales
+      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => {
         return sum + (sale.total_amount || 0);
       }, 0);
 
-      // Stock Value = Revenue - Investment (negative until break-even, then profit)
+      // Stock Value = Total stock value in monetary terms
       // (calculated in the render section)
 
-      // Calculate top selling items from actual sales
+      // Calculate top selling items from filtered sales
       const itemSalesMap = new Map<string, { total_sold: number; revenue: number }>();
-      recentSalesResponse.sales.forEach((sale: any) => {
+      filteredSales.forEach((sale: any) => {
         const existing = itemSalesMap.get(sale.item_name) || { total_sold: 0, revenue: 0 };
         itemSalesMap.set(sale.item_name, {
           total_sold: existing.total_sold + sale.quantity_sold,
@@ -114,9 +134,9 @@ const AdminDashboard: React.FC = () => {
         .sort((a, b) => b.total_sold - a.total_sold)
         .slice(0, 5);
 
-      // Calculate user performance (all contributors)
+      // Calculate user performance from filtered sales
       const userSalesMap = new Map<string, { sales: number; revenue: number }>();
-      recentSalesResponse.sales.forEach((sale: any) => {
+      filteredSales.forEach((sale: any) => {
         const userName = sale.recorded_by_name || 'Unknown';
         const existing = userSalesMap.get(userName) || { sales: 0, revenue: 0 };
         userSalesMap.set(userName, {
@@ -139,9 +159,9 @@ const AdminDashboard: React.FC = () => {
       // Use analytics data
       const analyticsData: Analytics = {
         totalRevenue: totalRevenue,
-        totalSales: recentSalesResponse.sales.length,
-        totalUnits: recentSalesResponse.sales.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0),
-        averageSale: recentSalesResponse.sales.length > 0 ? totalRevenue / recentSalesResponse.sales.length : 0,
+        totalSales: filteredSales.length,
+        totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0),
+        averageSale: filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0,
         topSellingItems: topSellingItems,
         userPerformance: userPerformance,
         dailySales: [],
@@ -166,7 +186,7 @@ const AdminDashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchAdminData]);
+  }, [fetchAdminData, selectedPeriod]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -257,10 +277,11 @@ const AdminDashboard: React.FC = () => {
     }
   });
 
-  const totalAvailableUnits = items.reduce((sum: number, item: any) => {
+  const totalStockValue = items.reduce((sum: number, item: any) => {
     const sold = itemSoldMap.get(item.item_id) || 0;
     const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
-    return sum + Math.max(0, totalReceived - sold);
+    const available = Math.max(0, totalReceived - sold);
+    return sum + (available * (Number(item.unit_price) || 0));
   }, 0);
 
 
@@ -379,10 +400,10 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
-                Available Stock
+                Total Value of the Stock
               </h3>
-              <p className="text-xs font-semibold text-indigo-600 break-words">
-                {totalAvailableUnits} units
+              <p className="text-sm font-semibold text-indigo-600 break-words">
+                {formatCurrency(totalStockValue)}
               </p>
             </div>
           </div>

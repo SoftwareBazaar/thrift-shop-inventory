@@ -145,7 +145,7 @@ const Users: React.FC = () => {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      await dataApi.updateUser(editingUser.user_id, {
+      const updatePayload: any = {
         username: editingUser.username,
         full_name: editingUser.full_name,
         role: editingUser.role,
@@ -154,7 +154,13 @@ const Users: React.FC = () => {
         phone_number: editingUser.phone_number || null,
         email: editingUser.email || null,
         recovery_hint: editingUser.recovery_hint || null
-      });
+      };
+
+      if ((editingUser as any).password) {
+        updatePayload.password = (editingUser as any).password;
+      }
+
+      await dataApi.updateUser(editingUser.user_id, updatePayload);
       setShowEditUserModal(false);
       setEditingUser(null);
       fetchUsers();
@@ -168,18 +174,18 @@ const Users: React.FC = () => {
     e.preventDefault();
     if (!editingStall) return;
     try {
-      const stallData: any = { 
+      const stallData: any = {
         stall_name: editingStall.stall_name,
         status: editingStall.status
       };
-      
+
       // Find assigned user if exists
       const assignedUser = users.find(u => u.full_name === editingStall.assigned_user);
       if (assignedUser) {
         stallData.user_id = assignedUser.user_id;
         stallData.manager = assignedUser.full_name;
       }
-      
+
       await dataApi.updateStall(editingStall.stall_id, stallData);
       setShowEditStallModal(false);
       setEditingStall(null);
@@ -202,8 +208,8 @@ const Users: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>User Management</h1>
-          <p style={{color: 'var(--neutral-600)'}}>Manage users and stalls</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>User Management</h1>
+          <p style={{ color: 'var(--neutral-600)' }}>Manage users and stalls</p>
         </div>
         <div className="flex space-x-3">
           <button
@@ -260,15 +266,14 @@ const Users: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      userItem.role === 'admin' 
-                        ? 'status-info' 
-                        : 'status-info'
-                    }`}>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${userItem.role === 'admin'
+                      ? 'status-info'
+                      : 'status-info'
+                      }`}>
                       {userItem.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm" style={{color: 'var(--neutral-700)'}}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--neutral-700)' }}>
                     {userItem.stall_name || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -429,7 +434,7 @@ const Users: React.FC = () => {
                   type="button"
                   onClick={() => setShowAddModal(false)}
                   className="px-4 py-2 hover:opacity-70"
-                  style={{color: 'var(--neutral-600)'}}
+                  style={{ color: 'var(--neutral-600)' }}
                 >
                   Cancel
                 </button>
@@ -490,7 +495,7 @@ const Users: React.FC = () => {
                   type="button"
                   onClick={() => setShowStallModal(false)}
                   className="px-4 py-2 hover:opacity-70"
-                  style={{color: 'var(--neutral-600)'}}
+                  style={{ color: 'var(--neutral-600)' }}
                 >
                   Cancel
                 </button>
@@ -520,6 +525,16 @@ const Users: React.FC = () => {
                   value={editingUser.username}
                   onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password (leave blank to keep current)</label>
+                <input
+                  type="password"
+                  value={(editingUser as any).password || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value } as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter new password"
                 />
               </div>
               <div>
@@ -599,7 +614,7 @@ const Users: React.FC = () => {
                   type="button"
                   onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
                   className="px-4 py-2 hover:opacity-70"
-                  style={{color: 'var(--neutral-600)'}}
+                  style={{ color: 'var(--neutral-600)' }}
                 >
                   Cancel
                 </button>
@@ -637,8 +652,8 @@ const Users: React.FC = () => {
                   value={editingStall.manager || editingStall.assigned_user || ''}
                   onChange={(e) => {
                     const selectedUser = users.find(u => u.full_name === e.target.value);
-                    setEditingStall({ 
-                      ...editingStall, 
+                    setEditingStall({
+                      ...editingStall,
                       manager: e.target.value,
                       assigned_user: e.target.value,
                       user_id: selectedUser?.user_id || 0
@@ -659,7 +674,7 @@ const Users: React.FC = () => {
                   type="button"
                   onClick={() => { setShowEditStallModal(false); setEditingStall(null); }}
                   className="px-4 py-2 hover:opacity-70"
-                  style={{color: 'var(--neutral-600)'}}
+                  style={{ color: 'var(--neutral-600)' }}
                 >
                   Cancel
                 </button>

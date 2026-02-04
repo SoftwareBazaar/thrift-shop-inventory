@@ -253,10 +253,16 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
             throw new Error('Account is inactive');
           }
 
-          const matches = await bcrypt.compare(password, userRow.password_hash || '');
+          const expectedHash = await derivePasswordHash(username, password);
+          const matches = expectedHash === userRow.password_hash;
+
           if (!matches) {
-            serverReportedInvalid = true;
-            throw new Error('Invalid credentials');
+            // Fallback: try bcrypt in case some users still have old hashes
+            const bcryptMatches = await bcrypt.compare(password, userRow.password_hash || '');
+            if (!bcryptMatches) {
+              serverReportedInvalid = true;
+              throw new Error('Invalid credentials');
+            }
           }
 
           const { password_hash, ...authUser } = userRow;
@@ -377,7 +383,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           return false;
         }
 
-        const newHash = await bcrypt.hash(newPassword, 10);
+        const newHash = await derivePasswordHash(user.username, newPassword);
         const { error: updateError } = await (supabase as any)
           .from('users')
           .update({ password_hash: newHash })
@@ -387,7 +393,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           throw new Error(updateError.message || 'Failed to update password.');
         }
 
-        const newPasswordVersion = await derivePasswordHash(user.username, newPassword);
+        const newPasswordVersion = newHash;
         await cacheCredentials(user, newPassword, newPasswordVersion);
         persistPasswordVersion(newPasswordVersion);
         logout();

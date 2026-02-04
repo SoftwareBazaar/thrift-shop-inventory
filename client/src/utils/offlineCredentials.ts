@@ -15,6 +15,7 @@ export type OfflineUser = {
   phone_number?: string | null;
   email?: string | null;
   recovery_hint?: string | null;
+  password_hash?: string | null;
 };
 
 type RecoveryInfo = {
@@ -328,8 +329,20 @@ export const syncOfflineUserProfile = (
   const record = map[key];
   if (!record) return;
 
+  // Check if password has changed on another device
+  let passwordVerifier = record.passwordVerifier;
+  let passwordUpdatedAt = record.passwordUpdatedAt;
+
+  if (user.password_hash && user.password_hash !== record.passwordVerifier) {
+    console.log(`[OfflineAuth] Updating password for ${user.username} from server sync`);
+    passwordVerifier = user.password_hash;
+    passwordUpdatedAt = new Date().toISOString();
+  }
+
   map[key] = {
     ...record,
+    passwordVerifier,
+    passwordUpdatedAt,
     user: {
       ...record.user,
       ...user,
