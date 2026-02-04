@@ -4,6 +4,11 @@ const jwt = require('jsonwebtoken');
 const MAX_ATTEMPTS = 5;
 
 module.exports = async (req, res) => {
+    console.log('🔍 Verify Code API Hit:', req.url);
+    console.log('📍 Method:', req.method);
+    console.log('🔐 Has JWT_SECRET:', !!process.env.JWT_SECRET);
+    console.log('📅 Deployed at:', new Date().toISOString());
+
     // Set CORS and JSON headers for all responses
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

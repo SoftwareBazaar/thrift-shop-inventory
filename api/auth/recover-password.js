@@ -11,6 +11,10 @@ const hasRequiredSpecialChars = (password) => {
 };
 
 module.exports = async (req, res) => {
+  console.log('🔍 Recover Password API Hit:', req.url);
+  console.log('📍 Method:', req.method);
+  console.log('📅 Deployed at:', new Date().toISOString());
+
   // Set CORS and JSON headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

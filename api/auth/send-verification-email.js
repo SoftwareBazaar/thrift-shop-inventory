@@ -23,6 +23,12 @@ async function sendEmailInDevelopment(email, code, username) {
 }
 
 module.exports = async (req, res) => {
+    console.log('🔍 API Route Hit:', req.url);
+    console.log('📍 Method:', req.method);
+    console.log('🔑 Has RESEND_API_KEY:', !!process.env.RESEND_API_KEY);
+    console.log('🔐 Has JWT_SECRET:', !!process.env.JWT_SECRET);
+    console.log('📅 Deployed at:', new Date().toISOString());
+
     // Set CORS and JSON headers for all responses
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
