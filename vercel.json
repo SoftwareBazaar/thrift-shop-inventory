@@ -5,7 +5,28 @@
     }
   },
   "framework": "create-react-app",
+  "rewrites": [
+    {
+      "source": "/api/auth/send-verification-email",
+      "destination": "/api/auth/send-verification-email.js"
+    },
+    {
+      "source": "/api/auth/verify-code",
+      "destination": "/api/auth/verify-code.js"
+    },
+    {
+      "source": "/api/auth/recover-password",
+      "destination": "/api/auth/recover-password.js"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ],
   "redirects": [
-    { "source": "/", "destination": "/index.html" }
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
   ]
 }
