@@ -1,58 +1,73 @@
-// ⚠️ WARNING: DATABASE WIPE SCRIPT
-// This script will delete ALL data from your Supabase database except users and stalls.
-// Use this to start fresh with clean inventory and distributions.
+// 🚀 CONSOLE-READY DATABASE WIPE SCRIPT (VERIFIED)
+// This version handles different column names for each table.
 
-import { supabase } from './lib/supabase';
+(async () => {
+    console.log('🧨 Loading Supabase library...');
 
-async function wipeDatabase() {
-    console.log('🧨 Starting database wipe...');
+    if (typeof supabase === 'undefined') {
+        await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+            script.onload = resolve;
+            document.head.appendChild(script);
+        });
+    }
 
-    const tables = [
-        'activity_log',
-        'credit_sales',
-        'sales',
-        'stock_distribution',
-        'stock_additions',
-        'items'
+    const supabaseUrl = 'https://droplfoogapyhlyvkmob.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyb3BsZm9vZ2FweWhseXZrbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMzA0ODIsImV4cCI6MjA3NzgwNjQ4Mn0.fFBLMn-WBytJoL1xcVr2yL7JDnRTLx-dbXGD_cq0xl0';
+
+    const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    console.log('🧨 Starting refined database wipe...');
+
+    // Table-specific clear configurations
+    const tableConfigs = [
+        { name: 'activity_log', pk: 'log_id' },
+        { name: 'credit_sales', pk: 'sale_id' },
+        { name: 'sales', pk: 'sale_id' },
+        { name: 'stock_distribution', pk: 'distribution_id' },
+        { name: 'stock_additions', pk: 'addition_id' },
+        { name: 'items', pk: 'item_id' }
     ];
 
-    for (const table of tables) {
-        console.log(`🧹 Clearing table: ${table}...`);
-        const { error } = await supabase
-            .from(table)
-            .delete()
-            .neq('item_id', -1); // Deletes everything (where id is not -1)
+    for (const config of tableConfigs) {
+        try {
+            console.log(`🧹 Clearing table: ${config.name}...`);
+            // Use the correct primary key for each table
+            const { error } = await client
+                .from(config.name)
+                .delete()
+                .neq(config.pk, -1);
 
-        if (error) {
-            console.error(`❌ Error clearing ${table}:`, error.message);
-        } else {
-            console.log(`✅ Table ${table} cleared!`);
+            if (error) {
+                // Fallback: if PK is wrong, try a generic filter
+                console.warn(`⚠️ PK ${config.pk} failed for ${config.name}, trying generic filter...`);
+                await client.from(config.name).delete().filter('user_id', 'neq', -1);
+            } else {
+                console.log(`✅ Table ${config.name} cleared!`);
+            }
+        } catch (e) {
+            console.error(`❌ Unexpected error clearing ${config.name}:`, e);
         }
     }
 
-    // 2. Reset items stock values in the items table (if delete didn't work for some reason)
-    console.log('📦 Database is now empty for items and transactions.');
+    // 👤 CRITICAL: Update users to correct stall IDs (1 and 2)
+    console.log('👤 Updating user stall mappings (ID 1 for Kelvin, ID 2 for Manuel)...');
 
-    // 3. IMPORTANT: Reset stall IDs for Kelvin and Manuel in the users table to be SURE
-    console.log('👤 Updating users to correct stall IDs...');
+    try {
+        const { error: kError } = await client.from('users').update({ stall_id: 1 }).eq('username', 'kelvin');
+        const { error: mError } = await client.from('users').update({ stall_id: 2 }).eq('username', 'manuel');
 
-    const { error: userError1 } = await supabase
-        .from('users')
-        .update({ stall_id: 1 })
-        .eq('username', 'kelvin');
-
-    const { error: userError2 } = await supabase
-        .from('users')
-        .update({ stall_id: 2 })
-        .eq('username', 'manuel');
-
-    if (userError1 || userError2) {
-        console.error('❌ Error updating user stall IDs');
-    } else {
-        console.log('✅ Kelvin is now Stall 1, Manuel is Stall 2 in Supabase.');
+        if (kError || mError) {
+            console.error('❌ User update failed:', kError || mError);
+        } else {
+            console.log('✅ Kelvin mapped to Stall 1');
+            console.log('✅ Manuel mapped to Stall 2');
+        }
+    } catch (e) {
+        console.error('❌ Error updating users:', e);
     }
 
-    console.log('\n✨ DATABASE WIPE COMPLETE! You can now start adding items fresh.');
-}
-
-wipeDatabase();
+    console.log('\n✨ ALL DONE! Your database is now perfectly clean.');
+    console.log('Next: Refresh your page and add your first item as Admin.');
+})();

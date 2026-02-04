@@ -236,13 +236,27 @@ const AdminDashboard: React.FC = () => {
     }
   });
 
+  // Calculate total units sold per item for accurate system-wide stock tracking
+  const itemSoldMap = new Map<number, number>();
+  allSales.forEach(sale => {
+    if (sale.item_id) {
+      const current = itemSoldMap.get(sale.item_id) || 0;
+      itemSoldMap.set(sale.item_id, current + (sale.quantity_sold || 0));
+    }
+  });
+
   const totalAvailableUnits = items.reduce((sum: number, item: any) => {
-    return sum + Number(item?.current_stock || 0);
+    const sold = itemSoldMap.get(item.item_id) || 0;
+    const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
+    return sum + Math.max(0, totalReceived - sold);
   }, 0);
 
   const totalAvailableValue = items.reduce((sum: number, item: any) => {
-    const unitValue = Number(item?.unit_price ?? item?.buying_price ?? 0);
-    return sum + Number(item?.current_stock || 0) * unitValue;
+    const sold = itemSoldMap.get(item.item_id) || 0;
+    const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
+    const systemStock = Math.max(0, totalReceived - sold);
+    const unitValue = Number(item?.buying_price || 0); // Use buying price for warehouse value
+    return sum + systemStock * unitValue;
   }, 0);
 
   const revenue = analytics?.totalRevenue || 0;
