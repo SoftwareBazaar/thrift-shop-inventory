@@ -201,7 +201,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      // Using /api as the default base for reports - this works on Vercel and locally if proxied
+      const apiUrl = process.env.REACT_APP_API_URL || '/api';
 
       const response = await fetch(`${apiUrl}/reports/performance?format=${type}`, {
         method: 'GET',
