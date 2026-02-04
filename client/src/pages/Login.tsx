@@ -182,7 +182,19 @@ const Login: React.FC = () => {
         })
       });
 
-      const data = await response.json();
+      // Get response text first to handle non-JSON responses
+      const responseText = await response.text();
+      console.log('📋 Server response:', responseText);
+      console.log('📊 Status:', response.status);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response as JSON:', parseError);
+        console.log('📄 Raw response:', responseText);
+        throw new Error(`Server returned invalid response (status ${response.status}). Check console for details.`);
+      }
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to send verification code');
@@ -207,6 +219,7 @@ const Login: React.FC = () => {
       setRecoveryStep('verify-code');
 
     } catch (error: any) {
+      console.error('sendVerificationCode error:', error);
       setRecoveryError(error.message || 'Failed to send verification code');
     } finally {
       setRecoveryLoading(false);
