@@ -279,9 +279,12 @@ export const offlineDataApi = {
   getUsers: dataApi.getUsers,
   createUser: dataApi.createUser,
   updateUser: dataApi.updateUser,
+  deleteUser: dataApi.deleteUser,
   getStalls: dataApi.getStalls,
   createStall: dataApi.createStall,
-  updateStall: dataApi.updateStall
+  updateStall: dataApi.updateStall,
+  deleteStall: dataApi.deleteStall,
+  deleteItem: dataApi.deleteItem
 };
 
 export default offlineDataApi;

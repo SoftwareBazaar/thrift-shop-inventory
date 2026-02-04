@@ -196,6 +196,43 @@ const Users: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (userId: number, userName: string) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete user "${userName}"?\n\nThis will:\n- Remove all their data\n- Remove their assigned stall\n- Cannot be undone`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await dataApi.deleteUser(userId);
+      fetchUsers();
+      alert('User deleted successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || error.message || 'Failed to delete user');
+    }
+  };
+
+  const handleDeleteStall = async (stallId: number, stallName: string) => {
+    const assignedUsers = users.filter(u => u.stall_id === stallId);
+
+    const message = assignedUsers.length > 0
+      ? `Are you sure you want to delete stall "${stallName}"?\n\nThis stall has ${assignedUsers.length} user(s) assigned:\n ${assignedUsers.map(u => u.full_name).join(', ')}\n\nDeleting will unassign these users.\n\nThis action cannot be undone.`
+      : `Are you sure you want to delete stall "${stallName}"?\n\nThis action cannot be undone.`;
+
+    const confirmed = window.confirm(message);
+
+    if (!confirmed) return;
+
+    try {
+      await dataApi.deleteStall(stallId);
+      fetchStalls();
+      fetchUsers(); // Refresh to show unassigned users
+      alert('Stall deleted successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || error.message || 'Failed to delete stall');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -280,13 +317,23 @@ const Users: React.FC = () => {
                     {new Date(userItem.created_date).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => openEditUserModal(userItem)}
-                      className="text-blue-600 hover:text-blue-900"
-                      style={{ color: 'var(--primary-600)' }}
-                    >
-                      Edit
-                    </button>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => openEditUserModal(userItem)}
+                        className="text-blue-600 hover:text-blue-900"
+                        style={{ color: 'var(--primary-600)' }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(userItem.user_id, userItem.full_name)}
+                        className="text-red-600 hover:text-red-900"
+                        disabled={userItem.role === 'admin'}
+                        title={userItem.role === 'admin' ? 'Cannot delete admin users' : 'Delete user'}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -325,12 +372,20 @@ const Users: React.FC = () => {
                     {stall.manager || stall.assigned_user || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => openEditStallModal(stall)}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => openEditStallModal(stall)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStall(stall.stall_id, stall.stall_name)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

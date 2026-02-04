@@ -59,6 +59,8 @@ const AdminDashboard: React.FC = () => {
     recorded_by: ''
   });
   const [users, setUsers] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const fetchAdminData = useCallback(async () => {
     try {
@@ -109,6 +111,15 @@ const AdminDashboard: React.FC = () => {
       } else if (selectedPeriod === 'year') {
         const startOfYear = new Date(now.getFullYear(), 0, 1);
         filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfYear);
+      } else if (selectedPeriod === 'custom' && startDate && endDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filteredSales = allSales.filter(sale => {
+          const saleDate = new Date(sale.date_time);
+          return saleDate >= start && saleDate <= end;
+        });
       }
 
       // Calculate total revenue from filtered sales
@@ -186,7 +197,7 @@ const AdminDashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchAdminData, selectedPeriod]);
+  }, [fetchAdminData, selectedPeriod, startDate, endDate]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -315,17 +326,77 @@ const AdminDashboard: React.FC = () => {
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">Admin Dashboard</h1>
             <p className="text-sm sm:text-base text-blue-100 mt-1 truncate">System Overview & Analytics - {new Date().toLocaleDateString()}</p>
           </div>
-          <div className="flex flex-wrap gap-2 sm:gap-4 sm:flex-nowrap">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-white text-gray-900 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base flex-1 sm:flex-none min-w-[120px]"
-            >
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="year">This Year</option>
-            </select>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setSelectedPeriod('today')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'today'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('week')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'week'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                This Week
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('month')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'month'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                This Month
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('year')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'year'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                This Year
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('custom')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'custom'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                Custom Range
+              </button>
+            </div>
+
+            {selectedPeriod === 'custom' && (
+              <div className="flex flex-wrap items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-blue-700 uppercase">From:</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-2 py-1 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-blue-700 uppercase">To:</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-2 py-1 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            )}
             <div className="flex bg-white/10 rounded-lg p-1 gap-1">
               <button
                 onClick={() => downloadReport('pdf', 'performance')}

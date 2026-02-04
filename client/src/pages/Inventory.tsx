@@ -283,6 +283,24 @@ const Inventory: React.FC = () => {
     }
   };
 
+  const handleDeleteItem = async (itemId: number, itemName: string) => {
+    const sold = getItemsSold(itemId, itemName);
+    const message = sold > 0
+      ? `Are you sure you want to delete "${itemName}"?\n\nThis item has ${sold} recorded sale(s).\n\nDeleting will NOT remove historical sales data but will remove the item from active inventory.\n\nThis action cannot be undone.`
+      : `Are you sure you want to delete "${itemName}"?\n\nThis action cannot be undone.`;
+
+    const confirmed = window.confirm(message);
+    if (!confirmed) return;
+
+    try {
+      await dataApi.deleteItem(itemId);
+      fetchItems();
+      alert('Item removed from inventory successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || error.message || 'Failed to delete item');
+    }
+  };
+
   const filteredItems = items.filter(item => {
     const matchesSearch = item.item_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || item.category === selectedCategory;
@@ -614,9 +632,16 @@ const Inventory: React.FC = () => {
                               });
                               setShowEditModal(true);
                             }}
-                            className="text-purple-600 hover:text-purple-900"
+                            className="text-purple-600 hover:text-purple-900 mr-3"
                           >
                             Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.item_id, item.item_name)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Remove item"
+                          >
+                            🗑️ Remove
                           </button>
                         </td>
                       )}

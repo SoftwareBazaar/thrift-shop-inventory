@@ -349,6 +349,14 @@ export const mockApi = {
     return { user: users[userIndex] };
   },
 
+  deleteUser: async (userId: number): Promise<{ success: boolean }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const users = getStorageData<User[]>('users', mockUsers);
+    const filteredUsers = users.filter(u => u.user_id !== userId);
+    setStorageData('users', filteredUsers);
+    return { success: true };
+  },
+
   // Stalls API
   getStalls: async (): Promise<{ stalls: Stall[] }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -378,6 +386,14 @@ export const mockApi = {
     stalls[stallIndex] = { ...stalls[stallIndex], ...stallData };
     setStorageData('stalls', stalls);
     return { stall: stalls[stallIndex] };
+  },
+
+  deleteStall: async (stallId: number): Promise<{ success: boolean }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    const filteredStalls = stalls.filter(s => s.stall_id !== stallId);
+    setStorageData('stalls', filteredStalls);
+    return { success: true };
   },
 
   // Inventory API
@@ -593,6 +609,14 @@ export const mockApi = {
     };
     setStorageData('items', items);
     return { item: items[itemIndex] };
+  },
+
+  deleteItem: async (itemId: number): Promise<{ success: boolean }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+    const filteredItems = items.filter(i => i.item_id !== itemId);
+    setStorageData('items', filteredItems);
+    return { success: true };
   },
 
   // Sales API

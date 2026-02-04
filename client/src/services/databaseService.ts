@@ -244,6 +244,25 @@ export const dbApi = {
     }
   },
 
+  deleteUser: async (userId: number) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.deleteUser(userId);
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('users')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  },
+
   // Inventory
   getInventory: async (stallId?: number) => {
     if (!isSupabaseConfigured()) {
@@ -618,6 +637,27 @@ export const dbApi = {
     } catch (error) {
       console.error('Error updating item:', error);
       throw new Error((error as any)?.message || 'Failed to update item.');
+    }
+  },
+
+  deleteItem: async (itemId: number) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.deleteItem(itemId);
+    }
+
+    try {
+      // Note: We might need to handle cascading deletes if foreign key constraints aren't set up for CASCADE
+      // but for simplicity we assume Supabase schema handles it or it's a soft delete
+      const { error } = await (supabase as any)
+        .from('items')
+        .delete()
+        .eq('item_id', itemId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      throw error;
     }
   },
 
@@ -1047,6 +1087,25 @@ export const dbApi = {
       return { stall: data as Stall };
     } catch (error) {
       console.error('Error updating stall:', error);
+      throw error;
+    }
+  },
+
+  deleteStall: async (stallId: number) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.deleteStall(stallId);
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('stalls')
+        .delete()
+        .eq('stall_id', stallId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting stall:', error);
       throw error;
     }
   }
