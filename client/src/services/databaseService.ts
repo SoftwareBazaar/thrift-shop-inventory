@@ -208,7 +208,10 @@ export const dbApi = {
           .single();
 
         if (userRecord?.username) {
+          console.log(`[Update User] Derived password hash for ${userRecord.username}`);
           updateData.password_hash = await derivePasswordHash(userRecord.username, (updateData as any).password);
+        } else {
+          console.warn('[Update User] Could not fetch username for hashing. Password update skipped.');
         }
         delete (updateData as any).password;
       }

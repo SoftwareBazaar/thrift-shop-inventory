@@ -381,30 +381,40 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (supabaseReady && online) {
         const { data: existingUser, error: fetchError } = await (supabase as any)
           .from('users')
-          .select('password_hash')
+          .select('password_hash, username')
           .eq('user_id', user.user_id)
           .single();
 
         if (fetchError || !existingUser) {
+          console.error('[ChangePassword] Fetch error:', fetchError);
           throw new Error('Unable to verify your account. Please try again.');
         }
 
+        const dbUsername = existingUser.username || user.username;
         const currentHashInDb = existingUser.password_hash || '';
 
         // Try derivePasswordHash first
-        const expectedCurrentHash = await derivePasswordHash(user.username, oldPassword);
+        const expectedCurrentHash = await derivePasswordHash(dbUsername, oldPassword);
         let matches = expectedCurrentHash === currentHashInDb;
+
+        console.log(`[ChangePassword] Verifying for user: ${dbUsername}`);
 
         if (!matches) {
           // Fallback to bcrypt for legacy hashes
-          matches = await bcrypt.compare(oldPassword, currentHashInDb);
+          try {
+            matches = await bcrypt.compare(oldPassword, currentHashInDb);
+            if (matches) console.log('[ChangePassword] Matched via bcrypt fallback');
+          } catch (e) {
+            console.warn('[ChangePassword] Bcrypt comparison failed:', e);
+          }
         }
 
         if (!matches) {
+          console.warn('[ChangePassword] Password mismatch');
           return false;
         }
 
-        const newHash = await derivePasswordHash(user.username, newPassword);
+        const newHash = await derivePasswordHash(dbUsername, newPassword);
         const { error: updateError } = await (supabase as any)
           .from('users')
           .update({ password_hash: newHash })
