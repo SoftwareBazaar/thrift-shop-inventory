@@ -77,7 +77,7 @@ class OfflineStorageService {
   // Save item to offline storage
   async saveItem(item: any): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['items'], 'readwrite');
       const store = transaction.objectStore('items');
@@ -98,7 +98,7 @@ class OfflineStorageService {
   // Get all items from offline storage
   async getItems(): Promise<any[]> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['items'], 'readonly');
       const store = transaction.objectStore('items');
@@ -117,7 +117,7 @@ class OfflineStorageService {
   // Save sale to offline storage
   async saveSale(sale: any): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['sales'], 'readwrite');
       const store = transaction.objectStore('sales');
@@ -137,7 +137,7 @@ class OfflineStorageService {
   // Get all sales from offline storage
   async getSales(): Promise<any[]> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['sales'], 'readonly');
       const store = transaction.objectStore('sales');
@@ -156,7 +156,7 @@ class OfflineStorageService {
   // Add operation to offline queue
   async queueOperation(operation: OfflineOperation): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['offline_queue'], 'readwrite');
       const store = transaction.objectStore('offline_queue');
@@ -176,7 +176,7 @@ class OfflineStorageService {
   // Get all pending operations
   async getPendingOperations(): Promise<OfflineOperation[]> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['offline_queue'], 'readonly');
       const store = transaction.objectStore('offline_queue');
@@ -207,7 +207,7 @@ class OfflineStorageService {
   // Mark operation as synced
   async markOperationSynced(operationId: string): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['offline_queue'], 'readwrite');
       const store = transaction.objectStore('offline_queue');
@@ -232,7 +232,7 @@ class OfflineStorageService {
   // Delete synced operations (cleanup)
   async deleteSyncedOperations(): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['offline_queue'], 'readwrite');
       const store = transaction.objectStore('offline_queue');
@@ -256,10 +256,50 @@ class OfflineStorageService {
     });
   }
 
+  // Save distribution to offline storage
+  async saveDistribution(distribution: any): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['distributions'], 'readwrite');
+      const store = transaction.objectStore('distributions');
+      const request = store.put(distribution);
+
+      request.onsuccess = () => {
+        console.log('[OfflineStorage] Distribution saved:', distribution.distribution_id);
+        resolve();
+      };
+
+      request.onerror = () => {
+        console.error('[OfflineStorage] Failed to save distribution');
+        reject(request.error);
+      };
+    });
+  }
+
+  // Get all distributions from offline storage
+  async getDistributions(): Promise<any[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['distributions'], 'readonly');
+      const store = transaction.objectStore('distributions');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  }
+
   // Clear all offline data (for testing/reset)
   async clearAll(): Promise<void> {
     if (!this.db) await this.init();
-    
+
     const stores = ['items', 'sales', 'distributions', 'offline_queue'];
     const promises = stores.map((storeName) => {
       return new Promise<void>((resolve, reject) => {

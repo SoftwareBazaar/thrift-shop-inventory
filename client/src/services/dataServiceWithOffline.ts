@@ -14,34 +14,85 @@ export const offlineDataApi = {
         // Save to offline storage
         if (result.items) {
           for (const item of result.items) {
-            // Ensure stall_id is attached if it was a stall-specific fetch
-            const itemToSave = stallId ? { ...item, stall_id: stallId } : item;
-            await offlineStorage.saveItem(itemToSave);
+            await offlineStorage.saveItem(item);
           }
         }
         return result;
       } else {
-        // Offline: get from IndexedDB
+        // Offline: get from IndexedDB and calculate stock from distributions
         console.log(`[OfflineDataApi] Getting inventory from offline storage for stall: ${stallId || 'admin'}`);
         const items = await offlineStorage.getItems();
-        // Filter: match stall_id if provided OR show items without stall_id if admin (stallId undefined)
-        return {
-          items: items.filter(item => {
-            if (!stallId) return true; // Admin sees all
-            return item.stall_id === stallId;
-          })
-        };
+        const distributions = await offlineStorage.getDistributions();
+        const sales = await offlineStorage.getSales();
+
+        // If stallId is provided (non-admin user), calculate stock from distributions
+        if (stallId !== undefined) {
+          console.log(`[OfflineDataApi] Filtering for stall ${stallId}, found ${distributions.length} distributions`);
+
+          const filteredItems = items
+            .map(item => {
+              // Get all distributions to this stall for this item
+              const stallDistributions = distributions.filter(
+                d => d.item_id === item.item_id && d.stall_id === stallId
+              );
+
+              const totalDistributedToStall = stallDistributions.reduce(
+                (sum, d) => sum + d.quantity_allocated, 0
+              );
+
+              // If no stock distributed to this stall, exclude this item
+              if (totalDistributedToStall === 0) {
+                return null;
+              }
+
+              // Calculate sales from this stall for this item
+              const stallSales = sales.filter(
+                s => s.item_id === item.item_id && s.stall_id === stallId
+              );
+              const totalSold = stallSales.reduce((sum, s) => sum + s.quantity_sold, 0);
+
+              // Calculate stock available for this stall
+              const currentStock = Math.max(0, totalDistributedToStall - totalSold);
+
+              return {
+                ...item,
+                current_stock: currentStock,
+                total_allocated: totalDistributedToStall,
+                stall_id: stallId
+              };
+            })
+            .filter((item): item is any => item !== null);
+
+          console.log(`[OfflineDataApi] Returning ${filteredItems.length} items for stall ${stallId}`);
+          return { items: filteredItems };
+        }
+
+        // Admin: return all items with admin stock calculation
+        const itemsWithAdminStock = items.map(item => {
+          const totalDistributed = distributions
+            .filter(d => d.item_id === item.item_id)
+            .reduce((sum, d) => sum + d.quantity_allocated, 0);
+
+          const totalSold = sales
+            .filter(s => s.item_id === item.item_id)
+            .reduce((sum, s) => sum + s.quantity_sold, 0);
+
+          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed - totalSold);
+
+          return {
+            ...item,
+            current_stock: adminStock,
+            total_allocated: totalDistributed
+          };
+        });
+
+        return { items: itemsWithAdminStock };
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting inventory:', error);
-      // Fallback to offline storage
+      // Fallback to simple offline storage
       const items = await offlineStorage.getItems();
-      return {
-        items: items.filter(item => {
-          if (!stallId) return true;
-          return item.stall_id === stallId;
-        })
-      };
+      return { items };
     }
   },
 
@@ -170,15 +221,67 @@ export const offlineDataApi = {
     }
   },
 
+  // Distribute stock - handle offline
+  distributeStock: async (distributionData: {
+    item_id: number;
+    distributions: Array<{ stall_id: number; quantity: number }>;
+    notes?: string;
+  }) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.distributeStock(distributionData);
+
+        // Save distributions to offline storage for offline access
+        if (result && result.distributions) {
+          for (const dist of result.distributions) {
+            await offlineStorage.saveDistribution(dist);
+          }
+        }
+
+        // Also refetch and cache the updated inventory
+        const inventory = await dataApi.getInventory();
+        if (inventory.items) {
+          for (const item of inventory.items) {
+            await offlineStorage.saveItem(item);
+          }
+        }
+
+        return result;
+      } else {
+        // Offline: queue for sync
+        console.log('[OfflineDataApi] Distributing stock offline, queuing for sync');
+        await syncService.queueOperation('CREATE', 'distributions', distributionData);
+
+        // Create temporary distribution records
+        const tempDistributions = distributionData.distributions.map(d => ({
+          distribution_id: Date.now() + Math.random(),
+          item_id: distributionData.item_id,
+          stall_id: d.stall_id,
+          quantity_allocated: d.quantity,
+          date_distributed: new Date().toISOString(),
+          distributed_by: 1
+        }));
+
+        // Save to offline storage
+        for (const dist of tempDistributions) {
+          await offlineStorage.saveDistribution(dist);
+        }
+
+        return { distributions: tempDistributions };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error distributing stock:', error);
+      throw error;
+    }
+  },
+
   // Other methods pass through to main API
   getUsers: dataApi.getUsers,
   createUser: dataApi.createUser,
   updateUser: dataApi.updateUser,
   getStalls: dataApi.getStalls,
   createStall: dataApi.createStall,
-  updateStall: dataApi.updateStall,
-  distributeStock: dataApi.distributeStock
+  updateStall: dataApi.updateStall
 };
 
 export default offlineDataApi;
-
