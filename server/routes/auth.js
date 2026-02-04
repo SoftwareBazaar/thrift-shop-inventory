@@ -280,6 +280,15 @@ router.put('/profile', authenticateToken, async (req, res) => {
 });
 
 // Logout (client-side token removal)
+// Password recovery routes (imported from standalone functions)
+const sendVerificationEmail = require('../../api/auth/send-verification-email');
+const verifyCode = require('../../api/auth/verify-code');
+const recoverPassword = require('../../api/auth/recover-password');
+
+router.post('/send-verification-email', sendVerificationEmail);
+router.post('/verify-code', verifyCode);
+router.post('/recover-password', recoverPassword);
+
 router.post('/logout', authenticateToken, (req, res) => {
   res.json({ message: 'Logout successful' });
 });
