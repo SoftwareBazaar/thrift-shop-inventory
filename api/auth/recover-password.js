@@ -30,8 +30,17 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // Parse body if needed for Vercel compatibility
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid JSON body' });
+      }
+    }
 
-    const { username, method, contact, newPassword } = req.body || {};
+    const { username, method, contact, newPassword } = body || {};
 
     if (!username || !method || !contact || !newPassword) {
       return res.status(400).json({ message: 'Username, method, contact, and new password are required' });

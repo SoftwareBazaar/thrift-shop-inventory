@@ -35,17 +35,38 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');
 
+    // Handle OPTIONS preflight
     if (req.method === 'OPTIONS') {
+        console.log('✅ OPTIONS request handled');
         return res.status(200).end();
     }
 
+    // Only allow POST
     if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method not allowed' });
+        console.error('❌ Method not allowed:', req.method);
+        return res.status(405).json({
+            success: false,
+            message: 'Method not allowed. Use POST.'
+        });
     }
 
     try {
+        // Parse body if needed (Vercel usually does this automatically)
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            } catch (e) {
+                console.error('❌ Failed to parse request body:', e);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid JSON in request body'
+                });
+            }
+        }
 
-        const { username, email } = req.body || {};
+        const { username, email } = body || {};
+        console.log('📥 Request body:', { username, email: email ? '***' : undefined });
 
         if (!username || !email) {
             return res.status(400).json({ message: 'Username and email are required' });

@@ -20,12 +20,21 @@ module.exports = async (req, res) => {
     }
 
     if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method not allowed' });
+        return res.status(405).json({ message: 'Method not allowed. Use POST.' });
     }
 
     try {
+        // Parse body if needed
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            } catch (e) {
+                return res.status(400).json({ message: 'Invalid JSON body' });
+            }
+        }
 
-        const { email, code } = req.body || {};
+        const { email, code } = body || {};
 
         if (!email || !code) {
             return res.status(400).json({ message: 'Email and code are required' });
