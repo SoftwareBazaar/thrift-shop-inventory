@@ -338,10 +338,20 @@ const Inventory: React.FC = () => {
   const getItemsSold = (itemId: number, fallbackName: string) => {
     return salesData
       .filter((sale) => {
-        if (sale.item_id != null) {
-          return Number(sale.item_id) === itemId;
+        // First filter by item
+        const matchesItem = sale.item_id != null
+          ? Number(sale.item_id) === itemId
+          : sale.item_name === fallbackName;
+
+        if (!matchesItem) return false;
+
+        // For non-admin users, only show their own sales
+        if (user?.role !== 'admin' && user?.user_id) {
+          return sale.recorded_by === user.user_id;
         }
-        return sale.item_name === fallbackName;
+
+        // Admin sees all sales
+        return true;
       })
       .reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
   };
@@ -536,9 +546,11 @@ const Inventory: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
-                          <div className="text-[11px] font-medium text-gray-500 uppercase tracking-tight">
-                            Total in system: {managedTotal}
-                          </div>
+                          {user?.role === 'admin' && (
+                            <div className="text-[11px] font-medium text-gray-500 uppercase tracking-tight">
+                              Total in system: {managedTotal}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
