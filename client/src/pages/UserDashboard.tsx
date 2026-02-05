@@ -24,6 +24,8 @@ interface Sale {
   buying_price?: number;
   cash_amount?: number | null;
   mobile_amount?: number | null;
+  recorded_by?: number;
+  recorded_by_name?: string;
 }
 
 const UserDashboard: React.FC = () => {
@@ -373,6 +375,7 @@ const UserDashboard: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Served By</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
               </tr>
             </thead>
@@ -404,6 +407,9 @@ const UserDashboard: React.FC = () => {
                         ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {sale.recorded_by_name || 'System'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(sale.date_time).toLocaleTimeString()}

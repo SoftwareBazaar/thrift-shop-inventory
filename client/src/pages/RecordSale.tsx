@@ -62,6 +62,17 @@ const RecordSale: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // Initialize form data with user defaults
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        stall_id: prev.stall_id || user.stall_id?.toString() || '',
+        served_by: prev.served_by || user.user_id.toString() || ''
+      }));
+    }
+  }, [user]);
+
   // Reload inventory when admin changes stall selection
   useEffect(() => {
     if (user?.role === 'admin' && formData.stall_id) {
@@ -88,14 +99,6 @@ const RecordSale: React.FC = () => {
           unit_price: selectedItem.unit_price.toString()
         }));
       }
-    }
-
-    // Auto-populate stall_id from user if user has a stall
-    if (user?.stall_id && !formData.stall_id) {
-      setFormData(prev => ({
-        ...prev,
-        stall_id: user.stall_id!.toString()
-      }));
     }
   };
 
@@ -284,31 +287,9 @@ const RecordSale: React.FC = () => {
               </select>
             </div>
 
-            {/* Stall Selection - Optional for admin */}
+            {/* Stall Selection - Hidden for non-admins as it's auto-assigned */}
             {user?.role !== 'admin' && (
-              <div>
-                <label htmlFor="stall_id" className="block text-sm font-medium text-gray-700 mb-2">
-                  Stall *</label>
-                <select
-                  id="stall_id"
-                  name="stall_id"
-                  value={formData.stall_id}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                  disabled={loading}
-                >
-                  <option value="">-- Select a stall --</option>
-                  {stalls.map((stall) => (
-                    <option key={stall.stall_id} value={stall.stall_id}>
-                      {stall.stall_name} - {stall.location}
-                    </option>
-                  ))}
-                </select>
-                {user?.stall_id && !formData.stall_id && (
-                  <p className="mt-1 text-xs text-gray-500">Your assigned stall will be pre-selected, but you can change it</p>
-                )}
-              </div>
+              <input type="hidden" name="stall_id" value={formData.stall_id} />
             )}
             {/* Optional stall selection for admin */}
             {user?.role === 'admin' && (
