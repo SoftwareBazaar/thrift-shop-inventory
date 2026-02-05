@@ -29,11 +29,7 @@ module.exports = async (req, res) => {
     console.log('🔐 Has JWT_SECRET:', !!process.env.JWT_SECRET);
     console.log('📅 Deployed at:', new Date().toISOString());
 
-    // Set CORS and JSON headers for all responses
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Content-Type', 'application/json');
+    // Set JSON header (CORS is handled by vercel.json)
 
     // Handle OPTIONS preflight
     if (req.method === 'OPTIONS') {
