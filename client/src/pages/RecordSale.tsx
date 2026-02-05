@@ -29,11 +29,21 @@ const RecordSale: React.FC = () => {
     notes: ''
   });
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (selectedStallId?: string) => {
     try {
-      // For non-admin users, only get items distributed to their stall
-      const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
-      
+      // For admin: if they select a stall, show that stall's inventory
+      // For non-admin users: only get items distributed to their stall
+      let stallId: number | undefined;
+
+      if (user?.role === 'admin' && selectedStallId) {
+        // Admin selected a specific stall - show that stall's inventory
+        stallId = parseInt(selectedStallId);
+      } else if (user?.role !== 'admin' && user?.stall_id) {
+        // Non-admin user - show their assigned stall's inventory
+        stallId = user.stall_id;
+      }
+      // If admin hasn't selected a stall, stallId remains undefined (shows central stock)
+
       const [itemsResponse, stallsResponse, usersResponse] = await Promise.all([
         dataApi.getInventory(stallId),
         dataApi.getStalls(),
@@ -51,6 +61,16 @@ const RecordSale: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Reload inventory when admin changes stall selection
+  useEffect(() => {
+    if (user?.role === 'admin' && formData.stall_id) {
+      fetchData(formData.stall_id);
+    } else if (user?.role === 'admin' && !formData.stall_id) {
+      // Admin cleared stall selection - reload central stock
+      fetchData();
+    }
+  }, [formData.stall_id, user?.role, fetchData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -120,17 +140,17 @@ const RecordSale: React.FC = () => {
 
       // Determine who recorded the sale
       // If served_by is selected, use that; otherwise use the current user
-      const recordedBy = formData.served_by 
+      const recordedBy = formData.served_by
         ? parseInt(formData.served_by)
         : (user?.user_id || 0);
 
       // Calculate total amount
       const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
-      
+
       if (formData.sale_type === 'split') {
         const cash = parseFloat(formData.cash_amount);
         const mobile = parseFloat(formData.mobile_amount);
-        
+
         if (!formData.cash_amount || !formData.mobile_amount || !Number.isFinite(cash) || !Number.isFinite(mobile)) {
           setError('Enter both cash and mobile amounts for split payments.');
           setLoading(false);
@@ -149,16 +169,16 @@ const RecordSale: React.FC = () => {
           return;
         }
       }
-      
+
       // Calculate split amounts if needed
       let cash_amount = null;
       let mobile_amount = null;
-      
+
       if (formData.sale_type === 'split') {
         cash_amount = parseFloat(formData.cash_amount);
         mobile_amount = parseFloat(formData.mobile_amount);
       }
-      
+
       // Record the sale
       await dataApi.createSale({
         item_id: formData.item_id,
@@ -177,9 +197,9 @@ const RecordSale: React.FC = () => {
         cash_amount: cash_amount,
         mobile_amount: mobile_amount
       });
-      
+
       setSuccessMessage('Sale recorded successfully!');
-      
+
       // Clear form
       setFormData({
         item_id: '',
@@ -228,8 +248,8 @@ const RecordSale: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Record Sale</h1>
-          <p style={{color: 'var(--neutral-600)'}}>Record a new sales transaction</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Record Sale</h1>
+          <p style={{ color: 'var(--neutral-600)' }}>Record a new sales transaction</p>
         </div>
         <button
           onClick={() => navigate('/sales')}
@@ -463,9 +483,9 @@ const RecordSale: React.FC = () => {
               </div>
               <p className="mt-2 text-sm text-gray-600">
                 Total: KES {(
-                  (parseFloat(formData.cash_amount) || 0) + 
+                  (parseFloat(formData.cash_amount) || 0) +
                   (parseFloat(formData.mobile_amount) || 0)
-                ).toFixed(2)} | 
+                ).toFixed(2)} |
                 Expected: KES {(parseInt(formData.quantity_sold) * parseFloat(formData.unit_price)).toFixed(2)}
               </p>
             </div>

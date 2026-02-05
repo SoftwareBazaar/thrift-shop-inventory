@@ -536,7 +536,7 @@ const Inventory: React.FC = () => {
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
                           <div className="text-[11px] font-medium text-gray-500 uppercase tracking-tight">
-                            Total in system: {totalInventory}
+                            Total in system: {managedTotal}
                           </div>
                         </div>
                       </td>
@@ -922,7 +922,7 @@ const Inventory: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Available for Distribution</label>
                   <input
                     type="text"
                     value={selectedItemAvailable}
