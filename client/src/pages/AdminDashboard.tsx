@@ -46,7 +46,6 @@ const AdminDashboard: React.FC = () => {
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
-  const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [editSaleData, setEditSaleData] = useState({
@@ -501,15 +500,7 @@ const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-lg">
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-900">User Performance</h2>
-              <button
-                onClick={() => setShowCommissionModal(true)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                💰 Commission Report
-              </button>
-            </div>
+            <h2 className="text-xl font-bold text-gray-900">User Performance</h2>
           </div>
           <div className="p-6">
             <div className="space-y-4">
@@ -521,7 +512,6 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
-                    <p className="text-sm text-gray-600">Commission: {formatCurrency(user.revenue * 0.05)}</p>
                   </div>
                 </div>
               ))}
@@ -675,52 +665,6 @@ const AdminDashboard: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* Commission Modal */}
-      {showCommissionModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Commission Report</h3>
-              <div className="space-y-4">
-                {analytics?.commissionData.map((user, index) => (
-                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{user.user_name}</h4>
-                      <p className="text-sm text-gray-600">{user.sales} sales</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-green-600">{formatCurrency(user.commission)}</p>
-                    </div>
-                  </div>
-                ))}
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-gray-900">Total Commission</h4>
-                    <p className="font-bold text-green-600">
-                      {formatCurrency(analytics?.commissionData.reduce((sum, user) => sum + user.commission, 0) || 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6 flex space-x-3">
-                <button
-                  onClick={() => setShowCommissionModal(false)}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md font-medium"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => downloadReport('pdf')}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium"
-                >
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Sale Modal */}
       {showEditSaleModal && selectedSale && (

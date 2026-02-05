@@ -66,9 +66,11 @@ const Sales: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [servedByFilter, setServedByFilter] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -80,12 +82,13 @@ const Sales: React.FC = () => {
     fetchSales();
     fetchStalls();
     fetchItems();
-    
+    fetchUsers();
+
     // Auto-refresh every 5 seconds to sync data across all users
     const interval = setInterval(() => {
       fetchSales();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -123,6 +126,15 @@ const Sales: React.FC = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const response = await dataApi.getUsers();
+      setUsers(response.users);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -136,12 +148,12 @@ const Sales: React.FC = () => {
     if (user?.role !== 'admin' && sale.sale_type === 'credit') {
       return false;
     }
-    
+
     // Non-admin users can only see their own sales
     if (user?.role !== 'admin' && sale.recorded_by !== user?.user_id) {
       return false;
     }
-    
+
     // Filter by date range
     if (dateRange.startDate) {
       const saleDate = new Date(sale.date_time).toISOString().split('T')[0];
@@ -151,7 +163,7 @@ const Sales: React.FC = () => {
       const saleDate = new Date(sale.date_time).toISOString().split('T')[0];
       if (saleDate > dateRange.endDate) return false;
     }
-    
+
     // Filter by stall
     if (selectedStall !== '') {
       const stall = stalls.find(s => s.stall_id === selectedStall);
@@ -159,10 +171,13 @@ const Sales: React.FC = () => {
     }
 
     if (categoryFilter && sale.category !== categoryFilter) return false;
-    
+
     // Filter by sale type
     if (saleTypeFilter && sale.sale_type !== saleTypeFilter) return false;
-    
+
+    // Filter by served by (recorded_by_name)
+    if (servedByFilter && sale.recorded_by_name !== servedByFilter) return false;
+
     return true;
   });
 
@@ -303,8 +318,8 @@ const Sales: React.FC = () => {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Sales Management</h1>
-          <p className="text-sm sm:text-base" style={{color: 'var(--neutral-600)'}}>View and manage sales records</p>
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Sales Management</h1>
+          <p className="text-sm sm:text-base" style={{ color: 'var(--neutral-600)' }}>View and manage sales records</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3 sm:flex-nowrap">
           <button
@@ -436,14 +451,14 @@ const Sales: React.FC = () => {
                     if (sale.sale_type === 'cash') acc[userName].cash += 1;
                     if (sale.sale_type === 'mobile') acc[userName].mobile += 1;
                     if (user?.role === 'admin' && sale.sale_type === 'credit') acc[userName].credit += 1;
-                    
+
                     // Track items sold
                     const itemName = sale.item_name;
                     if (!acc[userName].items[itemName]) {
                       acc[userName].items[itemName] = 0;
                     }
                     acc[userName].items[itemName] += sale.quantity_sold;
-                    
+
                     return acc;
                   }, {} as any);
 
@@ -492,7 +507,7 @@ const Sales: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
             <input
@@ -557,12 +572,29 @@ const Sales: React.FC = () => {
             </select>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Served By</label>
+            <select
+              value={servedByFilter}
+              onChange={(e) => setServedByFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Users</option>
+              {users.map(userItem => (
+                <option key={userItem.user_id} value={userItem.full_name}>
+                  {userItem.full_name} {userItem.role === 'admin' ? '(Admin)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSelectedStall('');
                 setSaleTypeFilter('');
                 setCategoryFilter('');
+                setServedByFilter('');
                 setDateRange({ startDate: '', endDate: '' });
               }}
               className="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
@@ -632,16 +664,15 @@ const Sales: React.FC = () => {
                     {formatCurrency(sale.total_amount)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      sale.sale_type === 'cash' 
-                        ? 'bg-green-100 text-green-800' 
-                        : sale.sale_type === 'mobile'
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${sale.sale_type === 'cash'
+                      ? 'bg-green-100 text-green-800'
+                      : sale.sale_type === 'mobile'
                         ? 'bg-purple-100 text-purple-800'
                         : sale.sale_type === 'split'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {sale.sale_type === 'split' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                      {sale.sale_type === 'split'
                         ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
                         : sale.sale_type}
                     </span>
@@ -683,7 +714,7 @@ const Sales: React.FC = () => {
             {sales.length === 0 ? 'No sales recorded yet' : 'No sales match your filters'}
           </h3>
           <p className="text-gray-600 mb-4">
-            {sales.length === 0 
+            {sales.length === 0
               ? 'Start by recording your first sale to track revenue'
               : 'Try adjusting your filters or date range'}
           </p>
