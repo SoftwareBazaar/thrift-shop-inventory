@@ -358,12 +358,13 @@ const Inventory: React.FC = () => {
     ? Math.max(0, (selectedItem.total_allocated || 0) - selectedItemSold)
     : 0;
   const selectedItemAvailable = selectedItem ? Math.max(0, selectedItem.current_stock || 0) : 0;
+  const selectedItemManagedTotal = selectedItemAvailable + selectedItemDistributed; // Unsold only
   const selectedItemTotalInventory = selectedItem
     ? selectedItemAvailable + selectedItemDistributed + selectedItemSold
     : 0;
   const quantityToAddPreview = addStockQuantity ? parseInt(addStockQuantity, 10) || 0 : 0;
   const previewAvailableAfterAdd = selectedItemAvailable + quantityToAddPreview;
-  const previewTotalInventory = selectedItemTotalInventory + quantityToAddPreview;
+  const previewTotalInventory = selectedItemManagedTotal + quantityToAddPreview; // Use managedTotal instead of totalInventory
   const totalQuantityPendingDistribution = distributionData.distributions.reduce(
     (sum, dist) => sum + (parseInt(dist.quantity) || 0),
     0
