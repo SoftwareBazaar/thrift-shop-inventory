@@ -100,7 +100,7 @@ const UserDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, selectedPeriod]);
+  }, [user, selectedPeriod, servedBy]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -127,8 +127,6 @@ const UserDashboard: React.FC = () => {
     if (!selectedItem || !user) return;
 
     try {
-      if (!selectedItem || !user) return;
-
       const quantity = Number.isFinite(saleQuantity) ? saleQuantity : 0;
       const price = parseFloat(salePrice);
 
@@ -646,7 +644,7 @@ const UserDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </div >
+    </div>
   );
 };
 
