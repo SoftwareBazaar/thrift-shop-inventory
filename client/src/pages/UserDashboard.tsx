@@ -45,6 +45,8 @@ const UserDashboard: React.FC = () => {
   const [todayUnits, setTodayUnits] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
   const [saleError, setSaleError] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
+  const [servedBy, setServedBy] = useState('');
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -84,6 +86,15 @@ const UserDashboard: React.FC = () => {
       setTodaySales(totalSales);
       setTodayUnits(totalUnits);
 
+      // Fetch users for the "Served By" field
+      const usersResponse = await dataApi.getUsers();
+      setUsers(usersResponse.users || []);
+
+      // Initial servedBy if not set
+      if (!servedBy && user) {
+        setServedBy(user.user_id.toString());
+      }
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -107,6 +118,7 @@ const UserDashboard: React.FC = () => {
     setSaleQuantity(1);
     setSalePrice(item.unit_price.toString());
     setSaleError('');
+    if (user) setServedBy(user.user_id.toString());
     setShowSaleForm(true);
   };
 
@@ -174,7 +186,7 @@ const UserDashboard: React.FC = () => {
         unit_price: price,
         total_amount: totalAmount,
         sale_type: saleType,
-        recorded_by: user.user_id,
+        recorded_by: parseInt(servedBy) || user.user_id,
         customer_name: saleType === 'mobile' ? customerName : undefined,
         customer_contact: saleType === 'mobile' ? customerName : undefined,
         cash_amount: cash_amount,
@@ -523,6 +535,23 @@ const UserDashboard: React.FC = () => {
                       </select>
                     </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Served By *</label>
+                      <select
+                        value={servedBy}
+                        onChange={(e) => setServedBy(e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      >
+                        <option value="">-- Select staff --</option>
+                        {users.map((u) => (
+                          <option key={u.user_id} value={u.user_id.toString()}>
+                            {u.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     {saleType === 'split' && (
                       <>
                         <div>
@@ -617,7 +646,7 @@ const UserDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </div >
   );
 };
 
