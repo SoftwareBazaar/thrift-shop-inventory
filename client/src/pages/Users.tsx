@@ -294,12 +294,6 @@ const Users: React.FC = () => {
                     <div>
                       <div className="text-sm font-medium text-gray-900">{userItem.full_name}</div>
                       <div className="text-sm text-gray-500">{userItem.username}</div>
-                      {userItem.email && (
-                        <div className="text-xs text-gray-400">{userItem.email}</div>
-                      )}
-                      {userItem.phone_number && (
-                        <div className="text-xs text-gray-400">{userItem.phone_number}</div>
-                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -396,9 +390,9 @@ const Users: React.FC = () => {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New User</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 sticky top-0 bg-white pb-2 border-b">Add New User</h3>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
@@ -568,9 +562,9 @@ const Users: React.FC = () => {
 
       {/* Edit User Modal */}
       {showEditUserModal && editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit User</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 sticky top-0 bg-white pb-2 border-b">Edit User</h3>
             <form onSubmit={handleUpdateUser} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
