@@ -13,7 +13,7 @@ async function authenticateToken(req) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    
+
     // Get user details from Supabase
     const { data: userRecord, error } = await supabase
       .from('users')
@@ -30,8 +30,10 @@ async function authenticateToken(req) {
     }
 
     if (decoded.passwordVersion) {
-      const currentVersion = crypto.createHash('sha256').update(userRecord.password_hash || '').digest('hex');
-      if (currentVersion !== decoded.passwordVersion) {
+      const versionA = crypto.createHash('sha256').update(userRecord.password_hash || '').digest('hex');
+      const versionB = userRecord.password_hash;
+
+      if (decoded.passwordVersion !== versionA && decoded.passwordVersion !== versionB) {
         return { error: { message: 'Session expired. Please sign in again.', status: 401 } };
       }
     }

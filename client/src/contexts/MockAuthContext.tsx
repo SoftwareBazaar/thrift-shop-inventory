@@ -243,7 +243,7 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
           const { data: userRow, error: fetchError } = await (supabase as any)
             .from('users')
             .select('user_id, username, password_hash, full_name, role, stall_id, status, phone_number, email')
-            .eq('username', username)
+            .or(`username.eq."${username}",email.eq."${username.toLowerCase()}"`)
             .single();
 
           if (fetchError || !userRow) {

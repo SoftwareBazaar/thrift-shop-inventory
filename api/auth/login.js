@@ -15,11 +15,11 @@ module.exports = async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
-    // Get user from Supabase
+    // Get user from Supabase - search by username OR email
     const { data: users, error } = await supabase
       .from('users')
       .select('user_id, username, password_hash, full_name, role, stall_id, status, phone_number, email')
-      .eq('username', username)
+      .or(`username.eq."${username}",email.eq."${username.toLowerCase()}"`)
       .single();
 
     if (error || !users) {
@@ -33,8 +33,26 @@ module.exports = async (req, res) => {
       return res.status(401).json({ message: 'Account is inactive' });
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    // Verify password - support both bcrypt and SHA256 (client-hashed) formats
+    let isValidPassword = false;
+
+    // Try bcrypt first (traditional/registered users)
+    try {
+      isValidPassword = await bcrypt.compare(password, user.password_hash);
+    } catch (bcryptError) {
+      console.log('Bcrypt comparison error, checking alternate hash...');
+    }
+
+    // Try SHA256 fallback (recovered users / client-hashing app)
+    if (!isValidPassword) {
+      const normalizedUsername = (user.username || '').trim().toLowerCase();
+      const derivedHash = crypto.createHash('sha256')
+        .update(normalizedUsername + '|' + password)
+        .digest('hex');
+
+      isValidPassword = derivedHash === user.password_hash;
+    }
+
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

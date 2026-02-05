@@ -8,8 +8,8 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "nodemon server/index.js",
     "client": "cd client && npm start",
-    "build": "cd client && npm install && npm run build",
-    "vercel-build": "cd client && npm install && npm run build",
+    "build": "cd client && npm install && npm run build && cd .. && rm -rf build && mv client/build build",
+    "vercel-build": "cd client && npm install && npm run build && cd .. && rm -rf build && mv client/build build",
     "install-all": "npm install && cd client && npm install"
   },
   "dependencies": {

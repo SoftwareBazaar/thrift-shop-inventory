@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "outputDirectory": "client/build",
+  "outputDirectory": "build",
   "rewrites": [
     {
       "source": "/api/(.*)",
