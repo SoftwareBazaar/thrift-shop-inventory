@@ -1,35 +1,14 @@
 {
   "version": 2,
   "outputDirectory": "client/build",
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
     {
-      "source": "/((?!api/).*)",
-      "destination": "/$1"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1",
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      }
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html",
-      "check": true
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

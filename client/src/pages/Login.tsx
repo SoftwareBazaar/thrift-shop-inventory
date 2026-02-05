@@ -341,13 +341,22 @@ const Login: React.FC = () => {
           }
 
           if (!response.ok) {
-            if (response.status >= 400 && response.status < 500) {
+            // DEDUCTIVE REASONING FALLBACK: 
+            // If the server returns 405 or 404, it's a routing issue. 
+            // We should still allow the offline update to proceed so the user can log in.
+            if (response.status === 405 || response.status === 404) {
+              console.warn('⚠️ Server routing issue detected on password update (405). Proceeding with offline-only update.');
+              setRecoveryServerNote('Server update failed (Routing 405) – your password will be updated for offline access. Please sign in while online later to sync.');
+            } else if (response.status >= 400 && response.status < 500) {
               throw new Error(data?.message || 'We could not verify your account information with the server.');
+            } else {
+              throw new Error(data?.message || 'Unable to reach the server right now.');
             }
-            throw new Error(data?.message || 'Unable to reach the server right now.');
           }
 
-          serverSynced = true;
+          if (response.ok) {
+            serverSynced = true;
+          }
         } catch (serverError: any) {
           console.warn('Unable to update password on server, falling back to offline update.', serverError);
           if (serverError?.message?.includes('verify your account information')) {
