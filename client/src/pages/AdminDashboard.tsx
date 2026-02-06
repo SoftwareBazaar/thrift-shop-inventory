@@ -451,8 +451,8 @@ const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
           <div className="flex flex-col">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-            <p className="text-xl font-bold text-yellow-600 truncate">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+            <p className="text-lg font-bold text-yellow-600 leading-tight">
               {formatCurrency(todaySales)}
             </p>
           </div>
@@ -460,8 +460,8 @@ const AdminDashboard: React.FC = () => {
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex flex-col">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
-            <p className="text-xl font-bold text-blue-600 truncate">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
+            <p className="text-lg font-bold text-blue-600 leading-tight">
               {formatCurrency(analytics?.totalRevenue || 0)}
             </p>
           </div>
@@ -469,16 +469,16 @@ const AdminDashboard: React.FC = () => {
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
           <div className="flex flex-col">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
-            <p className="text-xl font-bold text-purple-600 truncate">{analytics?.totalUnits || 0}</p>
-            <p className="text-xs text-gray-400 mt-1">Physical items moved</p>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
+            <p className="text-lg font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500">
           <div className="flex flex-col">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
-            <p className="text-lg font-bold text-indigo-600 truncate">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
+            <p className="text-base font-bold text-indigo-600">
               {formatCurrency(totalStockValue)}
             </p>
           </div>
@@ -486,8 +486,8 @@ const AdminDashboard: React.FC = () => {
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500">
           <div className="flex flex-col">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
-            <p className={`text-xl font-bold truncate ${profitTone}`}>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
+            <p className={`text-lg font-bold ${profitTone}`}>
               {formatCurrency(grossProfit)}
             </p>
           </div>
