@@ -262,6 +262,7 @@ const UserDashboard: React.FC = () => {
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
               <p className="text-2xl font-bold text-yellow-600">{formatCurrency(todaySales)}</p>
+              <p className="text-sm text-gray-500">{todayUnits} units sold today</p>
             </div>
           </div>
         </div>
