@@ -60,6 +60,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [todaySales, setTodaySales] = useState(0);
 
   const fetchAdminData = useCallback(async () => {
     try {
@@ -180,6 +181,11 @@ const AdminDashboard: React.FC = () => {
 
       setAnalytics(analyticsData);
 
+      // Calculate today's sales specifically
+      const todaySalesData = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
+      const totalTodayRevenue = todaySalesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+      setTodaySales(totalTodayRevenue);
+
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
@@ -197,6 +203,17 @@ const AdminDashboard: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [fetchAdminData, selectedPeriod, startDate, endDate]);
+
+  const handleDeleteSale = async (saleId: number) => {
+    if (!window.confirm('Are you sure you want to delete this sale? This will restore the item stock.')) return;
+    try {
+      await dataApi.deleteSale(saleId);
+      await fetchAdminData();
+    } catch (error) {
+      console.error('Error deleting sale:', error);
+      alert('Failed to delete sale');
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -431,7 +448,20 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-yellow-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-xl">🌅</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
+              <p className="text-xl font-bold text-yellow-600 leading-tight">
+                {formatCurrency(todaySales)}
+              </p>
+            </div>
+          </div>
+        </div>
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -657,6 +687,12 @@ const AdminDashboard: React.FC = () => {
                       className="text-purple-600 hover:text-purple-900"
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSale(sale.sale_id)}
+                      className="ml-3 text-red-600 hover:text-red-900"
+                    >
+                      Delete
                     </button>
                   </td>
                 </tr>

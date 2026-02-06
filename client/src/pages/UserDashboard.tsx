@@ -41,6 +41,8 @@ const UserDashboard: React.FC = () => {
   const [customerName, setCustomerName] = useState('');
   const [cashAmount, setCashAmount] = useState('');
   const [mobileAmount, setMobileAmount] = useState('');
+  const [periodSales, setPeriodSales] = useState(0);
+  const [periodUnits, setPeriodUnits] = useState(0);
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month'>('week');
@@ -70,6 +72,9 @@ const UserDashboard: React.FC = () => {
         periodStart.setDate(now.getDate() - 30);
       }
 
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
       const periodSalesData = allSales.filter((sale: any) => {
         const saleDate = new Date(sale.date_time);
         // Filter out credit sales for non-admin users
@@ -77,14 +82,26 @@ const UserDashboard: React.FC = () => {
         return saleDate >= periodStart && sale.recorded_by === user?.user_id;
       });
 
+      const dailySalesData = allSales.filter((sale: any) => {
+        const saleDate = new Date(sale.date_time);
+        if (sale.sale_type === 'credit') return false;
+        return saleDate >= startOfToday && sale.recorded_by === user?.user_id;
+      });
+
       setSales(periodSalesData);
 
       // Calculate totals
-      const totalSales = periodSalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
-      const totalUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
+      const pSales = periodSalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
+      const pUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
 
-      setTodaySales(totalSales);
-      setTodayUnits(totalUnits);
+      setPeriodSales(pSales);
+      setPeriodUnits(pUnits);
+
+      const tSales = dailySalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
+      const tUnits = dailySalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
+
+      setTodaySales(tSales);
+      setTodayUnits(tUnits);
 
       // Fetch users for the "Served By" field
       const usersResponse = await dataApi.getUsers();
@@ -235,8 +252,20 @@ const UserDashboard: React.FC = () => {
         <p className="text-sm sm:text-base text-blue-100 mt-1 truncate">Stall Operator Dashboard - {new Date().toLocaleDateString()}</p>
       </div>
 
-      {/* Today's Performance */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+      {/* Performance Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-yellow-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-3xl">🌅</span>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
+              <p className="text-2xl font-bold text-yellow-600">{formatCurrency(todaySales)}</p>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-green-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -244,7 +273,7 @@ const UserDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(todaySales)}</p>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(periodSales)}</p>
             </div>
           </div>
         </div>
@@ -255,8 +284,8 @@ const UserDashboard: React.FC = () => {
               <span className="text-3xl">📦</span>
             </div>
             <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Items Sold</h3>
-              <p className="text-2xl font-bold text-blue-600">{todayUnits}</p>
+              <h3 className="text-lg font-medium text-gray-900">Items Sold ({selectedPeriod})</h3>
+              <p className="text-2xl font-bold text-blue-600">{periodUnits}</p>
             </div>
           </div>
         </div>
@@ -275,6 +304,7 @@ const UserDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
 
       {/* Quick Actions */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">

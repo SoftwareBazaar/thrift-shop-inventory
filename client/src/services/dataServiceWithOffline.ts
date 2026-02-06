@@ -284,7 +284,28 @@ export const offlineDataApi = {
   createStall: dataApi.createStall,
   updateStall: dataApi.updateStall,
   deleteStall: dataApi.deleteStall,
-  deleteItem: dataApi.deleteItem
+  deleteItem: dataApi.deleteItem,
+
+  // Delete sale - queue if offline
+  deleteSale: async (saleId: number) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.deleteSale(saleId);
+        await offlineStorage.deleteSale(saleId);
+        return result;
+      } else {
+        // Offline: delete from IndexedDB and queue for sync
+        console.log('[OfflineDataApi] Deleting sale offline, queuing for sync');
+        await offlineStorage.deleteSale(saleId);
+        await syncService.queueOperation('DELETE', 'sales', { sale_id: saleId });
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error deleting sale:', error);
+      throw error;
+    }
+  }
 };
+
 
 export default offlineDataApi;

@@ -1025,6 +1025,37 @@ export const dbApi = {
     }
   },
 
+  deleteSale: async (saleId: number) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).deleteSale(saleId);
+    }
+
+    try {
+      console.log(`[Delete Sale] Deleting sale ID: ${saleId}`);
+
+      // Explicitly delete from credit_sales first if it exists
+      // though CASCADE should handle it if set up in DB
+      await (supabase as any)
+        .from('credit_sales')
+        .delete()
+        .eq('sale_id', saleId);
+
+      const { error } = await (supabase as any)
+        .from('sales')
+        .delete()
+        .eq('sale_id', saleId);
+
+      if (error) throw error;
+
+      console.log(`[Delete Sale] Successfully deleted sale ID: ${saleId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting sale:', error);
+      throw error;
+    }
+  },
+
+
   // Stalls
   getStalls: async () => {
     if (!isSupabaseConfigured()) {

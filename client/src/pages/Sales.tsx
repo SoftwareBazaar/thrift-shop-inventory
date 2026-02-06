@@ -191,6 +191,20 @@ const Sales: React.FC = () => {
     });
   };
 
+  const handleDelete = async (saleId: number) => {
+    if (user?.role !== 'admin') return;
+    if (!window.confirm('Are you sure you want to delete this sale? This will restore the item stock.')) return;
+
+    try {
+      await dataApi.deleteSale(saleId);
+      await fetchSales();
+      await fetchItems(); // Refresh items to show updated stock
+    } catch (error) {
+      console.error('Error deleting sale:', error);
+      alert('Failed to delete sale');
+    }
+  };
+
   const openEditModal = (sale: Sale) => {
     if (user?.role !== 'admin') return;
     setEditError('');
@@ -697,6 +711,12 @@ const Sales: React.FC = () => {
                         className="text-sm font-semibold hover:underline"
                       >
                         Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(sale.sale_id)}
+                        className="text-sm font-semibold text-red-600 hover:text-red-800 hover:underline ml-3"
+                      >
+                        Delete
                       </button>
                     </td>
                   )}

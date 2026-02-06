@@ -841,5 +841,28 @@ export const mockApi = {
     };
     distributions.push(newDistribution);
     setStorageData('stock_distributions', distributions);
+  },
+
+  deleteSale: async (saleId: number): Promise<{ success: boolean }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const sales = getStorageData<Sale[]>('sales', mockSales);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+
+    const saleToDelete = sales.find(s => s.sale_id === saleId);
+    if (!saleToDelete) {
+      throw new Error('Sale not found');
+    }
+
+    // Restore item stock
+    const item = items.find(i => i.item_id === saleToDelete.item_id);
+    if (item) {
+      item.current_stock += saleToDelete.quantity_sold;
+    }
+
+    const filteredSales = sales.filter(s => s.sale_id !== saleId);
+    setStorageData('sales', filteredSales);
+    setStorageData('items', items);
+
+    return { success: true };
   }
 };

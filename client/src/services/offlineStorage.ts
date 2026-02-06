@@ -153,6 +153,26 @@ class OfflineStorageService {
     });
   }
 
+  // Delete sale from offline storage
+  async deleteSale(saleId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['sales'], 'readwrite');
+      const store = transaction.objectStore('sales');
+      const request = store.delete(saleId);
+
+      request.onsuccess = () => {
+        console.log('[OfflineStorage] Sale deleted:', saleId);
+        resolve();
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  }
+
   // Add operation to offline queue
   async queueOperation(operation: OfflineOperation): Promise<void> {
     if (!this.db) await this.init();
