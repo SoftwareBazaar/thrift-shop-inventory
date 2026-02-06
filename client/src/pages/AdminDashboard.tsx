@@ -419,21 +419,21 @@ const AdminDashboard: React.FC = () => {
                 className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
                 title="Performance Report"
               >
-                📊 Performance
+                Performance
               </button>
               <button
                 onClick={() => downloadReport('pdf', 'inventory')}
                 className="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
                 title="Stock Inventory"
               >
-                📋 Inventory
+                Inventory
               </button>
               <button
                 onClick={() => downloadReport('pdf', 'sales')}
                 className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
                 title="Sales Transactions"
               >
-                💰 Sales
+                Sales
               </button>
             </div>
             <button
@@ -441,7 +441,7 @@ const AdminDashboard: React.FC = () => {
               className="bg-green-500 hover:bg-green-600 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap hidden sm:block"
               title="Performance Excel"
             >
-              📊 Excel
+              Excel
             </button>
           </div>
         </div>
@@ -449,79 +449,47 @@ const AdminDashboard: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-yellow-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-xl">🌅</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
-              <p className="text-xl font-bold text-yellow-600 leading-tight">
-                {formatCurrency(todaySales)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-xl">💰</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
-              <p className="text-xl font-bold text-blue-600 leading-tight break-words">
-                {formatCurrency(analytics?.totalRevenue || 0)}
-              </p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+            <p className="text-xl font-bold text-yellow-600 truncate">
+              {formatCurrency(todaySales)}
+            </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-xl">📦</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
-                Units Sold
-              </h3>
-              <p className="text-xs text-gray-500 leading-tight whitespace-normal">
-                Physical items moved
-              </p>
-              <p className="text-xl font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
+            <p className="text-xl font-bold text-blue-600 truncate">
+              {formatCurrency(analytics?.totalRevenue || 0)}
+            </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-indigo-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-xl">🏬</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
-                Total Value of the Stock
-              </h3>
-              <p className="text-sm font-semibold text-indigo-600 break-words">
-                {formatCurrency(totalStockValue)}
-              </p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
+            <p className="text-xl font-bold text-purple-600 truncate">{analytics?.totalUnits || 0}</p>
+            <p className="text-xs text-gray-400 mt-1">Physical items moved</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-orange-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-xl">💹</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900 whitespace-normal leading-tight">
-                Gross Profit
-              </h3>
-              <p className={`text-xl font-bold break-words ${profitTone}`}>
-                {formatCurrency(grossProfit)}
-              </p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
+            <p className="text-lg font-bold text-indigo-600 truncate">
+              {formatCurrency(totalStockValue)}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
+            <p className={`text-xl font-bold truncate ${profitTone}`}>
+              {formatCurrency(grossProfit)}
+            </p>
           </div>
         </div>
       </div>

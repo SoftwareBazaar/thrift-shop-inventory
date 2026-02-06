@@ -254,54 +254,34 @@ const UserDashboard: React.FC = () => {
 
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-yellow-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-3xl">🌅</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Today's Sales</h3>
-              <p className="text-2xl font-bold text-yellow-600">{formatCurrency(todaySales)}</p>
-              <p className="text-sm text-gray-500">{todayUnits} units sold today</p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+            <p className="text-xl font-bold text-yellow-600 truncate">{formatCurrency(todaySales)}</p>
+            <p className="text-xs text-gray-500 mt-1">{todayUnits} units sold today</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-green-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-3xl">💰</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(periodSales)}</p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-green-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
+            <p className="text-xl font-bold text-green-600 truncate">{formatCurrency(periodSales)}</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-3xl">📦</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Items Sold ({selectedPeriod})</h3>
-              <p className="text-2xl font-bold text-blue-600">{periodUnits}</p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Items Sold ({selectedPeriod})</h3>
+            <p className="text-xl font-bold text-blue-600 truncate">{periodUnits}</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-3xl">🏪</span>
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Available Items</h3>
-              <p className="text-2xl font-bold text-purple-600">
-                {items.reduce((sum, item) => sum + (item.current_stock || 0), 0)}
-              </p>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Available Items</h3>
+            <p className="text-xl font-bold text-purple-600 truncate">
+              {items.reduce((sum, item) => sum + (item.current_stock || 0), 0)}
+            </p>
           </div>
         </div>
       </div>
@@ -315,7 +295,7 @@ const UserDashboard: React.FC = () => {
             onClick={() => setShowSaleForm(true)}
             className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base"
           >
-            💰 Record New Sale
+            Record New Sale
           </button>
           <button
             onClick={fetchDashboardData}
