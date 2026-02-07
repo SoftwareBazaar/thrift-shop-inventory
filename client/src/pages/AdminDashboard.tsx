@@ -463,7 +463,7 @@ const AdminDashboard: React.FC = () => {
               {formatCurrency(todaySales)}
             </p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-30 pointer-events-none">
+          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
             📅
           </div>
         </div>
@@ -475,7 +475,7 @@ const AdminDashboard: React.FC = () => {
               {formatCurrency(analytics?.totalRevenue || 0)}
             </p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-30 pointer-events-none">
+          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
             💰
           </div>
         </div>
@@ -486,7 +486,7 @@ const AdminDashboard: React.FC = () => {
             <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
             <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-30 pointer-events-none">
+          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
             📦
           </div>
         </div>
@@ -498,7 +498,7 @@ const AdminDashboard: React.FC = () => {
               {formatCurrency(totalStockValue)}
             </p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-30 pointer-events-none">
+          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
             🏦
           </div>
         </div>
@@ -510,7 +510,7 @@ const AdminDashboard: React.FC = () => {
               {formatCurrency(grossProfit)}
             </p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-30 pointer-events-none">
+          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
             📈
           </div>
         </div>
