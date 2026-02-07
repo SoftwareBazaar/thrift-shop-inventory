@@ -42,22 +42,10 @@ interface Analytics {
 const AdminDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [stalls, setStalls] = useState<Stall[]>([]);
-  const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
-  const [showEditSaleModal, setShowEditSaleModal] = useState(false);
-  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [editSaleData, setEditSaleData] = useState({
-    quantity_sold: '',
-    unit_price: '',
-    total_amount: '',
-    sale_type: 'cash' as 'cash' | 'credit' | 'mobile' | 'split',
-    cash_amount: '',
-    mobile_amount: '',
-    recorded_by: ''
-  });
   const [users, setUsers] = useState<any[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -92,7 +80,6 @@ const AdminDashboard: React.FC = () => {
       });
 
       setAllSales(sortedSales);
-      setRecentSales(sortedSales.slice(0, 10));
 
       // Filter sales based on selected period
       const now = new Date();
@@ -211,16 +198,7 @@ const AdminDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchAdminData, selectedPeriod, startDate, endDate]);
 
-  const handleDeleteSale = async (saleId: number) => {
-    if (!window.confirm('Are you sure you want to delete this sale? This will restore the item stock.')) return;
-    try {
-      await dataApi.deleteSale(saleId);
-      await fetchAdminData();
-    } catch (error) {
-      console.error('Error deleting sale:', error);
-      alert('Failed to delete sale');
-    }
-  };
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -613,179 +591,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
 
-      {/* Edit Sale Modal */}
-      {showEditSaleModal && selectedSale && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Sale</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const updateData: any = {
-                  quantity_sold: parseInt(editSaleData.quantity_sold),
-                  unit_price: parseFloat(editSaleData.unit_price),
-                  total_amount: parseFloat(editSaleData.total_amount),
-                  sale_type: editSaleData.sale_type,
-                  recorded_by: parseInt(editSaleData.recorded_by)
-                };
 
-                if (editSaleData.sale_type === 'split') {
-                  updateData.cash_amount = parseFloat(editSaleData.cash_amount);
-                  updateData.mobile_amount = parseFloat(editSaleData.mobile_amount);
-                }
-
-                await dataApi.updateSale(selectedSale.sale_id, updateData);
-                setShowEditSaleModal(false);
-                fetchAdminData();
-                alert('Sale updated successfully!');
-              } catch (error: any) {
-                alert(error.message || 'Failed to update sale');
-              }
-            }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item</label>
-                <input
-                  type="text"
-                  value={selectedSale.item_name}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Sold *</label>
-                <input
-                  type="number"
-                  value={editSaleData.quantity_sold}
-                  onChange={(e) => {
-                    const qty = parseInt(e.target.value) || 0;
-                    const price = parseFloat(editSaleData.unit_price) || 0;
-                    setEditSaleData(prev => ({
-                      ...prev,
-                      quantity_sold: e.target.value,
-                      total_amount: (qty * price).toString()
-                    }));
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="1"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES) *</label>
-                <input
-                  type="number"
-                  value={editSaleData.unit_price}
-                  onChange={(e) => {
-                    const qty = parseInt(editSaleData.quantity_sold) || 0;
-                    const price = parseFloat(e.target.value) || 0;
-                    setEditSaleData(prev => ({
-                      ...prev,
-                      unit_price: e.target.value,
-                      total_amount: (qty * price).toString()
-                    }));
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0.01"
-                  step="0.01"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (KES) *</label>
-                <input
-                  type="number"
-                  value={editSaleData.total_amount}
-                  onChange={(e) => setEditSaleData(prev => ({ ...prev, total_amount: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="0.01"
-                  step="0.01"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sale Type *</label>
-                <select
-                  value={editSaleData.sale_type}
-                  onChange={(e) => setEditSaleData(prev => ({ ...prev, sale_type: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mobile">Mobile</option>
-                  <option value="credit">Credit</option>
-                  <option value="split">Split (Cash + Mobile)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Recorded By *</label>
-                <select
-                  value={editSaleData.recorded_by}
-                  onChange={(e) => setEditSaleData(prev => ({ ...prev, recorded_by: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select a user...</option>
-                  {users.map((user) => (
-                    <option key={user.user_id} value={user.user_id}>
-                      {user.full_name} ({user.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {editSaleData.sale_type === 'split' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cash Amount (KES) *</label>
-                    <input
-                      type="number"
-                      value={editSaleData.cash_amount}
-                      onChange={(e) => setEditSaleData(prev => ({ ...prev, cash_amount: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0.01"
-                      step="0.01"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Amount (KES) *</label>
-                    <input
-                      type="number"
-                      value={editSaleData.mobile_amount}
-                      onChange={(e) => setEditSaleData(prev => ({ ...prev, mobile_amount: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0.01"
-                      step="0.01"
-                      required
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowEditSaleModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-                >
-                  Update Sale
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
