@@ -84,6 +84,8 @@ const AdminDashboard: React.FC = () => {
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       let filteredSales = allSales;
+      let runningTotalEnd = new Date(); // Default to now for relative filters
+
       if (selectedPeriod === 'today') {
         filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
       } else if (selectedPeriod === 'week') {
@@ -106,6 +108,7 @@ const AdminDashboard: React.FC = () => {
           const saleDate = new Date(sale.date_time);
           return saleDate >= start && saleDate <= end;
         });
+        runningTotalEnd = end;
       }
 
       // Calculate total revenue from filtered sales
@@ -113,9 +116,12 @@ const AdminDashboard: React.FC = () => {
         return sum + (sale.total_amount || 0);
       }, 0);
 
-      // Calculate cumulative revenue from ALL sales
+      // Calculate cumulative revenue (Running Total up to end of selected period)
       const cumulativeRevenue = allSales.reduce((sum: number, sale: any) => {
-        return sum + (sale.total_amount || 0);
+        if (new Date(sale.date_time) <= runningTotalEnd) {
+          return sum + (sale.total_amount || 0);
+        }
+        return sum;
       }, 0);
 
       // Stock Value = Total stock value in monetary terms
