@@ -29,6 +29,7 @@ interface Sale {
 
 interface Analytics {
   totalRevenue: number;
+  cumulativeRevenue: number;
   totalSales: number;
   totalUnits: number;
   averageSale: number;
@@ -127,6 +128,11 @@ const AdminDashboard: React.FC = () => {
         return sum + (sale.total_amount || 0);
       }, 0);
 
+      // Calculate cumulative revenue from ALL sales
+      const cumulativeRevenue = allSales.reduce((sum: number, sale: any) => {
+        return sum + (sale.total_amount || 0);
+      }, 0);
+
       // Stock Value = Total stock value in monetary terms
       // (calculated in the render section)
 
@@ -170,6 +176,7 @@ const AdminDashboard: React.FC = () => {
       // Use analytics data
       const analyticsData: Analytics = {
         totalRevenue: totalRevenue,
+        cumulativeRevenue: cumulativeRevenue,
         totalSales: filteredSales.length,
         totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0),
         averageSale: filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0,
@@ -449,62 +456,62 @@ const AdminDashboard: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
-        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-              <p className="text-lg font-bold text-yellow-600 leading-tight">
-                {formatCurrency(todaySales)}
-              </p>
-            </div>
-            <span className="text-2xl" role="img" aria-label="today sales">📅</span>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500 relative overflow-hidden">
+          <div className="flex flex-col relative z-10">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+            <p className="text-lg font-bold text-yellow-600 leading-tight">
+              {formatCurrency(todaySales)}
+            </p>
+          </div>
+          <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
+            📅
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
-              <p className="text-lg font-bold text-blue-600 leading-tight">
-                {formatCurrency(analytics?.totalRevenue || 0)}
-              </p>
-            </div>
-            <span className="text-2xl" role="img" aria-label="total revenue">💰</span>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
+          <div className="flex flex-col relative z-10">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
+            <p className="text-lg font-bold text-blue-600 leading-tight">
+              {formatCurrency(analytics?.cumulativeRevenue || 0)}
+            </p>
+          </div>
+          <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
+            💰
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
-              <p className="text-lg font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
-              <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
-            </div>
-            <span className="text-2xl" role="img" aria-label="units sold">📦</span>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
+          <div className="flex flex-col relative z-10">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
+            <p className="text-lg font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
+          </div>
+          <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
+            📦
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
-              <p className="text-base font-bold text-indigo-600">
-                {formatCurrency(totalStockValue)}
-              </p>
-            </div>
-            <span className="text-2xl" role="img" aria-label="stock value">🏦</span>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500 relative overflow-hidden">
+          <div className="flex flex-col relative z-10">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
+            <p className="text-base font-bold text-indigo-600">
+              {formatCurrency(totalStockValue)}
+            </p>
+          </div>
+          <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
+            🏦
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
-              <p className={`text-lg font-bold ${profitTone}`}>
-                {formatCurrency(grossProfit)}
-              </p>
-            </div>
-            <span className="text-2xl" role="img" aria-label="gross profit">📈</span>
+        <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
+          <div className="flex flex-col relative z-10">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
+            <p className={`text-lg font-bold ${profitTone}`}>
+              {formatCurrency(grossProfit)}
+            </p>
+          </div>
+          <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
+            📈
           </div>
         </div>
       </div>
