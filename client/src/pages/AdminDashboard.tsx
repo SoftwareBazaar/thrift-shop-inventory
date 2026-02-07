@@ -46,16 +46,14 @@ const AdminDashboard: React.FC = () => {
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
-  const [users, setUsers] = useState<any[]>([]);
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [todaySales, setTodaySales] = useState(0);
 
   const fetchAdminData = useCallback(async () => {
     try {
-      // Fetch users for "Recorded By" dropdown
-      const usersResponse = await dataApi.getUsers();
-      setUsers(usersResponse.users || []);
+
 
       // Fetch stalls
       const stallsResponse = await dataApi.getStalls();
