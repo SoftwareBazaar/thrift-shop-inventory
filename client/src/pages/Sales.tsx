@@ -187,7 +187,8 @@ const Sales: React.FC = () => {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Africa/Nairobi'
     });
   };
 
@@ -353,78 +354,6 @@ const Sales: React.FC = () => {
         </div>
       </div>
 
-      {/* Sales Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <span className="text-xl">💰</span>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-600">Total Sales</p>
-              <p className="text-lg font-semibold text-gray-900">{filteredSales.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <span className="text-xl">💵</span>
-            </div>
-            <div className="ml-3 flex-1 min-w-0">
-              <p className="text-sm text-gray-600">Total Revenue</p>
-              <p className="text-sm sm:text-base font-semibold text-gray-900 break-words">
-                {formatCurrency(filteredSales.reduce((sum, sale) => sum + sale.total_amount, 0))}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <span className="text-xl">🛒</span>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-600">Cash Sales</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {filteredSales.filter(sale => sale.sale_type === 'cash').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <span className="text-xl">📱</span>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-600">Mobile Sales</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {filteredSales.filter(sale => sale.sale_type === 'mobile').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {user?.role === 'admin' && (
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="flex items-center">
-              <div className="p-2 bg-red-100 rounded-lg">
-                <span className="text-xl">💳</span>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-gray-600">Credit Sales</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {filteredSales.filter(sale => sale.sale_type === 'credit').length}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* User Sales Summary */}
       {user?.role === 'admin' && (
@@ -644,7 +573,7 @@ const Sales: React.FC = () => {
                   Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
+                  Stall Name
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Recorded By
@@ -692,14 +621,7 @@ const Sales: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {sale.customer_name ? (
-                      <div>
-                        <div className="font-medium">{sale.customer_name}</div>
-                        <div className="text-gray-500">{sale.customer_contact}</div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
+                    {sale.stall_name || <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.recorded_by_name}

@@ -479,7 +479,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
             <p className="text-lg font-bold text-blue-600 leading-tight break-words">
-              {formatCurrency(analytics?.totalRevenue || 0)}
+              {formatCurrency(analytics?.cumulativeRevenue || 0)}
             </p>
           </div>
           <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
@@ -612,92 +612,6 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Sales */}
-      <div className="bg-white rounded-lg shadow-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Recent Sales Activity</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stall</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {recentSales.map((sale) => (
-                <tr key={sale.sale_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {sale.item_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {sale.quantity_sold}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(sale.total_amount)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${sale.sale_type === 'cash'
-                      ? 'bg-green-100 text-green-800'
-                      : sale.sale_type === 'mobile'
-                        ? 'bg-purple-100 text-purple-800'
-                        : sale.sale_type === 'split'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                      {sale.sale_type === 'split'
-                        ? `Cash: ${sale.cash_amount ? formatCurrency(sale.cash_amount) : 'N/A'}, Mobile: ${sale.mobile_amount ? formatCurrency(sale.mobile_amount) : 'N/A'}`
-                        : sale.sale_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {sale.recorded_by_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {sale.stall_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(sale.date_time).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setSelectedSale(sale);
-                        setEditSaleData({
-                          quantity_sold: sale.quantity_sold.toString(),
-                          unit_price: sale.unit_price.toString(),
-                          total_amount: sale.total_amount.toString(),
-                          sale_type: sale.sale_type as 'cash' | 'credit' | 'mobile' | 'split',
-                          cash_amount: sale.cash_amount?.toString() || '',
-                          mobile_amount: sale.mobile_amount?.toString() || '',
-                          recorded_by: sale.recorded_by.toString()
-                        });
-                        setShowEditSaleModal(true);
-                      }}
-                      className="text-purple-600 hover:text-purple-900"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSale(sale.sale_id)}
-                      className="ml-3 text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {/* Edit Sale Modal */}
       {showEditSaleModal && selectedSale && (

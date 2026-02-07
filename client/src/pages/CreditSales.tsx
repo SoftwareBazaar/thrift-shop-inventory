@@ -43,7 +43,8 @@ const CreditSales: React.FC = () => {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Africa/Nairobi'
     });
   };
 
@@ -68,8 +69,8 @@ const CreditSales: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Credit Sales Management</h1>
-          <p style={{color: 'var(--neutral-600)'}}>View and manage credit sales transactions</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Credit Sales Management</h1>
+          <p style={{ color: 'var(--neutral-600)' }}>View and manage credit sales transactions</p>
         </div>
         <button
           onClick={() => navigate('/sales')}
@@ -229,8 +230,8 @@ const CreditSales: React.FC = () => {
                   payment_status: editData.payment_status,
                   balance_due: editData.balance_due
                 });
-                const updatedSales = creditSales.map(sale => 
-                  sale.sale_id === editingSale.sale_id 
+                const updatedSales = creditSales.map(sale =>
+                  sale.sale_id === editingSale.sale_id
                     ? { ...sale, payment_status: editData.payment_status, balance_due: editData.balance_due }
                     : sale
                 );
@@ -281,7 +282,7 @@ const CreditSales: React.FC = () => {
                   type="button"
                   onClick={() => { setShowEditModal(false); setEditingSale(null); }}
                   className="px-4 py-2 hover:opacity-70"
-                  style={{color: 'var(--neutral-600)'}}
+                  style={{ color: 'var(--neutral-600)' }}
                 >
                   Cancel
                 </button>
