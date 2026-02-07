@@ -255,33 +255,45 @@ const UserDashboard: React.FC = () => {
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
-          <div className="flex flex-col">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-            <p className="text-lg font-bold text-yellow-600">{formatCurrency(todaySales)}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">{todayUnits} units sold today</p>
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+              <p className="text-lg font-bold text-yellow-600">{formatCurrency(todaySales)}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">{todayUnits} units sold today</p>
+            </div>
+            <span className="text-2xl" role="img" aria-label="today sales">📅</span>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-green-500">
-          <div className="flex flex-col">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(periodSales)}</p>
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">{selectedPeriod === 'week' ? 'Weekly' : 'Monthly'} Sales</h3>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(periodSales)}</p>
+            </div>
+            <span className="text-2xl" role="img" aria-label="period sales">💰</span>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
-          <div className="flex flex-col">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Items Sold ({selectedPeriod})</h3>
-            <p className="text-lg font-bold text-blue-600">{periodUnits}</p>
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Items Sold ({selectedPeriod})</h3>
+              <p className="text-lg font-bold text-blue-600">{periodUnits}</p>
+            </div>
+            <span className="text-2xl" role="img" aria-label="items sold">📦</span>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
-          <div className="flex flex-col">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Items</h3>
-            <p className="text-lg font-bold text-purple-600">
-              {items.reduce((sum, item) => sum + (item.current_stock || 0), 0)}
-            </p>
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Items</h3>
+              <p className="text-lg font-bold text-purple-600">
+                {items.reduce((sum, item) => sum + (item.current_stock || 0), 0)}
+              </p>
+            </div>
+            <span className="text-2xl" role="img" aria-label="available items">🏗️</span>
           </div>
         </div>
       </div>
