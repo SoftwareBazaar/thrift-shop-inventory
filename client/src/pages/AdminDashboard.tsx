@@ -399,23 +399,23 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             {selectedPeriod === 'custom' && (
-              <div className="flex flex-wrap items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
+              <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border-2 border-white shadow-md">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-blue-700 uppercase">From:</label>
+                  <label className="text-xs font-bold text-gray-700 uppercase">From:</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="px-2 py-1 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-gray-900"
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-blue-700 uppercase">To:</label>
+                  <label className="text-xs font-bold text-gray-700 uppercase">To:</label>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="px-2 py-1 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-gray-900"
                   />
                 </div>
               </div>
@@ -457,9 +457,9 @@ const AdminDashboard: React.FC = () => {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10">
+          <div className="flex flex-col relative z-10 pr-8">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-            <p className="text-lg font-bold text-yellow-600 leading-tight">
+            <p className="text-lg font-bold text-yellow-600 leading-tight break-words">
               {formatCurrency(todaySales)}
             </p>
           </div>
@@ -469,11 +469,12 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10">
+          <div className="flex flex-col relative z-10 pr-8">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
-            <p className="text-lg font-bold text-blue-600 leading-tight">
+            <p className="text-lg font-bold text-blue-600 leading-tight break-words">
               {formatCurrency(analytics?.cumulativeRevenue || 0)}
             </p>
+            <p className="text-[9px] text-gray-400 mt-0.5">All-time cumulative</p>
           </div>
           <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
             💰
@@ -481,9 +482,9 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10">
+          <div className="flex flex-col relative z-10 pr-8">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
-            <p className="text-lg font-bold text-purple-600">{analytics?.totalUnits || 0}</p>
+            <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
             <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
           </div>
           <div className="absolute right-2 bottom-2 text-3xl opacity-10 pointer-events-none">
@@ -492,9 +493,9 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10">
+          <div className="flex flex-col relative z-10 pr-8">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
-            <p className="text-base font-bold text-indigo-600">
+            <p className="text-base font-bold text-indigo-600 break-words">
               {formatCurrency(totalStockValue)}
             </p>
           </div>
@@ -504,9 +505,9 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10">
+          <div className="flex flex-col relative z-10 pr-8">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
-            <p className={`text-lg font-bold ${profitTone}`}>
+            <p className={`text-lg font-bold ${profitTone} break-words`}>
               {formatCurrency(grossProfit)}
             </p>
           </div>
