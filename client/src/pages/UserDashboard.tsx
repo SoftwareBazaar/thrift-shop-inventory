@@ -41,7 +41,6 @@ const UserDashboard: React.FC = () => {
   const [customerName, setCustomerName] = useState('');
   const [cashAmount, setCashAmount] = useState('');
   const [mobileAmount, setMobileAmount] = useState('');
-  const [periodSales, setPeriodSales] = useState(0);
   const [periodUnits, setPeriodUnits] = useState(0);
   const [todaySales, setTodaySales] = useState(0);
   const [todayUnits, setTodayUnits] = useState(0);
@@ -92,10 +91,8 @@ const UserDashboard: React.FC = () => {
       setSales(periodSalesData);
 
       // Calculate totals
-      const pSales = periodSalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
       const pUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
 
-      setPeriodSales(pSales);
       setPeriodUnits(pUnits);
 
       const tSales = dailySalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
