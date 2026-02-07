@@ -463,8 +463,15 @@ const AdminDashboard: React.FC = () => {
               {formatCurrency(todaySales)}
             </p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
-            📅
+          <div className="absolute right-2 bottom-2 opacity-20 pointer-events-none">
+            <div className="flex flex-col items-center bg-white border-2 border-gray-300 rounded-lg shadow-sm" style={{ width: '48px' }}>
+              <div className="bg-red-500 text-white text-[8px] font-bold py-0.5 w-full text-center rounded-t">
+                {new Date().toLocaleString('en', { month: 'short' }).toUpperCase()}
+              </div>
+              <div className="text-2xl font-bold text-gray-800 py-1">
+                {new Date().getDate()}
+              </div>
+            </div>
           </div>
         </div>
 
