@@ -604,12 +604,14 @@ const Inventory: React.FC = () => {
 
                 return (
                   <React.Fragment key={item.item_id}>
-                    <tr className={`hover:bg-gray-50 ${isExpanded ? 'bg-blue-50/30' : ''}`}>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                    <tr
+                      onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
+                      className={`hover:bg-blue-50/40 cursor-pointer transition-all group ${isExpanded ? 'bg-blue-50/50 shadow-inner' : ''}`}
+                    >
+                      <td className="px-4 py-4 whitespace-nowrap text-center">
                         <button
                           type="button"
-                          onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition-all ${isExpanded ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition-all shadow-sm ${isExpanded ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 group-hover:bg-blue-200 group-hover:text-blue-700'}`}
                         >
                           {index + 1}
                         </button>
@@ -681,54 +683,62 @@ const Inventory: React.FC = () => {
                       )}
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => {
-                              setSelectedItem(item);
-                              setDistributionData({
-                                item_id: item.item_id,
-                                distributions: [],
-                                notes: ''
-                              });
-                              setShowDistributeModal(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            Distribute
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedItem(item);
-                              setAddStockQuantity('');
-                              setShowAddStockModal(true);
-                            }}
-                            className="text-green-600 hover:text-green-900 mr-3"
-                          >
-                            Add Stock
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedItem(item);
-                              setEditFormData({
-                                item_name: item.item_name,
-                                category: item.category,
-                                unit_price: item.unit_price.toString(),
-                                initial_stock: item.initial_stock.toString(),
-                                total_added: item.total_added.toString(),
-                                current_stock: item.current_stock.toString()
-                              });
-                              setShowEditModal(true);
-                            }}
-                            className="text-purple-600 hover:text-purple-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(item.item_id, item.item_name)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Remove item"
-                          >
-                            🗑️ Remove
-                          </button>
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                                setDistributionData({
+                                  item_id: item.item_id,
+                                  distributions: [],
+                                  notes: ''
+                                });
+                                setShowDistributeModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Distribute
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                                setAddStockQuantity('');
+                                setShowAddStockModal(true);
+                              }}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              Add Stock
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                                setEditFormData({
+                                  item_name: item.item_name,
+                                  category: item.category,
+                                  unit_price: item.unit_price.toString(),
+                                  initial_stock: item.initial_stock.toString(),
+                                  total_added: item.total_added.toString(),
+                                  current_stock: item.current_stock.toString()
+                                });
+                                setShowEditModal(true);
+                              }}
+                              className="text-purple-600 hover:text-purple-900"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteItem(item.item_id, item.item_name);
+                              }}
+                              className="text-red-600 hover:text-red-900"
+                              title="Remove item"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -756,7 +766,7 @@ const Inventory: React.FC = () => {
                                   {distributedLive}
                                 </div>
                                 <p className="mt-1 text-xs text-blue-700">
-                                  Stock currently with Kelvin, Manuel and other stalls
+                                  Stock currently with stalls
                                 </p>
                               </div>
                               <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
@@ -816,48 +826,54 @@ const Inventory: React.FC = () => {
                             {user?.role === 'admin' && (
                               <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
                                 <div className="flex justify-between items-center mb-4">
-                                  <h4 className="text-sm font-semibold text-gray-900">Distribution History</h4>
+                                  <h4 className="text-lg font-bold text-gray-900">Distribution History</h4>
                                   {isRefreshingDist && <span className="text-xs text-blue-500 animate-pulse">Refreshing...</span>}
                                 </div>
 
                                 {itemDistributions.length > 0 ? (
                                   <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
-                                      <thead className="bg-gray-50">
+                                      <thead className="bg-[#f0f9ff]">
                                         <tr>
-                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
-                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">To Stall</th>
-                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Quantity</th>
-                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Actions</th>
+                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
+                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Destination Stall</th>
+                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty</th>
+                                          <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-200">
                                         {itemDistributions.map((dist) => (
-                                          <tr key={dist.distribution_id} className="text-xs">
-                                            <td className="px-3 py-2 whitespace-nowrap text-gray-600">
-                                              {new Date(dist.date_distributed).toLocaleDateString()}
+                                          <tr key={dist.distribution_id} className="text-sm hover:bg-blue-50/30 transition-colors">
+                                            <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
+                                              {new Date(dist.date_distributed).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                             </td>
-                                            <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                                            <td className="px-3 py-3 whitespace-nowrap font-bold text-indigo-900">
                                               {dist.stall_name}
                                             </td>
-                                            <td className="px-3 py-2 whitespace-nowrap text-gray-900 font-bold">
-                                              {dist.quantity_allocated}
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                              <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-black">
+                                                {dist.quantity_allocated}
+                                              </span>
                                             </td>
-                                            <td className="px-3 py-2 whitespace-nowrap text-right">
+                                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
                                               <button
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
                                                   setEditingDist(dist);
                                                   setEditDistQty(dist.quantity_allocated.toString());
                                                   setEditDistStallId(dist.stall_id.toString());
                                                   setShowEditDistModal(true);
                                                 }}
-                                                className="text-blue-600 hover:text-blue-800 mr-3"
+                                                className="bg-blue-50 text-blue-700 px-3 py-1 rounded-md hover:bg-blue-600 hover:text-white transition-all mr-2 border border-blue-200"
                                               >
                                                 Edit
                                               </button>
                                               <button
-                                                onClick={() => handleDeleteDist(dist)}
-                                                className="text-red-600 hover:text-red-800"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteDist(dist);
+                                                }}
+                                                className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
                                               >
                                                 Delete
                                               </button>
@@ -868,7 +884,7 @@ const Inventory: React.FC = () => {
                                     </table>
                                   </div>
                                 ) : (
-                                  <p className="text-xs text-gray-500 italic">No distribution records found for this item.</p>
+                                  <p className="text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg">No distribution records found for this item.</p>
                                 )}
                               </div>
                             )}
@@ -884,32 +900,33 @@ const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {filteredItems.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <div className="text-gray-400 text-6xl mb-4">📦</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {loading ? 'Loading items...' : searchTerm || selectedCategory || showLowStock ? 'No items match your filters' : 'No items found'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm || selectedCategory || showLowStock
-              ? 'Try adjusting your search or filter criteria'
-              : user?.role === 'admin'
-                ? 'Start by adding items to your inventory'
-                : `No items have been distributed to your stall yet (Stall ID: ${user?.stall_id || 'N/A'})`}
-          </p>
-          <div className="text-xs text-gray-400 mt-2">
-            User: {user?.username} | Role: {user?.role} | Mode: {navigator.onLine ? 'Online' : 'Offline'}
+      {
+        filteredItems.length === 0 && (
+          <div className="text-center py-12 bg-white rounded-lg shadow">
+            <div className="text-gray-400 text-6xl mb-4">📦</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {loading ? 'Loading items...' : searchTerm || selectedCategory || showLowStock ? 'No items match your filters' : 'No items found'}
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {searchTerm || selectedCategory || showLowStock
+                ? 'Try adjusting your search or filter criteria'
+                : user?.role === 'admin'
+                  ? 'Start by adding items to your inventory'
+                  : `No items have been distributed to your stall yet (Stall ID: ${user?.stall_id || 'N/A'})`}
+            </p>
+            <div className="text-xs text-gray-400 mt-2">
+              User: {user?.username} | Role: {user?.role} | Mode: {navigator.onLine ? 'Online' : 'Offline'}
+            </div>
+            {user?.role === 'admin' && !searchTerm && !selectedCategory && !showLowStock && (
+              <button
+                onClick={() => navigate('/add-item')}
+                className="btn-primary mt-4"
+              >
+                ➕ Add Your First Item
+              </button>
+            )}
           </div>
-          {user?.role === 'admin' && !searchTerm && !selectedCategory && !showLowStock && (
-            <button
-              onClick={() => navigate('/add-item')}
-              className="btn-primary mt-4"
-            >
-              ➕ Add Your First Item
-            </button>
-          )}
-        </div>
-      )
+        )
       }
 
       {/* Stock Distribution Modal */}
@@ -988,7 +1005,7 @@ const Inventory: React.FC = () => {
                           onChange={(e) => updateDistribution(index, 'quantity', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           min="1"
-                          max={selectedItem.current_stock}
+                          max={selectedItem?.current_stock || 0}
                           required
                           placeholder="Qty"
                         />
@@ -1227,62 +1244,64 @@ const Inventory: React.FC = () => {
         )
       }
       {/* Edit Distribution Modal */}
-      {showEditDistModal && editingDist && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Distribution</h3>
-            <form onSubmit={handleEditDistSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stall *</label>
-                <select
-                  value={editDistStallId}
-                  onChange={(e) => setEditDistStallId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select a stall</option>
-                  {stalls.map((stall) => (
-                    <option key={stall.stall_id} value={stall.stall_id}>
-                      {stall.stall_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {
+        showEditDistModal && editingDist && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Distribution</h3>
+              <form onSubmit={handleEditDistSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stall *</label>
+                  <select
+                    value={editDistStallId}
+                    onChange={(e) => setEditDistStallId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select a stall</option>
+                    {stalls.map((stall) => (
+                      <option key={stall.stall_id} value={stall.stall_id}>
+                        {stall.stall_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
-                <input
-                  type="number"
-                  value={editDistQty}
-                  onChange={(e) => setEditDistQty(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min="1"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                  <input
+                    type="number"
+                    value={editDistQty}
+                    onChange={(e) => setEditDistQty(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="1"
+                    required
+                  />
+                </div>
 
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditDistModal(false);
-                    setEditingDist(null);
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditDistModal(false);
+                      setEditingDist(null);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div >
   );
 };
