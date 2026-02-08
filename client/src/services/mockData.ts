@@ -843,6 +843,93 @@ export const mockApi = {
     setStorageData('stock_distributions', distributions);
   },
 
+  getDistributions: async (itemId?: number): Promise<{ distributions: any[] }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const stalls = getStorageData<Stall[]>('stalls', mockStalls);
+    const users = getStorageData<User[]>('users', mockUsers);
+
+    let filteredDist = itemId
+      ? distributions.filter(d => d.item_id === itemId)
+      : distributions;
+
+    const enrichedDist = filteredDist.map(d => {
+      const stall = stalls.find(s => s.stall_id === d.stall_id);
+      const user = users.find(u => u.user_id === d.distributed_by);
+      return {
+        ...d,
+        stall_name: stall ? stall.stall_name : 'Unknown Stall',
+        distributed_by_name: user ? user.full_name : 'Unknown Admin'
+      };
+    });
+
+    return { distributions: enrichedDist.sort((a, b) => new Date(b.date_distributed).getTime() - new Date(a.date_distributed).getTime()) };
+  },
+
+  updateDistribution: async (distributionId: number, quantity: number, stallId: number): Promise<{ distribution: any }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+
+    const distIndex = distributions.findIndex(d => d.distribution_id === distributionId);
+    if (distIndex === -1) throw new Error('Distribution not found');
+
+    const dist = distributions[distIndex];
+    const itemId = dist.item_id;
+    const oldQty = dist.quantity_allocated;
+    const qtyDiff = quantity - oldQty;
+
+    const item = items.find(i => i.item_id === itemId);
+    if (!item) throw new Error('Item not found');
+
+    if (qtyDiff > item.current_stock) {
+      throw new Error(`Insufficient stock! Available: ${item.current_stock}, Requested additional: ${qtyDiff}`);
+    }
+
+    // Update item stock
+    item.current_stock -= qtyDiff;
+    item.total_allocated += qtyDiff;
+
+    // Update distribution
+    distributions[distIndex] = {
+      ...dist,
+      quantity_allocated: quantity,
+      stall_id: stallId,
+      date_distributed: new Date().toISOString()
+    };
+
+    setStorageData('items', items);
+    setStorageData('stock_distributions', distributions);
+
+    return { distribution: distributions[distIndex] };
+  },
+
+  deleteDistribution: async (distributionId: number): Promise<{ success: boolean }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+
+    const distIndex = distributions.findIndex(d => d.distribution_id === distributionId);
+    if (distIndex === -1) throw new Error('Distribution not found');
+
+    const dist = distributions[distIndex];
+    const itemId = dist.item_id;
+    const qty = dist.quantity_allocated;
+
+    const item = items.find(i => i.item_id === itemId);
+    if (item) {
+      item.current_stock += qty;
+      item.total_allocated -= qty;
+    }
+
+    const filteredDist = distributions.filter(d => d.distribution_id !== distributionId);
+
+    setStorageData('items', items);
+    setStorageData('stock_distributions', filteredDist);
+
+    return { success: true };
+  },
+
   deleteSale: async (saleId: number): Promise<{ success: boolean }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);

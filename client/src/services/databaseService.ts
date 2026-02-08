@@ -773,6 +773,161 @@ export const dbApi = {
     }
   },
 
+  getDistributions: async (itemId?: number) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).getDistributions(itemId);
+    }
+
+    try {
+      let query = (supabase as any)
+        .from('stock_distribution')
+        .select(`
+          *,
+          stalls:stall_id(stall_name),
+          users:distributed_by(full_name)
+        `);
+
+      if (itemId) {
+        query = query.eq('item_id', itemId);
+      }
+
+      const { data, error } = await query.order('date_distributed', { ascending: false });
+
+      if (error) throw error;
+
+      const distributions = (data || []).map((dist: any) => ({
+        ...dist,
+        stall_name: dist.stalls?.stall_name || 'Unknown',
+        distributed_by_name: dist.users?.full_name || 'Unknown'
+      }));
+
+      return { distributions };
+    } catch (error) {
+      console.error('Error fetching distributions:', error);
+      throw error;
+    }
+  },
+
+  updateDistribution: async (distributionId: number, quantity: number, stallId: number) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).updateDistribution(distributionId, quantity, stallId);
+    }
+
+    try {
+      // 1. Get the existing distribution to know the difference
+      const { data: existingDist, error: fetchError } = await (supabase as any)
+        .from('stock_distribution')
+        .select('*')
+        .eq('distribution_id', distributionId)
+        .single();
+
+      if (fetchError || !existingDist) throw new Error('Distribution not found');
+
+      const itemId = existingDist.item_id;
+      const oldQuantity = existingDist.quantity_allocated;
+      const quantityDiff = quantity - oldQuantity;
+
+      // 2. Get current item stock to ensure we have enough
+      const { data: itemRecord, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('current_stock, total_allocated')
+        .eq('item_id', itemId)
+        .single();
+
+      if (itemError || !itemRecord) throw new Error('Item not found');
+
+      if (quantityDiff > itemRecord.current_stock) {
+        throw new Error(`Insufficient stock! Available: ${itemRecord.current_stock}, Requested additional: ${quantityDiff}`);
+      }
+
+      // 3. Update distribution
+      const { data, error: updateDistError } = await (supabase as any)
+        .from('stock_distribution')
+        .update({
+          quantity_allocated: quantity,
+          stall_id: stallId,
+          date_distributed: new Date().toISOString() // Update date to reflect edit
+        })
+        .eq('distribution_id', distributionId)
+        .select()
+        .single();
+
+      if (updateDistError) throw updateDistError;
+
+      // 4. Sync item stock
+      const newCurrentStock = Math.max(0, itemRecord.current_stock - quantityDiff);
+      const newTotalAllocated = (itemRecord.total_allocated || 0) + quantityDiff;
+
+      const { error: updateItemError } = await (supabase as any)
+        .from('items')
+        .update({
+          current_stock: newCurrentStock,
+          total_allocated: newTotalAllocated
+        })
+        .eq('item_id', itemId);
+
+      if (updateItemError) throw updateItemError;
+
+      return { distribution: data };
+    } catch (error) {
+      console.error('Error updating distribution:', error);
+      throw error;
+    }
+  },
+
+  deleteDistribution: async (distributionId: number) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).deleteDistribution(distributionId);
+    }
+
+    try {
+      // 1. Get the existing distribution
+      const { data: existingDist, error: fetchError } = await (supabase as any)
+        .from('stock_distribution')
+        .select('*')
+        .eq('distribution_id', distributionId)
+        .single();
+
+      if (fetchError || !existingDist) throw new Error('Distribution not found');
+
+      const itemId = existingDist.item_id;
+      const quantity = existingDist.quantity_allocated;
+
+      // 2. Delete the distribution
+      const { error: deleteError } = await (supabase as any)
+        .from('stock_distribution')
+        .delete()
+        .eq('distribution_id', distributionId);
+
+      if (deleteError) throw deleteError;
+
+      // 3. Return stock to item
+      const { data: itemRecord, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('current_stock, total_allocated')
+        .eq('item_id', itemId)
+        .single();
+
+      if (!itemError && itemRecord) {
+        const newCurrentStock = (itemRecord.current_stock || 0) + quantity;
+        const newTotalAllocated = Math.max(0, (itemRecord.total_allocated || 0) - quantity);
+
+        await (supabase as any)
+          .from('items')
+          .update({
+            current_stock: newCurrentStock,
+            total_allocated: newTotalAllocated
+          })
+          .eq('item_id', itemId);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting distribution:', error);
+      throw error;
+    }
+  },
+
   // Sales
   getSales: async () => {
     if (!isSupabaseConfigured()) {

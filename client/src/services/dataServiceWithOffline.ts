@@ -285,6 +285,9 @@ export const offlineDataApi = {
   updateStall: dataApi.updateStall,
   deleteStall: dataApi.deleteStall,
   deleteItem: dataApi.deleteItem,
+  getDistributions: dataApi.getDistributions,
+  updateDistribution: dataApi.updateDistribution,
+  deleteDistribution: dataApi.deleteDistribution,
 
   // Delete sale - queue if offline
   deleteSale: async (saleId: number) => {

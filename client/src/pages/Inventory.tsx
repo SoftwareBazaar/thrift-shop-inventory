@@ -56,6 +56,12 @@ const Inventory: React.FC = () => {
   });
   const [addStockQuantity, setAddStockQuantity] = useState('');
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+  const [itemDistributions, setItemDistributions] = useState<any[]>([]);
+  const [showEditDistModal, setShowEditDistModal] = useState(false);
+  const [editingDist, setEditingDist] = useState<any>(null);
+  const [editDistQty, setEditDistQty] = useState('');
+  const [editDistStallId, setEditDistStallId] = useState<string>('');
+  const [isRefreshingDist, setIsRefreshingDist] = useState(false);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -100,6 +106,27 @@ const Inventory: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [fetchItems, fetchSales]);
+
+  const fetchItemDistributions = useCallback(async (itemId: number) => {
+    if (user?.role !== 'admin') return;
+    setIsRefreshingDist(true);
+    try {
+      const response = await dataApi.getDistributions(itemId);
+      setItemDistributions(response.distributions || []);
+    } catch (error) {
+      console.error('Error fetching distributions:', error);
+    } finally {
+      setIsRefreshingDist(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (expandedItemId) {
+      fetchItemDistributions(expandedItemId);
+    } else {
+      setItemDistributions([]);
+    }
+  }, [expandedItemId, fetchItemDistributions]);
 
   const fetchCategories = async () => {
     try {
@@ -201,6 +228,50 @@ const Inventory: React.FC = () => {
         i === index ? { ...dist, [field]: value } : dist
       )
     }));
+  };
+
+  const handleEditDistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDist) return;
+
+    const quantity = parseInt(editDistQty);
+    const stallId = parseInt(editDistStallId);
+
+    if (isNaN(quantity) || quantity <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    if (isNaN(stallId)) {
+      alert('Please select a stall');
+      return;
+    }
+
+    try {
+      await dataApi.updateDistribution(editingDist.distribution_id, quantity, stallId);
+      setShowEditDistModal(false);
+      setEditingDist(null);
+      fetchItems(); // Refresh inventory
+      if (expandedItemId) fetchItemDistributions(expandedItemId); // Refresh distribution list
+      alert('Distribution updated successfully!');
+    } catch (error: any) {
+      alert(error.message || 'Failed to update distribution');
+    }
+  };
+
+  const handleDeleteDist = async (dist: any) => {
+    if (!window.confirm(`Are you sure you want to delete this distribution?\n\n${dist.quantity_allocated} items will be returned to the central hub.`)) {
+      return;
+    }
+
+    try {
+      await dataApi.deleteDistribution(dist.distribution_id);
+      fetchItems(); // Refresh inventory
+      if (expandedItemId) fetchItemDistributions(expandedItemId); // Refresh distribution list
+      alert('Distribution deleted and stock returned to hub.');
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete distribution');
+    }
   };
 
   const handleAddStockSubmit = async (e: React.FormEvent) => {
@@ -741,6 +812,66 @@ const Inventory: React.FC = () => {
                                 </div>
                               </div>
                             </div>
+
+                            {user?.role === 'admin' && (
+                              <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-sm font-semibold text-gray-900">Distribution History</h4>
+                                  {isRefreshingDist && <span className="text-xs text-blue-500 animate-pulse">Refreshing...</span>}
+                                </div>
+
+                                {itemDistributions.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
+                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">To Stall</th>
+                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Quantity</th>
+                                          <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-200">
+                                        {itemDistributions.map((dist) => (
+                                          <tr key={dist.distribution_id} className="text-xs">
+                                            <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                                              {new Date(dist.date_distributed).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                                              {dist.stall_name}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-gray-900 font-bold">
+                                              {dist.quantity_allocated}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-right">
+                                              <button
+                                                onClick={() => {
+                                                  setEditingDist(dist);
+                                                  setEditDistQty(dist.quantity_allocated.toString());
+                                                  setEditDistStallId(dist.stall_id.toString());
+                                                  setShowEditDistModal(true);
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 mr-3"
+                                              >
+                                                Edit
+                                              </button>
+                                              <button
+                                                onClick={() => handleDeleteDist(dist)}
+                                                className="text-red-600 hover:text-red-800"
+                                              >
+                                                Delete
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-gray-500 italic">No distribution records found for this item.</p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1095,6 +1226,63 @@ const Inventory: React.FC = () => {
           </div>
         )
       }
+      {/* Edit Distribution Modal */}
+      {showEditDistModal && editingDist && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Distribution</h3>
+            <form onSubmit={handleEditDistSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stall *</label>
+                <select
+                  value={editDistStallId}
+                  onChange={(e) => setEditDistStallId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select a stall</option>
+                  {stalls.map((stall) => (
+                    <option key={stall.stall_id} value={stall.stall_id}>
+                      {stall.stall_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                <input
+                  type="number"
+                  value={editDistQty}
+                  onChange={(e) => setEditDistQty(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditDistModal(false);
+                    setEditingDist(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
