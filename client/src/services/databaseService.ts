@@ -576,6 +576,14 @@ export const dbApi = {
         updateData.unit_price = unitPrice;
       }
 
+      if (itemData.buying_price !== undefined) {
+        const buyingPrice = Number(itemData.buying_price);
+        if (!Number.isFinite(buyingPrice) || buyingPrice < 0) {
+          throw new Error('Buying price must be zero or greater.');
+        }
+        updateData.buying_price = buyingPrice;
+      }
+
       if (itemData.initial_stock !== undefined || itemData.total_added !== undefined) {
         const initialStock = itemData.initial_stock !== undefined ? Number(itemData.initial_stock) : Number(existingItem.initial_stock || 0);
         const currentTotalAdded = Number(existingItem.total_added || 0);

@@ -294,22 +294,15 @@ const AdminDashboard: React.FC = () => {
   });
 
   const totalStockValue = items.reduce((sum: number, item: any) => {
-    const sold = itemSoldMap.get(item.item_id) || 0;
+    // Total Value in system = (Initial + Added) * Buying Price
     const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
-    const available = Math.max(0, totalReceived - sold);
-    return sum + (available * (Number(item.unit_price) || 0));
+    return sum + (totalReceived * (Number(item.buying_price) || 0));
   }, 0);
 
 
   const revenue = analytics?.cumulativeRevenue || 0;
-  const totalInvestment = items.reduce((sum: number, item: any) => {
-    // Investment is based on all stock ever added (initial + additions)
-    const totalStockQty = Number(item.initial_stock || 0) + Number(item.total_added || 0);
-    const costPerUnit = Number(item.buying_price || 0);
-    return sum + (totalStockQty * costPerUnit);
-  }, 0);
-
-  const grossProfit = revenue - totalInvestment;
+  // Break-even Profit = Total Revenue - Total Investment in Stock
+  const grossProfit = revenue - totalStockValue;
   const profitTone =
     grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
 

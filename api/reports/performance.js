@@ -73,10 +73,8 @@ module.exports = async (req, res) => {
         const totalUnitsSold = sales.reduce((sum, s) => sum + (Number(s.quantity_sold) || 0), 0);
 
         const totalInvestment = items.reduce((sum, item) => {
-            const initialStock = Number(item.initial_stock) || 0;
-            const price = Number(item.buying_price || item.unit_price) || 0;
-            const totalAdded = additionsMap[item.item_id] || Number(item.total_added) || 0;
-            return sum + ((initialStock + totalAdded) * price);
+            const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
+            return sum + (totalReceived * (Number(item.buying_price) || 0));
         }, 0);
 
         const grossProfit = totalRevenue - totalInvestment;

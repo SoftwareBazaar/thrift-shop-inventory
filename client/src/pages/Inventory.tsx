@@ -45,6 +45,7 @@ const Inventory: React.FC = () => {
     item_name: '',
     category: '',
     unit_price: '',
+    buying_price: '',
     initial_stock: '',
     total_added: '',
     current_stock: ''
@@ -341,6 +342,7 @@ const Inventory: React.FC = () => {
         item_name: editFormData.item_name,
         category: editFormData.category,
         unit_price: unitPrice,
+        buying_price: parseFloat(editFormData.buying_price) || 0,
         initial_stock: initialStock,
         total_added: totalAdded,
         current_stock: currentStock
@@ -575,7 +577,7 @@ const Inventory: React.FC = () => {
                 </th>
                 {user?.role === 'admin' && (
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Unit Price
+                    Buying Price
                   </th>
                 )}
                 {user?.role === 'admin' && (
@@ -673,12 +675,12 @@ const Inventory: React.FC = () => {
                       </td>
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(item.unit_price || 0)}
+                          {formatCurrency(item.buying_price || 0)}
                         </td>
                       )}
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(managedTotal * (item.unit_price || 0))}
+                          {formatCurrency(managedTotal * (item.buying_price || 0))}
                         </td>
                       )}
                       {user?.role === 'admin' && (
@@ -718,6 +720,7 @@ const Inventory: React.FC = () => {
                                   item_name: item.item_name,
                                   category: item.category,
                                   unit_price: item.unit_price.toString(),
+                                  buying_price: (item.buying_price || 0).toString(),
                                   initial_stock: item.initial_stock.toString(),
                                   total_added: item.total_added.toString(),
                                   current_stock: item.current_stock.toString()
@@ -1172,11 +1175,24 @@ const Inventory: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (KES) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (Selling Price) *</label>
                   <input
                     type="number"
                     value={editFormData.unit_price}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, unit_price: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0.01"
+                    step="0.01"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Buying Price (Cost) *</label>
+                  <input
+                    type="number"
+                    value={editFormData.buying_price}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, buying_price: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     min="0.01"
                     step="0.01"
