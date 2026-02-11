@@ -301,7 +301,7 @@ const AdminDashboard: React.FC = () => {
   }, 0);
 
 
-  const revenue = analytics?.totalRevenue || 0;
+  const revenue = analytics?.cumulativeRevenue || 0;
   const totalInvestment = items.reduce((sum: number, item: any) => {
     // Investment is based on all stock ever added (initial + additions)
     const totalStockQty = Number(item.initial_stock || 0) + Number(item.total_added || 0);

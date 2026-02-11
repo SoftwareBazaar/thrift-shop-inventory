@@ -550,7 +550,7 @@ export const dbApi = {
 
       const { data: existingItem, error: fetchError } = await (supabase as any)
         .from('items')
-        .select('item_id, item_name, category, unit_price, initial_stock, total_added, current_stock')
+        .select('item_id, item_name, category, unit_price, initial_stock, total_added, current_stock, total_allocated')
         .eq('item_id', numericItemId)
         .single();
 
@@ -576,52 +576,40 @@ export const dbApi = {
         updateData.unit_price = unitPrice;
       }
 
-      if (itemData.initial_stock !== undefined) {
-        const initialStock = Number(itemData.initial_stock);
-        if (!Number.isFinite(initialStock) || initialStock < 0) {
-          throw new Error('Initial stock must be zero or greater.');
-        }
-        updateData.initial_stock = initialStock;
-      }
-
-      if (itemData.current_stock !== undefined) {
-        const currentStock = Number(itemData.current_stock);
-        if (!Number.isFinite(currentStock) || currentStock < 0) {
-          throw new Error('Current stock cannot be negative.');
-        }
-        updateData.current_stock = currentStock;
-      }
-
-      if (itemData.total_added !== undefined) {
+      if (itemData.initial_stock !== undefined || itemData.total_added !== undefined) {
+        const initialStock = itemData.initial_stock !== undefined ? Number(itemData.initial_stock) : Number(existingItem.initial_stock || 0);
         const currentTotalAdded = Number(existingItem.total_added || 0);
-        const newTotalAdded = Number(itemData.total_added);
-        if (!Number.isFinite(newTotalAdded) || newTotalAdded < currentTotalAdded) {
-          throw new Error('Cannot reduce added stock. Use distributions or edits to adjust stock instead.');
-        }
+        let newTotalAdded = currentTotalAdded;
 
-        const quantityToAdd = newTotalAdded - currentTotalAdded;
-        console.log(`[Update Item] Item ID: ${numericItemId}, currentTotalAdded: ${currentTotalAdded}, newTotalAdded: ${newTotalAdded}, quantityToAdd: ${quantityToAdd}`);
-
-        if (quantityToAdd > 0) {
-          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-          const { error: insertError } = await (supabase as any)
-            .from('stock_additions')
-            .insert([{
-              item_id: numericItemId,
-              quantity_added: quantityToAdd,
-              added_by: currentUser.user_id || 1
-            }]);
-
-          if (insertError) {
-            console.error('Error creating stock_additions record:', insertError);
-            throw new Error(insertError.message || 'Failed to record added stock.');
+        if (itemData.total_added !== undefined) {
+          newTotalAdded = Number(itemData.total_added);
+          if (!Number.isFinite(newTotalAdded)) {
+            throw new Error('Invalid total added value.');
           }
 
-          const newCurrentStock = Number(existingItem.current_stock || 0) + quantityToAdd;
-          updateData.current_stock = newCurrentStock;
+          const quantityToAdd = newTotalAdded - currentTotalAdded;
+          if (quantityToAdd > 0) {
+            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+            const { error: insertError } = await (supabase as any)
+              .from('stock_additions')
+              .insert([{
+                item_id: numericItemId,
+                quantity_added: quantityToAdd,
+                added_by: currentUser.user_id || 1
+              }]);
+
+            if (insertError) {
+              console.error('Error creating stock_additions record:', insertError);
+              throw new Error(insertError.message || 'Failed to record added stock.');
+            }
+          }
+          updateData.total_added = newTotalAdded;
         }
 
-        updateData.total_added = newTotalAdded;
+        // Formula: Current Stock = Initial + Total Added - Total Distributed
+        const totalDistributed = Number(existingItem.total_allocated || 0);
+        const newCurrentStock = Math.max(0, initialStock + newTotalAdded - totalDistributed);
+        updateData.current_stock = newCurrentStock;
       }
 
       if (Object.keys(updateData).length === 0) {

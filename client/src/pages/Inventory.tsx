@@ -575,7 +575,7 @@ const Inventory: React.FC = () => {
                 </th>
                 {user?.role === 'admin' && (
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Buying Price
+                    Unit Price
                   </th>
                 )}
                 {user?.role === 'admin' && (
@@ -673,12 +673,12 @@ const Inventory: React.FC = () => {
                       </td>
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(item.buying_price || 0)}
+                          {formatCurrency(item.unit_price || 0)}
                         </td>
                       )}
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(managedTotal * (item.buying_price || 0))}
+                          {formatCurrency(managedTotal * (item.unit_price || 0))}
                         </td>
                       )}
                       {user?.role === 'admin' && (
