@@ -474,8 +474,19 @@ export const dbApi = {
             0
           ) || 0;
 
-          // Admin Stock (Available in central hub) = Initial + Total Added - Total Distributed - Total Central Sold
-          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalCentralSold);
+          // Sum withdrawal quantities
+          const { data: withdrawals } = await (supabase as any)
+            .from('stock_withdrawals')
+            .select('quantity_withdrawn')
+            .eq('item_id', item.item_id);
+
+          const totalWithdrawn = (withdrawals as any)?.reduce(
+            (sum: number, w: any) => sum + (w.quantity_withdrawn || 0),
+            0
+          ) || 0;
+
+          // Admin Stock (Available in central hub) = Initial + Total Added - Total Distributed - Total Central Sold - Total Withdrawn
+          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalCentralSold - totalWithdrawn);
 
           if (existingCurrentStock !== adminStock) {
             try {
@@ -1219,6 +1230,38 @@ export const dbApi = {
     }
   },
 
+  createWithdrawal: async (withdrawalData: {
+    item_id: number;
+    quantity_withdrawn: number;
+    reason: string;
+    withdrawn_by: number;
+    notes?: string;
+  }) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).createWithdrawal(withdrawalData);
+    }
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from('stock_withdrawals')
+        .insert([{
+          item_id: withdrawalData.item_id,
+          quantity_withdrawn: withdrawalData.quantity_withdrawn,
+          reason: withdrawalData.reason,
+          withdrawn_by: withdrawalData.withdrawn_by,
+          notes: withdrawalData.notes
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { withdrawal: data };
+    } catch (error) {
+      console.error('Error creating withdrawal:', error);
+      throw error;
+    }
+  },
+
 
   // Stalls
   getStalls: async () => {
@@ -1311,4 +1354,3 @@ export const dbApi = {
 
 // Export as default for easy migration
 export default dbApi;
-

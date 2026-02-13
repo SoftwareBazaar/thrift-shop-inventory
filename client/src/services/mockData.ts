@@ -256,6 +256,9 @@ const initStorage = () => {
     if (!localStorage.getItem('thrift_shop_stock_additions')) {
       localStorage.setItem('thrift_shop_stock_additions', JSON.stringify([]));
     }
+    if (!localStorage.getItem('thrift_shop_stock_withdrawals')) {
+      localStorage.setItem('thrift_shop_stock_withdrawals', JSON.stringify([]));
+    }
   } catch (error) {
     console.error('Error initializing storage:', error);
     // Force reset on error
@@ -508,8 +511,13 @@ export const mockApi = {
         .filter(sale => sale.item_id === item.item_id)
         .reduce((sum, sale) => sum + sale.quantity_sold, 0);
 
-      // Admin's remaining stock = initial + added - distributed - sales
-      const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalSold);
+      const withdrawals = getStorageData<any[]>('stock_withdrawals', []);
+      const totalWithdrawn = withdrawals
+        .filter(w => w.item_id === item.item_id)
+        .reduce((sum, w) => sum + w.quantity_withdrawn, 0);
+
+      // Admin's remaining stock = initial + added - distributed - sales - withdrawn
+      const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalSold - totalWithdrawn);
 
       return {
         ...item,
@@ -713,6 +721,36 @@ export const mockApi = {
     setStorageData('items', updatedItems);
 
     return { sale: newSale };
+  },
+
+  createWithdrawal: async (withdrawalParams: {
+    item_id: number;
+    quantity_withdrawn: number;
+    reason: string;
+    withdrawn_by: number;
+    notes?: string;
+  }): Promise<{ withdrawal: any }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const withdrawals = getStorageData<any[]>('stock_withdrawals', []);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+
+    const item = items.find(i => i.item_id === withdrawalParams.item_id);
+    if (!item) throw new Error('Item not found');
+
+    const newWithdrawal = {
+      withdrawal_id: Date.now(),
+      ...withdrawalParams,
+      date_withdrawn: new Date().toISOString()
+    };
+
+    withdrawals.push(newWithdrawal);
+    setStorageData('stock_withdrawals', withdrawals);
+
+    // Update item stock if needed (getInventory usually recalcs but let's be safe)
+    item.current_stock = Math.max(0, item.current_stock - withdrawalParams.quantity_withdrawn);
+    setStorageData('items', items);
+
+    return { withdrawal: newWithdrawal };
   },
 
   updateSale: async (saleId: number, saleData: Partial<Sale>): Promise<{ sale: Sale }> => {

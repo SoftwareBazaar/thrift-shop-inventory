@@ -23,10 +23,10 @@ class SyncService {
     // Listen for online/offline events
     window.addEventListener('online', this.handleOnline.bind(this));
     window.addEventListener('offline', this.handleOffline.bind(this));
-    
+
     // Initialize offline storage
     offlineStorage.init().catch(console.error);
-    
+
     // Start periodic sync check
     this.startPeriodicSync();
   }
@@ -140,6 +140,8 @@ class SyncService {
           await dbApi.createSale(operation.data);
         } else if (operation.table === 'items') {
           await dbApi.createItem(operation.data);
+        } else if (operation.table === 'withdrawals') {
+          await dbApi.createWithdrawal(operation.data);
         }
         break;
 
@@ -182,7 +184,7 @@ class SyncService {
   // Queue an operation for offline sync
   async queueOperation(
     type: 'CREATE' | 'UPDATE' | 'DELETE',
-    table: 'items' | 'sales' | 'distributions',
+    table: 'items' | 'sales' | 'distributions' | 'withdrawals',
     data: any
   ): Promise<void> {
     const operation = {
@@ -195,7 +197,7 @@ class SyncService {
     };
 
     await offlineStorage.queueOperation(operation);
-    
+
     // Update pending count
     const pending = await offlineStorage.getPendingOperations();
     this.updateStatus({ pendingOperations: pending.length });

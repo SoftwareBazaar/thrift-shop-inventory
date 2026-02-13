@@ -66,6 +66,7 @@ const Inventory: React.FC = () => {
   const [editDistQty, setEditDistQty] = useState('');
   const [editDistStallId, setEditDistStallId] = useState<string>('');
   const [isRefreshingDist, setIsRefreshingDist] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -175,6 +176,7 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Validate all distributions first
       const validDistributions = distributionData.distributions
@@ -188,6 +190,7 @@ const Inventory: React.FC = () => {
 
       if (totalDistributed > selectedItem.current_stock) {
         alert(`Total quantity (${totalDistributed}) exceeds available stock (${selectedItem.current_stock})`);
+        setIsSubmitting(false);
         return;
       }
 
@@ -204,10 +207,12 @@ const Inventory: React.FC = () => {
         distributions: [],
         notes: ''
       });
-      fetchItems(); // Refresh items
+      await fetchItems(); // Refresh items
       alert('Stock distributed successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || error.message || 'Failed to distribute stock. Please check available stock.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -251,15 +256,18 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await dataApi.updateDistribution(editingDist.distribution_id, quantity, stallId);
       setShowEditDistModal(false);
       setEditingDist(null);
-      fetchItems(); // Refresh inventory
-      if (expandedItemId) fetchItemDistributions(expandedItemId); // Refresh distribution list
+      await fetchItems(); // Refresh inventory
+      if (expandedItemId) await fetchItemDistributions(expandedItemId); // Refresh distribution list
       alert('Distribution updated successfully!');
     } catch (error: any) {
       alert(error.message || 'Failed to update distribution');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -280,7 +288,7 @@ const Inventory: React.FC = () => {
 
   const handleAddStockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem || !addStockQuantity) return;
+    if (!selectedItem || !addStockQuantity || isSubmitting) return;
 
     const quantityToAdd = parseInt(addStockQuantity);
     if (quantityToAdd <= 0) {
@@ -288,6 +296,7 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Calculate new total_added (current + quantity to add)
       const newTotalAdded = (selectedItem.total_added || 0) + quantityToAdd;
@@ -298,17 +307,19 @@ const Inventory: React.FC = () => {
 
       setShowAddStockModal(false);
       setAddStockQuantity('');
-      fetchItems(); // Refresh items
+      await fetchItems(); // Refresh items
       alert('Stock added successfully!');
     } catch (error: any) {
       console.error('Error adding stock:', error);
       alert(error.response?.data?.message || 'Failed to add stock');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem || !withdrawQuantity || !user) return;
+    if (!selectedItem || !withdrawQuantity || !user || isSubmitting) return;
 
     const quantityToWithdraw = parseInt(withdrawQuantity);
     if (quantityToWithdraw <= 0) {
@@ -321,59 +332,49 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      // Record withdrawal as a 0-price sale from central store (stall_id: null)
-      // This is the most robust way to record stock leaving the system
-      // and ensures the central stock calculation (initial + added - distributed - central_sold)
-      // remains correct even when recalculated from history.
-      await dataApi.createSale({
+      // Use the new withdrawal API instead of createSale
+      await dataApi.createWithdrawal({
         item_id: selectedItem.item_id,
-        stall_id: null, // Central store withdrawal
-        quantity_sold: quantityToWithdraw,
-        unit_price: 0,
-        total_amount: 0,
-        sale_type: 'cash',
-        recorded_by: user.user_id,
-        customer_name: `Owner: ${withdrawReason || 'Withdrawal'}`,
-        notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Handled as stock movement.`
+        quantity_withdrawn: quantityToWithdraw,
+        reason: withdrawReason || 'General withdrawal',
+        withdrawn_by: user.user_id,
+        notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
       });
 
       setShowWithdrawModal(false);
       setWithdrawQuantity('');
       setWithdrawReason('');
-      fetchItems(); // Refresh items
+      await fetchItems(); // Refresh items
       alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) for ${withdrawReason || 'owner use'}`);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
       alert(error.response?.data?.message || '❌ Failed to withdraw stock');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem) return;
+    if (!selectedItem || isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
       const initialStock = parseInt(editFormData.initial_stock);
       const totalAdded = parseInt(editFormData.total_added);
       const currentStock = parseInt(editFormData.current_stock);
 
-      // Calculate current_stock based on initial_stock and total_added
-      // Note: current_stock = initial_stock + total_added - distributed
-      // We'll keep current_stock as is, but update initial_stock and total_added
-
       if (Number.isNaN(initialStock) || initialStock < 0) {
         alert('Initial stock must be zero or greater.');
+        setIsSubmitting(false);
         return;
       }
 
       if (Number.isNaN(totalAdded) || totalAdded < 0) {
         alert('Total added must be zero or greater.');
-        return;
-      }
-
-      if (Number.isNaN(currentStock) || currentStock < 0) {
-        alert('Current stock must be zero or greater.');
+        setIsSubmitting(false);
         return;
       }
 
@@ -381,6 +382,7 @@ const Inventory: React.FC = () => {
 
       if (Number.isNaN(unitPrice) || unitPrice <= 0) {
         alert('Unit price must be greater than zero.');
+        setIsSubmitting(false);
         return;
       }
 
@@ -395,10 +397,12 @@ const Inventory: React.FC = () => {
       });
 
       setShowEditModal(false);
-      fetchItems(); // Refresh items - this will sync to all users
+      await fetchItems(); // Refresh items - this will sync to all users
       alert('Item updated successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to update item');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -413,7 +417,7 @@ const Inventory: React.FC = () => {
 
     try {
       await dataApi.deleteItem(itemId);
-      fetchItems();
+      await fetchItems();
       alert('Item removed from inventory successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || error.message || 'Failed to delete item');
@@ -1121,10 +1125,10 @@ const Inventory: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={selectedItemAvailable === 0 || totalQuantityPendingDistribution === 0}
+                    disabled={selectedItemAvailable === 0 || totalQuantityPendingDistribution === 0 || isSubmitting}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Distribute Stock
+                    {isSubmitting ? 'Distributing...' : 'Distribute Stock'}
                   </button>
                 </div>
               </form>
@@ -1199,9 +1203,10 @@ const Inventory: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                    disabled={isSubmitting}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Add Stock
+                    {isSubmitting ? 'Adding...' : 'Add Stock'}
                   </button>
                 </div>
               </form>
@@ -1314,9 +1319,10 @@ const Inventory: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                    disabled={isSubmitting}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Update Item
+                    {isSubmitting ? 'Updating...' : 'Update Item'}
                   </button>
                 </div>
               </form>
@@ -1373,9 +1379,10 @@ const Inventory: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    disabled={isSubmitting}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Save Changes
+                    {isSubmitting ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </form>
@@ -1448,9 +1455,10 @@ const Inventory: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700"
+                  disabled={isSubmitting}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Confirm Withdrawal
+                  {isSubmitting ? 'Processing...' : 'Confirm Withdrawal'}
                 </button>
               </div>
             </form>

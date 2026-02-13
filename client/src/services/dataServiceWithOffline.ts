@@ -77,16 +77,36 @@ export const offlineDataApi = {
             .filter(s => s.item_id === item.item_id)
             .reduce((sum, s) => sum + s.quantity_sold, 0);
 
-          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed - totalSold);
-
+          const withdrawals = distributions.filter(d => false); // Placeholder or fetch if we had getWithdrawals
+          // For now, let's fetch withdrawals from offline storage if we can
+          // Actually, I should await it here or outside
           return {
             ...item,
-            current_stock: adminStock,
+            current_stock: 0, // Will be updated below
             total_allocated: totalDistributed
           };
         });
 
-        return { items: itemsWithAdminStock };
+        // Actually handle withdrawals correctly in admin stock calculation
+        const offlineWithdrawals = await offlineStorage.getWithdrawals();
+        const itemsWithWithdrawals = itemsWithAdminStock.map(item => {
+          const totalSold = sales
+            .filter(s => s.item_id === item.item_id)
+            .reduce((sum, s) => sum + s.quantity_sold, 0);
+
+          const totalWithdrawn = offlineWithdrawals
+            .filter(w => w.item_id === item.item_id)
+            .reduce((sum, w) => sum + w.quantity_withdrawn, 0);
+
+          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - item.total_allocated - totalSold - totalWithdrawn);
+
+          return {
+            ...item,
+            current_stock: adminStock
+          };
+        });
+
+        return { items: itemsWithWithdrawals };
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting inventory:', error);
@@ -128,7 +148,17 @@ export const offlineDataApi = {
       } else {
         // Offline: update in IndexedDB and queue for sync
         console.log('[OfflineDataApi] Updating item offline, queuing for sync');
-        const updatedItem = { ...itemData, item_id: itemId };
+
+        // Retrieve existing item to ensure we don't lose data (partial update fix)
+        const items = await offlineStorage.getItems();
+        const existingItem = items.find((i: any) => i.item_id === itemId) || {};
+
+        const updatedItem = {
+          ...existingItem,
+          ...itemData,
+          item_id: itemId
+        };
+
         await offlineStorage.saveItem(updatedItem);
         await syncService.queueOperation('UPDATE', 'items', updatedItem);
         return { item: updatedItem };
@@ -271,6 +301,34 @@ export const offlineDataApi = {
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error distributing stock:', error);
+      throw error;
+    }
+  },
+
+  // Create withdrawal - queue if offline
+  createWithdrawal: async (withdrawalData: any) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.createWithdrawal(withdrawalData);
+        if (result && result.withdrawal) {
+          await offlineStorage.saveWithdrawal(result.withdrawal);
+        }
+        return result;
+      } else {
+        // Offline: save to IndexedDB and queue for sync
+        console.log('[OfflineDataApi] Creating withdrawal offline, queuing for sync');
+        const tempId = Date.now();
+        const offlineWithdrawal = {
+          ...withdrawalData,
+          withdrawal_id: tempId,
+          date_withdrawn: new Date().toISOString()
+        };
+        await offlineStorage.saveWithdrawal(offlineWithdrawal);
+        await syncService.queueOperation('CREATE', 'withdrawals', withdrawalData);
+        return { withdrawal: offlineWithdrawal };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error creating withdrawal:', error);
       throw error;
     }
   },

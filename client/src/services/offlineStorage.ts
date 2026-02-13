@@ -7,7 +7,7 @@ const DB_VERSION = 1;
 interface OfflineOperation {
   id: string;
   type: 'CREATE' | 'UPDATE' | 'DELETE';
-  table: 'items' | 'sales' | 'distributions';
+  table: 'items' | 'sales' | 'distributions' | 'withdrawals';
   data: any;
   timestamp: number;
   synced: boolean;
@@ -52,6 +52,12 @@ class OfflineStorageService {
           const distributionsStore = db.createObjectStore('distributions', { keyPath: 'distribution_id', autoIncrement: true });
           distributionsStore.createIndex('item_id', 'item_id', { unique: false });
           distributionsStore.createIndex('stall_id', 'stall_id', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('withdrawals')) {
+          const withdrawalsStore = db.createObjectStore('withdrawals', { keyPath: 'withdrawal_id', autoIncrement: true });
+          withdrawalsStore.createIndex('item_id', 'item_id', { unique: false });
+          withdrawalsStore.createIndex('date_withdrawn', 'date_withdrawn', { unique: false });
         }
 
         if (!db.objectStoreNames.contains('offline_queue')) {
@@ -316,11 +322,51 @@ class OfflineStorageService {
     });
   }
 
+  // Save withdrawal to offline storage
+  async saveWithdrawal(withdrawal: any): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['withdrawals'], 'readwrite');
+      const store = transaction.objectStore('withdrawals');
+      const request = store.put(withdrawal);
+
+      request.onsuccess = () => {
+        console.log('[OfflineStorage] Withdrawal saved:', withdrawal.withdrawal_id);
+        resolve();
+      };
+
+      request.onerror = () => {
+        console.error('[OfflineStorage] Failed to save withdrawal');
+        reject(request.error);
+      };
+    });
+  }
+
+  // Get all withdrawals from offline storage
+  async getWithdrawals(): Promise<any[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['withdrawals'], 'readonly');
+      const store = transaction.objectStore('withdrawals');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  }
+
   // Clear all offline data (for testing/reset)
   async clearAll(): Promise<void> {
     if (!this.db) await this.init();
 
-    const stores = ['items', 'sales', 'distributions', 'offline_queue'];
+    const stores = ['items', 'sales', 'distributions', 'withdrawals', 'offline_queue'];
     const promises = stores.map((storeName) => {
       return new Promise<void>((resolve, reject) => {
         const transaction = this.db!.transaction([storeName], 'readwrite');
