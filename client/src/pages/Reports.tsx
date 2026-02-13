@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { dataApi } from '../services/dataService';
 import {
@@ -34,11 +34,7 @@ const Reports: React.FC = () => {
     ] : [])
   ];
 
-  useEffect(() => {
-    fetchReportData();
-  }, [activeTab, dateRange]);
-
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     setLoading(true);
     try {
       if (activeTab === 'inventory') {
@@ -107,7 +103,11 @@ const Reports: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, dateRange]);
+
+  useEffect(() => {
+    fetchReportData();
+  }, [fetchReportData]);
 
   const handleExportPDF = async (reportName: string) => {
     if (!reportRef.current) return;
@@ -247,8 +247,8 @@ const Reports: React.FC = () => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">Inventory Value Distribution</h3>
                 <div className="flex space-x-2">
-                  <button onClick={() => handleExport('inventory', 'excel')} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm">Export CSV</button>
-                  <button onClick={() => handleExport('inventory', 'pdf')} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Export PDF</button>
+                  <button onClick={() => handleExport('inventory', 'excel')} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export CSV'}</button>
+                  <button onClick={() => handleExport('inventory', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
                 </div>
               </div>
               <div ref={reportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -286,8 +286,8 @@ const Reports: React.FC = () => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">Revenue Trends</h3>
                 <div className="flex space-x-2">
-                  <button onClick={() => handleExport('sales', 'excel')} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm">Export CSV</button>
-                  <button onClick={() => handleExport('sales', 'pdf')} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Export PDF</button>
+                  <button onClick={() => handleExport('sales', 'excel')} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export CSV'}</button>
+                  <button onClick={() => handleExport('sales', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
                 </div>
               </div>
               <div ref={reportRef} className="space-y-6">
@@ -321,7 +321,7 @@ const Reports: React.FC = () => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">Stall Revenue Performance</h3>
                 <div className="flex space-x-2">
-                  <button onClick={() => handleExport('stall-performance', 'pdf')} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Export PDF</button>
+                  <button onClick={() => handleExport('stall-performance', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
                 </div>
               </div>
               <div ref={reportRef} className="h-80 bg-gray-50 rounded-xl p-4">
@@ -343,7 +343,7 @@ const Reports: React.FC = () => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">Top Selling Items</h3>
                 <div className="flex space-x-2">
-                  <button onClick={() => handleExport('top-sellers', 'pdf')} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Export PDF</button>
+                  <button onClick={() => handleExport('top-sellers', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
                 </div>
               </div>
               <div ref={reportRef} className="h-96 bg-gray-50 rounded-xl p-4">
@@ -367,7 +367,7 @@ const Reports: React.FC = () => {
                 <div>
                   <h4 className="text-xl font-bold text-gray-900">System Backup</h4>
                   <p className="text-gray-600 mt-2 max-w-lg">Download a complete snapshot of users, inventory, and sales data as a portable JSON file.</p>
-                  <button onClick={handleBackupAll} className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">Download Backup</button>
+                  <button onClick={handleBackupAll} disabled={loading} className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">{loading ? 'Preparing...' : 'Download Backup'}</button>
                 </div>
               </div>
               <div className="bg-yellow-50 border border-yellow-100 p-6 rounded-2xl">
