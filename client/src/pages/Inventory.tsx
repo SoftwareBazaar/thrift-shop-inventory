@@ -688,10 +688,11 @@ const Inventory: React.FC = () => {
                 const stallSoldForItem = getItemsSold(item.item_id, item.item_name, true);
                 const distributedLive = Math.max(0, (item.total_allocated || 0) - stallSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
-                const managedTotal = centralStock + distributedLive;
+                const totalReceived = (item.initial_stock || 0) + (item.total_added || 0);
+                const managedTotal = totalReceived;
                 const centralPercent = managedTotal > 0 ? Math.round((centralStock / managedTotal) * 100) : 0;
-                const distributedPercent = managedTotal > 0 ? Math.max(0, 100 - centralPercent) : 0;
-                const totalInventory = centralStock + distributedLive + totalSoldForItem;
+                const distributedPercent = managedTotal > 0 ? Math.round(((item.total_allocated || 0) / managedTotal) * 100) : 0;
+                const totalInventory = totalReceived;
                 const isExpanded = expandedItemId === item.item_id;
                 const columnSpan = user?.role === 'admin' ? 8 : 5;
 
@@ -713,8 +714,8 @@ const Inventory: React.FC = () => {
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
                           {user?.role === 'admin' && (
-                            <div className="text-[11px] font-medium text-gray-500 uppercase tracking-tight">
-                              Total in system: {managedTotal}
+                            <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
+                              Total Received: {totalReceived}
                             </div>
                           )}
                         </div>
@@ -889,13 +890,13 @@ const Inventory: React.FC = () => {
                               </div>
                               <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                 <div className="text-xs font-semibold uppercase text-indigo-700">
-                                  Total inventory
+                                  Total Received
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-indigo-900">
-                                  {totalInventory}
+                                  {totalReceived}
                                 </div>
                                 <p className="mt-1 text-xs text-indigo-700">
-                                  Available + distributed + sold
+                                  Initial + Items Added
                                 </p>
                               </div>
                             </div>

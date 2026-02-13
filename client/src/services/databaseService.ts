@@ -573,24 +573,39 @@ export const dbApi = {
             0
           ) || 0;
 
-          // Admin Stock (Available in central hub) = Initial + Total Added - Total Distributed - Total Central Sold - Total Withdrawn
-          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalCentralSold - totalWithdrawn);
+          // Formula: Correct Received = Initial + Sum of additions
+          const totalReceived = initialStock + totalAdded;
 
-          if (existingCurrentStock !== adminStock) {
+          // Admin Stock (Available in central hub) = Total Received - Total Distributed - Total Hub Sales - Total Withdrawn
+          const adminStock = Math.max(0, totalReceived - totalDistributed - totalCentralSold - totalWithdrawn);
+
+          // Update the items table to match reality if it got out of sync
+          if (existingCurrentStock !== adminStock || item.total_added !== totalAdded || item.total_allocated !== totalDistributed) {
+            console.log(`[Admin Stock Sync] Syncing totals for ${item.item_name}: Stock: ${adminStock}, Added: ${totalAdded}, Allocated: ${totalDistributed}`);
             try {
               await (supabase as any)
                 .from('items')
                 .update({
                   current_stock: adminStock,
+                  total_added: totalAdded,
                   total_allocated: totalDistributed
                 })
                 .eq('item_id', item.item_id);
             } catch (updateError) {
-              console.warn('[Admin Stock Calc] Failed to sync current_stock for item', item.item_id, updateError);
+              console.warn(`[Admin Stock Sync] Failed for ${item.item_name}:`, updateError);
             }
           }
 
-          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, totalCentralSold: ${totalCentralSold}, adminStock: ${adminStock}`);
+          console.log(`[Admin Stock Calc] ${item.item_name} breakdown:
+            Initial: ${initialStock}
+            Additions: ${totalAdded}
+            Total Received: ${totalReceived}
+            ---
+            Distributed: ${totalDistributed}
+            Hub Sales: ${totalCentralSold}
+            Withdrawn: ${totalWithdrawn}
+            ---
+            Result Central Stock: ${adminStock}`);
 
           return {
             ...item,
