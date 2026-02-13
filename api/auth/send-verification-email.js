@@ -30,6 +30,7 @@ module.exports = async (req, res) => {
     console.log('📅 Deployed at:', new Date().toISOString());
 
     // Set JSON header (CORS is handled by vercel.json)
+    res.setHeader('Content-Type', 'application/json');
 
     // Handle OPTIONS preflight
     if (req.method === 'OPTIONS') {
