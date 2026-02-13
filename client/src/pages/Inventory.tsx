@@ -408,7 +408,7 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const getItemsSold = (itemId: number, fallbackName: string) => {
+  const getItemsSold = (itemId: number, fallbackName: string, stallOnly: boolean = false) => {
     return salesData
       .filter((sale) => {
         // First filter by item
@@ -418,12 +418,17 @@ const Inventory: React.FC = () => {
 
         if (!matchesItem) return false;
 
+        // If stallOnly is requested, exclude central sales (where stall_id is null)
+        if (stallOnly && (sale.stall_id === null || sale.stall_id === undefined)) {
+          return false;
+        }
+
         // For non-admin users, only show their own sales
         if (user?.role !== 'admin' && user?.user_id) {
           return sale.recorded_by === user.user_id;
         }
 
-        // Admin sees all sales
+        // Admin sees all sales (unless stallOnly is set, which we handled above)
         return true;
       })
       .reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
@@ -595,7 +600,8 @@ const Inventory: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item, index) => {
                 const totalSoldForItem = getItemsSold(item.item_id, item.item_name);
-                const distributedLive = Math.max(0, (item.total_allocated || 0) - totalSoldForItem);
+                const stallSoldForItem = getItemsSold(item.item_id, item.item_name, true);
+                const distributedLive = Math.max(0, (item.total_allocated || 0) - stallSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
                 const managedTotal = centralStock + distributedLive;
                 const centralPercent = managedTotal > 0 ? Math.round((centralStock / managedTotal) * 100) : 0;

@@ -447,7 +447,7 @@ export const dbApi = {
 
           const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0) || 0;
 
-          // Sum sales quantities
+          // Sum distribution quantities
           const { data: itemDistributions, error: distError } = await (supabase as any)
             .from('stock_distribution')
             .select('quantity_allocated')
@@ -462,7 +462,20 @@ export const dbApi = {
             0
           ) || 0;
 
-          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed);
+          // Sum sales quantities (for this item specifically from central hub, where stall_id is null)
+          const { data: centralSales } = await (supabase as any)
+            .from('sales')
+            .select('quantity_sold')
+            .eq('item_id', item.item_id)
+            .is('stall_id', null);
+
+          const totalCentralSold = (centralSales as any)?.reduce(
+            (sum: number, sale: any) => sum + (sale.quantity_sold || 0),
+            0
+          ) || 0;
+
+          // Admin Stock (Available in central hub) = Initial + Total Added - Total Distributed - Total Central Sold
+          const adminStock = Math.max(0, initialStock + totalAdded - totalDistributed - totalCentralSold);
 
           if (existingCurrentStock !== adminStock) {
             try {
@@ -478,7 +491,7 @@ export const dbApi = {
             }
           }
 
-          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, adminStock: ${adminStock}`);
+          console.log(`[Admin Stock Calc] Item: ${item.item_name} (ID: ${item.item_id}), initial_stock: ${initialStock}, totalAdded: ${totalAdded}, totalDistributed: ${totalDistributed}, totalCentralSold: ${totalCentralSold}, adminStock: ${adminStock}`);
 
           return {
             ...item,
