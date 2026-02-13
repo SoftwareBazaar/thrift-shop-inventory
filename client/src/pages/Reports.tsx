@@ -45,7 +45,11 @@ const Reports: React.FC = () => {
           const cat = item.category || 'Other';
           categories[cat] = (categories[cat] || 0) + (item.current_stock * (item.buying_price || 0));
         });
-        setInventoryStats(Object.entries(categories).map(([name, value]) => ({ name, value })));
+        setInventoryStats(
+          Object.entries(categories)
+            .map(([name, value]) => ({ name, value: Number(value) }))
+            .sort((a, b) => b.value - a.value)
+        );
       } else if (activeTab === 'sales') {
         const response = await dataApi.getSales();
         let sales = response.sales || [];
@@ -57,7 +61,9 @@ const Reports: React.FC = () => {
         }
         const dates: any = {};
         sales.forEach((sale: any) => {
-          const date = sale.sale_date.split('T')[0];
+          const rawDate = sale.date_time || sale.sale_date;
+          if (!rawDate) return;
+          const date = rawDate.split('T')[0];
           dates[date] = (dates[date] || 0) + (sale.total_amount || 0);
         });
         setSalesTrends(Object.entries(dates)
@@ -76,9 +82,9 @@ const Reports: React.FC = () => {
         sales.forEach((sale: any) => {
           const stall = sale.stall_name || 'Unknown';
           if (!stalls[stall]) stalls[stall] = { name: stall, revenue: 0 };
-          stalls[stall].revenue += sale.total_amount || 0;
+          stalls[stall].revenue += Number(sale.total_amount) || 0;
         });
-        setStallStatsData(Object.values(stalls));
+        setStallStatsData(Object.values(stalls).sort((a: any, b: any) => b.revenue - a.revenue));
       } else if (activeTab === 'top-sellers') {
         const response = await dataApi.getSales();
         let sales = response.sales || [];
@@ -92,7 +98,7 @@ const Reports: React.FC = () => {
         sales.forEach((sale: any) => {
           const name = sale.item_name || 'Unknown';
           if (!itemsMap[name]) itemsMap[name] = { name, quantity: 0 };
-          itemsMap[name].quantity += sale.quantity || 0;
+          itemsMap[name].quantity += Number(sale.quantity_sold || sale.quantity) || 0;
         });
         setTopSellersData(Object.values(itemsMap)
           .sort((a: any, b: any) => b.quantity - a.quantity)

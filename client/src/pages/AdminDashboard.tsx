@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { dataApi } from '../services/dataService';
 
 interface Stall {
@@ -40,6 +40,7 @@ interface Analytics {
 }
 
 const AdminDashboard: React.FC = () => {
+  const reportRef = useRef<HTMLDivElement>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
@@ -234,43 +235,49 @@ const AdminDashboard: React.FC = () => {
   };
 
   const downloadReport = async (type: 'pdf' | 'excel', endpoint: 'performance' | 'inventory' | 'sales' = 'performance') => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      // Using /api as the default base for reports - this works on Vercel and locally if proxied
-      const apiUrl = process.env.REACT_APP_API_URL || '/api';
+    if (type === 'excel') {
+      // Fallback for Excel if needed, or implement simple CSV export
+      alert('Excel export is currently handled by the Reports page. Please use the Reports tab for CSV/Excel data.');
+      return;
+    }
 
-      const response = await fetch(`${apiUrl}/reports/${endpoint}?format=${type}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          sales: allSales,
-          items: items,
-          // We can also pass analytics if the backend needs pre-calculated values
-          analytics: analytics
-        })
+    if (!reportRef.current) return;
+    setLoading(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f3f4f6'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Failed to generate ${endpoint} report`);
-      }
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${endpoint}-report-${new Date().toISOString().split('T')[0]}.${type === 'pdf' ? 'pdf' : 'xlsx'}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.setFontSize(20);
+      pdf.setTextColor(30, 58, 138); // Navy blue
+      pdf.text(`Street Thrift Apparel - ${endpoint.toUpperCase()} REPORT`, 15, 15);
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139); // Slate gray
+      pdf.text(`Generated on: ${new Date().toLocaleString()}`, 15, 22);
+      pdf.text(`Period: ${selectedPeriod === 'custom' ? `${startDate} to ${endDate}` : selectedPeriod}`, 15, 27);
+
+      pdf.addImage(imgData, 'PNG', 10, 35, pdfWidth - 20, pdfHeight - 20);
+      pdf.save(`${endpoint}_report_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
-      console.error(`Error downloading ${endpoint} report:`, error);
-      alert(error instanceof Error ? error.message : `Failed to download ${endpoint} report. Please ensure the server is running.`);
+      console.error(`Error generating ${endpoint} report:`, error);
+      alert(`❌ Failed to generate ${endpoint} report. Please ensure jspdf and html2canvas are installed.`);
     } finally {
       setLoading(false);
     }
@@ -316,7 +323,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div ref={reportRef} className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="bg-gradient-primary text-white p-4 sm:p-6 rounded-lg">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
