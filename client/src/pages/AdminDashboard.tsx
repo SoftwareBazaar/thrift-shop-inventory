@@ -1,9 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { dataApi } from '../services/dataService';
-import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts';
 
 interface Stall {
   stall_id: number;
@@ -44,16 +40,12 @@ interface Analytics {
 }
 
 const AdminDashboard: React.FC = () => {
-  const reportRef = useRef<HTMLDivElement>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [exportLoading, setExportLoading] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
-
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -61,8 +53,6 @@ const AdminDashboard: React.FC = () => {
 
   const fetchAdminData = useCallback(async () => {
     try {
-
-
       // Fetch stalls
       const stallsResponse = await dataApi.getStalls();
       setStalls(stallsResponse.stalls || []);
@@ -82,7 +72,7 @@ const AdminDashboard: React.FC = () => {
       const sortedSales = [...allSales].sort((a, b) => {
         const dateA = new Date(a.date_time).getTime();
         const dateB = new Date(b.date_time).getTime();
-        return dateB - dateA; // Descending order (newest first)
+        return dateB - dateA;
       });
 
       setAllSales(sortedSales);
@@ -92,7 +82,7 @@ const AdminDashboard: React.FC = () => {
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       let filteredSales = allSales;
-      let runningTotalEnd = new Date(); // Default to now for relative filters
+      let runningTotalEnd = new Date();
 
       if (selectedPeriod === 'today') {
         filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
@@ -119,12 +109,7 @@ const AdminDashboard: React.FC = () => {
         runningTotalEnd = end;
       }
 
-      // Calculate total revenue from filtered sales
-      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => {
-        return sum + (sale.total_amount || 0);
-      }, 0);
-
-      // Calculate cumulative revenue (Running Total up to end of selected period)
+      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0);
       const cumulativeRevenue = allSales.reduce((sum: number, sale: any) => {
         if (new Date(sale.date_time) <= runningTotalEnd) {
           return sum + (sale.total_amount || 0);
@@ -132,10 +117,6 @@ const AdminDashboard: React.FC = () => {
         return sum;
       }, 0);
 
-      // Stock Value = Total stock value in monetary terms
-      // (calculated in the render section)
-
-      // Calculate top selling items from filtered sales
       const itemSalesMap = new Map<string, { total_sold: number; revenue: number }>();
       filteredSales.forEach((sale: any) => {
         const existing = itemSalesMap.get(sale.item_name) || { total_sold: 0, revenue: 0 };
@@ -150,7 +131,6 @@ const AdminDashboard: React.FC = () => {
         .sort((a, b) => b.total_sold - a.total_sold)
         .slice(0, 5);
 
-      // Calculate user performance from filtered sales
       const userSalesMap = new Map<string, { sales: number; revenue: number }>();
       filteredSales.forEach((sale: any) => {
         const userName = sale.recorded_by_name || 'Unknown';
@@ -165,14 +145,6 @@ const AdminDashboard: React.FC = () => {
         .map(([user_name, data]) => ({ user_name, ...data }))
         .sort((a, b) => b.revenue - a.revenue);
 
-      // Calculate commission data
-      const commissionData = userPerformance.map(user => ({
-        user_name: user.user_name,
-        sales: user.sales,
-        commission: user.revenue * 0.05
-      }));
-
-      // Use analytics data
       const analyticsData: Analytics = {
         totalRevenue: totalRevenue,
         cumulativeRevenue: cumulativeRevenue,
@@ -182,15 +154,16 @@ const AdminDashboard: React.FC = () => {
         topSellingItems: topSellingItems,
         userPerformance: userPerformance,
         dailySales: [],
-        commissionData: commissionData
+        commissionData: userPerformance.map(user => ({
+          user_name: user.user_name,
+          sales: user.sales,
+          commission: user.revenue * 0.05
+        }))
       };
 
       setAnalytics(analyticsData);
-
-      // Calculate today's sales specifically
       const todaySalesData = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
-      const totalTodayRevenue = todaySalesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-      setTodaySales(totalTodayRevenue);
+      setTodaySales(todaySalesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0));
 
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -201,16 +174,9 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
-
-    // Auto-refresh every 5 seconds to sync data across all users
-    const interval = setInterval(() => {
-      fetchAdminData();
-    }, 5000);
-
+    const interval = setInterval(() => fetchAdminData(), 5000);
     return () => clearInterval(interval);
-  }, [fetchAdminData, selectedPeriod, startDate, endDate]);
-
-
+  }, [fetchAdminData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -219,12 +185,11 @@ const AdminDashboard: React.FC = () => {
     }).format(amount);
   };
 
-  const getStallSalesSummary = (stallName: string): { revenue: number; count: number; contributors: Array<{ name: string; amount: number }> } => {
+  const getStallSalesSummary = (stallName: string) => {
     const stallSales = allSales.filter(sale => sale.stall_name === stallName);
     const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
     const count = stallSales.length;
 
-    // Get all contributors with their individual contribution amounts
     const contributorMap = new Map<string, number>();
     stallSales.forEach(sale => {
       if (sale.recorded_by_name) {
@@ -233,7 +198,6 @@ const AdminDashboard: React.FC = () => {
       }
     });
 
-    // Convert to array and sort by amount (descending)
     const contributors = Array.from(contributorMap.entries())
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount);
@@ -241,85 +205,15 @@ const AdminDashboard: React.FC = () => {
     return { revenue, count, contributors };
   };
 
-  const downloadReport = async (type: 'pdf' | 'excel', endpoint: 'performance' | 'inventory' | 'sales' = 'performance') => {
-    if (type === 'excel') {
-      // Fallback for Excel if needed, or implement simple CSV export
-      alert('Excel export is currently handled by the Reports page. Please use the Reports tab for CSV/Excel data.');
-      return;
-    }
-
-    if (!reportRef.current) return;
-    setExportLoading(true);
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#f3f4f6',
-        logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-      pdf.setFontSize(20);
-      pdf.setTextColor(30, 58, 138); // Navy blue
-      pdf.text(`Street Thrift Apparel - ${endpoint.toUpperCase()} REPORT`, 15, 15);
-
-      pdf.setFontSize(10);
-      pdf.setTextColor(100, 116, 139); // Slate gray
-      pdf.text(`Generated on: ${new Date().toLocaleString()}`, 15, 22);
-      pdf.text(`Period: ${selectedPeriod === 'custom' ? `${startDate} to ${endDate}` : selectedPeriod}`, 15, 27);
-
-      pdf.addImage(imgData, 'PNG', 10, 35, pdfWidth - 20, pdfHeight - 20);
-      pdf.save(`${endpoint}_report_${new Date().toISOString().split('T')[0]}.pdf`);
-    } catch (error) {
-      console.error(`Error generating ${endpoint} report:`, error);
-      alert(`❌ Failed to generate ${endpoint} report. Please ensure jspdf and html2canvas are installed.`);
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
   const items = inventoryResponse?.items || [];
-  const itemCostMap = new Map<number, number>();
-  items.forEach((item: any) => {
-    if (item?.item_id != null) {
-      itemCostMap.set(item.item_id, Number(item.buying_price) || 0);
-    }
-  });
-
-  // Calculate total units sold per item for accurate system-wide stock tracking
-  const itemSoldMap = new Map<number, number>();
-  allSales.forEach(sale => {
-    if (sale.item_id) {
-      const current = itemSoldMap.get(sale.item_id) || 0;
-      itemSoldMap.set(sale.item_id, current + (sale.quantity_sold || 0));
-    }
-  });
-
   const totalStockValue = items.reduce((sum: number, item: any) => {
-    // Total Value in system = (Initial + Added) * Buying Price
     const totalReceived = (Number(item.initial_stock) || 0) + (Number(item.total_added) || 0);
     return sum + (totalReceived * (Number(item.buying_price) || 0));
   }, 0);
 
-
   const revenue = analytics?.cumulativeRevenue || 0;
-  // Break-even Profit = Total Revenue - Total Investment in Stock
   const grossProfit = revenue - totalStockValue;
-  const profitTone =
-    grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
+  const profitTone = grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
 
   if (loading) {
     return (
@@ -331,7 +225,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div ref={reportRef} className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="bg-gradient-primary text-white p-4 sm:p-6 rounded-lg">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -341,51 +235,18 @@ const AdminDashboard: React.FC = () => {
           </div>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setSelectedPeriod('today')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'today'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('week')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'week'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                This Week
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('month')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'month'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                This Month
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('year')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'year'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                This Year
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('custom')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === 'custom'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                Custom Range
-              </button>
+              {['today', 'week', 'month', 'year', 'custom'].map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setSelectedPeriod(period)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedPeriod === period
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                >
+                  {period.charAt(0).toUpperCase() + period.slice(1).replace('custom', 'Custom Range').replace('week', 'This Week').replace('month', 'This Month').replace('year', 'This Year')}
+                </button>
+              ))}
             </div>
 
             {selectedPeriod === 'custom' && (
@@ -396,7 +257,7 @@ const AdminDashboard: React.FC = () => {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-gray-900"
+                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -405,41 +266,11 @@ const AdminDashboard: React.FC = () => {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-gray-900"
+                    className="px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900"
                   />
                 </div>
               </div>
             )}
-            <div className="flex bg-white/10 rounded-lg p-1 gap-1">
-              <button
-                onClick={() => downloadReport('pdf', 'performance')}
-                className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
-                title="Performance Report"
-              >
-                Performance
-              </button>
-              <button
-                onClick={() => downloadReport('pdf', 'inventory')}
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
-                title="Stock Inventory"
-              >
-                Inventory
-              </button>
-              <button
-                onClick={() => downloadReport('pdf', 'sales')}
-                className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded font-medium text-xs sm:text-sm flex items-center gap-1"
-                title="Sales Transactions"
-              >
-                Sales
-              </button>
-            </div>
-            <button
-              onClick={() => downloadReport('excel', 'performance')}
-              className="bg-green-500 hover:bg-green-600 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base whitespace-nowrap hidden sm:block"
-              title="Performance Excel"
-            >
-              Excel
-            </button>
           </div>
         </div>
       </div>
@@ -449,18 +280,14 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500 relative overflow-hidden">
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-            <p className="text-lg font-bold text-yellow-600 leading-tight break-words">
-              {formatCurrency(todaySales)}
-            </p>
+            <p className="text-lg font-bold text-yellow-600 break-words">{formatCurrency(todaySales)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 opacity-100 pointer-events-none">
-            <div className="flex flex-col items-center bg-white border-2 border-gray-300 rounded-lg shadow-sm" style={{ width: '48px' }}>
-              <div className="bg-red-500 text-white text-[8px] font-bold py-0.5 w-full text-center rounded-t">
+          <div className="absolute right-2 bottom-2">
+            <div className="flex flex-col items-center bg-white border border-gray-200 rounded-lg shadow-sm" style={{ width: '40px' }}>
+              <div className="bg-red-500 text-white text-[7px] font-bold py-0.5 w-full text-center rounded-t">
                 {new Date().toLocaleString('en', { month: 'short' }).toUpperCase()}
               </div>
-              <div className="text-2xl font-bold text-gray-800 py-1">
-                {new Date().getDate()}
-              </div>
+              <div className="text-xl font-bold text-gray-800 py-1">{new Date().getDate()}</div>
             </div>
           </div>
         </div>
@@ -468,136 +295,82 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
-            <p className="text-lg font-bold text-blue-600 leading-tight break-words">
-              {formatCurrency(analytics?.cumulativeRevenue || 0)}
-            </p>
+            <p className="text-lg font-bold text-blue-600 break-words">{formatCurrency(analytics?.cumulativeRevenue || 0)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
-            💰
-          </div>
+          <div className="absolute right-2 bottom-2 text-4xl opacity-10">💰</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
             <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Physical items moved</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
-            📦
-          </div>
+          <div className="absolute right-2 bottom-2 text-4xl opacity-10">📦</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500 relative overflow-hidden">
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
-            <p className="text-base font-bold text-indigo-600 break-words">
-              {formatCurrency(totalStockValue)}
-            </p>
+            <p className="text-base font-bold text-indigo-600 break-words">{formatCurrency(totalStockValue)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
-            🏦
-          </div>
+          <div className="absolute right-2 bottom-2 text-4xl opacity-10">🏦</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
           <div className="flex flex-col relative z-10 pr-10">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
-            <p className={`text-lg font-bold ${profitTone} break-words`}>
-              {formatCurrency(grossProfit)}
-            </p>
+            <p className={`text-lg font-bold ${profitTone} break-words`}>{formatCurrency(grossProfit)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-100 pointer-events-none">
-            📈
-          </div>
+          <div className="absolute right-2 bottom-2 text-4xl opacity-10">📈</div>
         </div>
       </div>
 
-      {/* User Performance & Commission */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h2 className="text-xl font-bold text-gray-900">User Performance</h2>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {analytics?.userPerformance.map((user, index) => (
-                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{user.user_name}</h3>
-                      <p className="text-sm text-gray-600">{user.sales} sales</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
-                    </div>
+            <div className="space-y-3">
+              {analytics?.userPerformance.map((user, index) => (
+                <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{user.user_name}</h3>
+                    <p className="text-xs text-gray-500">{user.sales} sales recorded</p>
                   </div>
-                ))}
-              </div>
-              <div className="h-64 bg-gray-50 rounded-xl p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={analytics?.userPerformance.map(u => ({ name: u.user_name, value: u.revenue }))}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={70}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {analytics?.userPerformance.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: any) => formatCurrency(v)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+                  <div className="text-right">
+                    <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h2 className="text-xl font-bold text-gray-900">Top Selling Items</h2>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {analytics?.topSellingItems.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{item.item_name}</h3>
-                      <p className="text-sm text-gray-600">{item.total_sold} units sold</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-blue-600">{formatCurrency(item.revenue)}</p>
-                    </div>
+            <div className="space-y-3">
+              {analytics?.topSellingItems.map((item, index) => (
+                <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{item.item_name}</h3>
+                    <p className="text-xs text-gray-500">{item.total_sold} units sold</p>
                   </div>
-                ))}
-              </div>
-              <div className="h-64 bg-gray-50 rounded-xl p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics?.topSellingItems.map(i => ({ name: i.item_name, quantity: i.total_sold }))}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" fontSize={10} interval={0} />
-                    <YAxis fontSize={10} />
-                    <Tooltip />
-                    <Bar dataKey="quantity" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                  <div className="text-right">
+                    <p className="font-bold text-blue-600">{formatCurrency(item.revenue)}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stalls Management */}
-      <div className="bg-white rounded-lg shadow-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-xl font-bold text-gray-900">Stalls Overview</h2>
         </div>
         <div className="p-6">
@@ -605,51 +378,40 @@ const AdminDashboard: React.FC = () => {
             {stalls.map((stall) => {
               const summary = getStallSalesSummary(stall.stall_name);
               return (
-                <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900">{stall.stall_name}</h3>
-                  <p className="text-sm text-gray-600">Manager: {stall.manager}</p>
-                  <p className="text-sm text-gray-600">Location: {stall.location}</p>
-                  <div className="mt-2 pt-2 border-t border-gray-300">
-                    <p className="text-xs text-gray-600">Sales: {summary.count}</p>
-                    <p className="text-sm font-semibold text-blue-600">{formatCurrency(summary.revenue)}</p>
+                <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-gray-900">{stall.stall_name}</h3>
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${stall.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {stall.status}
+                    </span>
+                  </div>
+                  <div className="space-y-1 mb-3">
+                    <p className="text-xs text-gray-600 flex items-center gap-1">👤 <span className="font-medium">{stall.manager}</span></p>
+                    <p className="text-xs text-gray-600 flex items-center gap-1">📍 <span>{stall.location}</span></p>
+                  </div>
+                  <div className="pt-3 border-t border-gray-200">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Recent Sales</span>
+                      <span>{summary.count} items</span>
+                    </div>
+                    <p className="text-lg font-bold text-blue-600 mb-2">{formatCurrency(summary.revenue)}</p>
                     {summary.contributors.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500">Contributors:</p>
-                        <div className="flex flex-col gap-1 mt-1">
-                          {summary.contributors.map((contributor, idx: number) => (
-                            <div key={idx} className="flex justify-between items-center text-xs bg-blue-50 border border-blue-200 px-2 py-1 rounded">
-                              <span className="font-medium text-blue-900">{contributor.name}</span>
-                              <span className="text-blue-700 font-semibold">{formatCurrency(contributor.amount)}</span>
-                            </div>
-                          ))}
-                        </div>
+                      <div className="space-y-1">
+                        {summary.contributors.slice(0, 3).map((contributor, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-[10px] bg-white border border-gray-100 px-2 py-1 rounded">
+                            <span className="text-gray-700">{contributor.name}</span>
+                            <span className="font-bold text-gray-900">{formatCurrency(contributor.amount)}</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${stall.status === 'active'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                    }`}>
-                    {stall.status}
-                  </span>
                 </div>
               );
             })}
           </div>
         </div>
       </div>
-
-
-
-      {/* Export Loading Overlay */}
-      {exportLoading && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[100] flex items-center justify-center">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl flex items-center space-x-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="font-bold text-gray-900">Generating Professional Report...</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
