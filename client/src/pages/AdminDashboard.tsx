@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { dataApi } from '../services/dataService';
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
 
 interface Stall {
   stall_id: number;
@@ -46,7 +50,10 @@ const AdminDashboard: React.FC = () => {
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -242,7 +249,7 @@ const AdminDashboard: React.FC = () => {
     }
 
     if (!reportRef.current) return;
-    setLoading(true);
+    setExportLoading(true);
     try {
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
@@ -250,7 +257,8 @@ const AdminDashboard: React.FC = () => {
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#f3f4f6'
+        backgroundColor: '#f3f4f6',
+        logging: false
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -279,7 +287,7 @@ const AdminDashboard: React.FC = () => {
       console.error(`Error generating ${endpoint} report:`, error);
       alert(`❌ Failed to generate ${endpoint} report. Please ensure jspdf and html2canvas are installed.`);
     } finally {
-      setLoading(false);
+      setExportLoading(false);
     }
   };
 
@@ -512,18 +520,42 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-900">User Performance</h2>
           </div>
           <div className="p-6">
-            <div className="space-y-4">
-              {analytics?.userPerformance.map((user, index) => (
-                <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{user.user_name}</h3>
-                    <p className="text-sm text-gray-600">{user.sales} sales</p>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                {analytics?.userPerformance.map((user, index) => (
+                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">{user.user_name}</h3>
+                      <p className="text-sm text-gray-600">{user.sales} sales</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-green-600">{formatCurrency(user.revenue)}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="h-64 bg-gray-50 rounded-xl p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics?.userPerformance.map(u => ({ name: u.user_name, value: u.revenue }))}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {analytics?.userPerformance.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: any) => formatCurrency(v)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -533,18 +565,31 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-900">Top Selling Items</h2>
           </div>
           <div className="p-6">
-            <div className="space-y-4">
-              {analytics?.topSellingItems.map((item, index) => (
-                <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{item.item_name}</h3>
-                    <p className="text-sm text-gray-600">{item.total_sold} units sold</p>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                {analytics?.topSellingItems.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">{item.item_name}</h3>
+                      <p className="text-sm text-gray-600">{item.total_sold} units sold</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-blue-600">{formatCurrency(item.revenue)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-blue-600">{formatCurrency(item.revenue)}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="h-64 bg-gray-50 rounded-xl p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics?.topSellingItems.map(i => ({ name: i.item_name, quantity: i.total_sold }))}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" fontSize={10} interval={0} />
+                    <YAxis fontSize={10} />
+                    <Tooltip />
+                    <Bar dataKey="quantity" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -596,6 +641,15 @@ const AdminDashboard: React.FC = () => {
 
 
 
+      {/* Export Loading Overlay */}
+      {exportLoading && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[100] flex items-center justify-center">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl flex items-center space-x-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="font-bold text-gray-900">Generating Professional Report...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
