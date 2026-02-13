@@ -350,6 +350,29 @@ export const offlineDataApi = {
       console.error('[OfflineDataApi] Error deleting sale:', error);
       throw error;
     }
+  },
+
+  // Bulk delete sales - queue if offline
+  bulkDeleteSales: async (saleIds: number[]) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.bulkDeleteSales(saleIds);
+        await offlineStorage.bulkDeleteSales(saleIds);
+        return result;
+      } else {
+        // Offline: delete from IndexedDB and queue for sync
+        console.log('[OfflineDataApi] Bulk deleting sales offline, queuing for sync');
+        await offlineStorage.bulkDeleteSales(saleIds);
+        // Queue individual operations for sync to simplify sync logic
+        for (const id of saleIds) {
+          await syncService.queueOperation('DELETE', 'sales', { sale_id: id });
+        }
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error bulk deleting sales:', error);
+      throw error;
+    }
   }
 };
 

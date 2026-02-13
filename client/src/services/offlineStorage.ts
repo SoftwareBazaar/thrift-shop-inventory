@@ -179,6 +179,38 @@ class OfflineStorageService {
     });
   }
 
+  // Bulk delete sales from offline storage
+  async bulkDeleteSales(saleIds: number[]): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['sales'], 'readwrite');
+      const store = transaction.objectStore('sales');
+
+      let completed = 0;
+      let hasError = false;
+
+      saleIds.forEach(id => {
+        const request = store.delete(id);
+        request.onerror = () => {
+          if (!hasError) {
+            hasError = true;
+            reject(request.error);
+          }
+        };
+        request.onsuccess = () => {
+          completed++;
+          if (completed === saleIds.length && !hasError) {
+            console.log(`[OfflineStorage] Bulk deleted ${saleIds.length} sales`);
+            resolve();
+          }
+        };
+      });
+
+      if (saleIds.length === 0) resolve();
+    });
+  }
+
   // Add operation to offline queue
   async queueOperation(operation: OfflineOperation): Promise<void> {
     if (!this.db) await this.init();

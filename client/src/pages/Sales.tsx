@@ -77,6 +77,8 @@ const Sales: React.FC = () => {
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string>('');
+  const [selectedSaleIds, setSelectedSaleIds] = useState<number[]>([]);
+  const [deletingBulk, setDeletingBulk] = useState(false);
 
   useEffect(() => {
     fetchSales();
@@ -200,9 +202,49 @@ const Sales: React.FC = () => {
       await dataApi.deleteSale(saleId);
       await fetchSales();
       await fetchItems(); // Refresh items to show updated stock
+      setSelectedSaleIds(prev => prev.filter(id => id !== saleId));
     } catch (error) {
       console.error('Error deleting sale:', error);
       alert('Failed to delete sale');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (user?.role !== 'admin') return;
+    if (selectedSaleIds.length === 0) return;
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedSaleIds.length} selected sales? This will restore the stock for each item.`)) {
+      return;
+    }
+
+    try {
+      setDeletingBulk(true);
+      await dataApi.bulkDeleteSales(selectedSaleIds);
+      await fetchSales();
+      await fetchItems();
+      setSelectedSaleIds([]);
+      alert(`Successfully deleted ${selectedSaleIds.length} sales`);
+    } catch (error) {
+      console.error('Error bulk deleting sales:', error);
+      alert('Failed to delete selected sales');
+    } finally {
+      setDeletingBulk(false);
+    }
+  };
+
+  const toggleSaleSelection = (saleId: number) => {
+    setSelectedSaleIds(prev =>
+      prev.includes(saleId)
+        ? prev.filter(id => id !== saleId)
+        : [...prev, saleId]
+    );
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedSaleIds.length === filteredSales.length) {
+      setSelectedSaleIds([]);
+    } else {
+      setSelectedSaleIds(filteredSales.map(s => s.sale_id));
     }
   };
 
@@ -351,6 +393,15 @@ const Sales: React.FC = () => {
               <span className="hidden sm:inline">Manage </span>Credit Sales
             </button>
           )}
+          {user?.role === 'admin' && selectedSaleIds.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={deletingBulk}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-base px-3 sm:px-4 py-2 rounded-md whitespace-nowrap shadow-sm disabled:opacity-50"
+            >
+              {deletingBulk ? 'Deleting...' : `Delete Selected (${selectedSaleIds.length})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -462,6 +513,16 @@ const Sales: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {user?.role === 'admin' && (
+                  <th className="px-6 py-3 text-left w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                      checked={filteredSales.length > 0 && selectedSaleIds.length === filteredSales.length}
+                      onChange={toggleAllSelection}
+                    />
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date & Time
                 </th>
@@ -495,7 +556,18 @@ const Sales: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredSales.map((sale) => (
-                <tr key={sale.sale_id} className="hover:bg-gray-50">
+                <tr key={sale.sale_id} className={`hover:bg-gray-50 ${selectedSaleIds.includes(sale.sale_id) ? 'bg-blue-50' : ''}`}>
+                  {user?.role === 'admin' && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        className="rounded text-blue-600 focus:ring-blue-500"
+                        checked={selectedSaleIds.includes(sale.sale_id)}
+                        onChange={() => toggleSaleSelection(sale.sale_id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatDate(sale.date_time)}
                   </td>

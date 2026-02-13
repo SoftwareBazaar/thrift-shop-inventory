@@ -1230,6 +1230,37 @@ export const dbApi = {
     }
   },
 
+  bulkDeleteSales: async (saleIds: number[]) => {
+    if (!isSupabaseConfigured()) {
+      for (const id of saleIds) {
+        await (mockApi as any).deleteSale(id);
+      }
+      return { success: true };
+    }
+
+    try {
+      console.log(`[Bulk Delete Sales] Deleting sale IDs:`, saleIds);
+
+      await (supabase as any)
+        .from('credit_sales')
+        .delete()
+        .in('sale_id', saleIds);
+
+      const { error } = await (supabase as any)
+        .from('sales')
+        .delete()
+        .in('sale_id', saleIds);
+
+      if (error) throw error;
+
+      console.log(`[Bulk Delete Sales] Successfully deleted ${saleIds.length} sales`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error bulk deleting sales:', error);
+      throw error;
+    }
+  },
+
   createWithdrawal: async (withdrawalData: {
     item_id: number;
     quantity_withdrawn: number;
