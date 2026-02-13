@@ -4,7 +4,6 @@ import { useAuth, PASSWORD_REQUIREMENTS, validatePasswordStrength } from '../con
 import { isSupabaseConfigured } from '../lib/supabase';
 import {
   getOfflineCredential,
-  verifyRecoveryInput,
   updateOfflinePassword as updateOfflinePasswordStore,
 } from '../utils/offlineCredentials';
 import { normaliseUsername, derivePasswordHash } from '../utils/passwordUtils';
@@ -32,8 +31,6 @@ const Login: React.FC = () => {
   const [recoverySuccess, setRecoverySuccess] = useState('');
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryServerNote, setRecoveryServerNote] = useState('');
-  const [countdown, setCountdown] = useState(0);
-  const [canResend, setCanResend] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -44,8 +41,6 @@ const Login: React.FC = () => {
     setRecoverySuccess('');
     setRecoveryServerNote('');
     setRecoveryLoading(false);
-    setCountdown(0);
-    setCanResend(false);
     setRecoveryForm({
       username: username || '',
       secretWordAnswers: {},
