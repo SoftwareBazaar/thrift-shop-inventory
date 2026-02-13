@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { dataApi } from '../services/dataService';
-import VoiceAssistant from '../components/VoiceAssistant';
 
 interface Item {
   item_id: number;
@@ -467,32 +466,6 @@ const Inventory: React.FC = () => {
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
-  // Voice Assistant handlers
-  const handleVoiceSearch = (text: string) => {
-    setSearchTerm(text);
-  };
-
-  const handleVoiceCommand = (command: string, params: any) => {
-    switch (command) {
-      case 'search':
-        setSearchTerm(params.term || '');
-        break;
-      case 'filterCategory':
-        setSelectedCategory(params.category || '');
-        break;
-      case 'clearFilters':
-        setSearchTerm('');
-        setSelectedCategory('');
-        setShowLowStock(false);
-        break;
-      case 'showLowStock':
-        setShowLowStock(true);
-        break;
-      default:
-        break;
-    }
-  };
-
   const getItemsSold = (itemId: number, fallbackName: string, stallOnly: boolean = false) => {
     return salesData
       .filter((sale) => {
@@ -585,11 +558,6 @@ const Inventory: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <VoiceAssistant
-                onTextReceived={handleVoiceSearch}
-                onCommand={handleVoiceCommand}
-                placeholder="Voice search..."
               />
             </div>
           </div>
