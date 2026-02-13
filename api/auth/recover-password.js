@@ -37,28 +37,10 @@ module.exports = async (req, res) => {
       }
     }
 
-    const { username, method, contact, newPassword, resetToken } = body || {};
+    const { username, newPassword, secretWordAnswers, secretWordPositions } = body || {};
 
-    if (!username || !method || !contact || !newPassword || !resetToken) {
-      return res.status(400).json({ message: 'Username, method, contact, new password, and reset token are required' });
-    }
-
-    // Verify resetToken
-    const jwt = require('jsonwebtoken');
-    try {
-      const decoded = jwt.verify(resetToken, process.env.JWT_SECRET || 'your-secret-key');
-      if (decoded.purpose !== 'password_reset' || decoded.email.toLowerCase() !== contact.trim().toLowerCase()) {
-        throw new Error('Invalid token purpose or email mismatch');
-      }
-      // Store user_id for later verification
-      req.verifiedUserId = decoded.user_id;
-    } catch (tokenError) {
-      console.error('Token verification failed:', tokenError);
-      return res.status(401).json({ message: 'Invalid or expired reset token. Please verify your email again.' });
-    }
-
-    if (!['phone', 'email'].includes(method)) {
-      return res.status(400).json({ message: 'Invalid recovery method. Use phone or email.' });
+    if (!username || !newPassword || !secretWordAnswers || !secretWordPositions) {
+      return res.status(400).json({ message: 'Username, new password, answers, and positions are required' });
     }
 
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
@@ -75,7 +57,7 @@ module.exports = async (req, res) => {
 
     const { data: userRecord, error: fetchError } = await supabase
       .from('users')
-      .select('user_id, username, status, phone_number, email')
+      .select('user_id, username, status, secret_word')
       .eq('username', username)
       .single();
 
@@ -87,24 +69,26 @@ module.exports = async (req, res) => {
       return res.status(403).json({ message: 'Account is inactive' });
     }
 
-    if (method === 'phone') {
-      const storedPhone = (userRecord.phone_number || '').replace(/\D/g, '');
-      const providedPhone = String(contact).replace(/\D/g, '');
-      if (!storedPhone) {
-        return res.status(400).json({ message: 'No phone number on file for this account' });
+    if (!userRecord.secret_word) {
+      return res.status(400).json({ message: 'No secret word configured for this account' });
+    }
+
+    // Verify secret word answers
+    const storedSecretWord = userRecord.secret_word.trim().toLowerCase();
+    let allCorrect = true;
+
+    for (const pos of secretWordPositions) {
+      const expectedChar = storedSecretWord[pos - 1];
+      const providedChar = String(secretWordAnswers[pos] || '').trim().toLowerCase();
+
+      if (expectedChar !== providedChar) {
+        allCorrect = false;
+        break;
       }
-      if (storedPhone !== providedPhone) {
-        return res.status(400).json({ message: 'Phone number does not match our records' });
-      }
-    } else {
-      const storedEmail = (userRecord.email || '').trim().toLowerCase();
-      const providedEmail = String(contact).trim().toLowerCase();
-      if (!storedEmail) {
-        return res.status(400).json({ message: 'No email on file for this account' });
-      }
-      if (storedEmail !== providedEmail) {
-        return res.status(400).json({ message: 'Email does not match our records' });
-      }
+    }
+
+    if (!allCorrect) {
+      return res.status(401).json({ message: 'Incorrect heart/secret word answers' });
     }
 
     // Use derivePasswordHash for password storage (same as client-side)

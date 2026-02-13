@@ -15,6 +15,7 @@ export interface User {
   email?: string | null;
   recovery_hint?: string | null;
   password_hash?: string | null;
+  secret_word?: string | null;
 }
 
 export interface Stall {

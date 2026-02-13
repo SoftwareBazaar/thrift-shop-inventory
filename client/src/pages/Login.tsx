@@ -8,6 +8,8 @@ import {
   updateOfflinePassword as updateOfflinePasswordStore,
 } from '../utils/offlineCredentials';
 import { normaliseUsername, derivePasswordHash } from '../utils/passwordUtils';
+import SetSecretWord from '../components/SetSecretWord';
+import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -16,16 +18,15 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState<'identify' | 'select' | 'verify' | 'verify-code' | 'reset' | 'success'>('identify');
-  const [recoveryOptions, setRecoveryOptions] = useState<{ phone?: string | null; email?: string | null }>({});
+  const [showSetSecretWordModal, setShowSetSecretWordModal] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<any>(null);
+  const [recoveryStep, setRecoveryStep] = useState<'identify' | 'verify-secret' | 'reset' | 'success'>('identify');
+  const [secretWordPositions, setSecretWordPositions] = useState<number[]>([]);
   const [recoveryForm, setRecoveryForm] = useState({
     username: '',
-    method: 'phone' as 'phone' | 'email',
-    contact: '',
-    verificationCode: '',
+    secretWordAnswers: {} as Record<number, string>,
     newPassword: '',
-    confirmPassword: '',
-    resetToken: ''
+    confirmPassword: ''
   });
   const [recoveryError, setRecoveryError] = useState('');
   const [recoverySuccess, setRecoverySuccess] = useState('');
@@ -38,7 +39,7 @@ const Login: React.FC = () => {
 
   const resetRecoveryState = () => {
     setRecoveryStep('identify');
-    setRecoveryOptions({});
+    setSecretWordPositions([]);
     setRecoveryError('');
     setRecoverySuccess('');
     setRecoveryServerNote('');
@@ -47,12 +48,9 @@ const Login: React.FC = () => {
     setCanResend(false);
     setRecoveryForm({
       username: username || '',
-      method: 'phone',
-      contact: '',
-      verificationCode: '',
+      secretWordAnswers: {},
       newPassword: '',
-      confirmPassword: '',
-      resetToken: ''
+      confirmPassword: ''
     });
   };
 
@@ -66,28 +64,16 @@ const Login: React.FC = () => {
     resetRecoveryState();
   };
 
-  const maskPhone = (phone?: string | null) => {
-    if (!phone) return '';
-    const clean = phone.replace(/\s+/g, '');
-    if (clean.length <= 4) {
-      return '••••';
-    }
-    const start = phone.slice(0, 3);
-    const end = phone.slice(-2);
-    return `${start}••••${end}`;
+  const getOrdinalSuffix = (num: number): string => {
+    const j = num % 10;
+    const k = num % 100;
+    if (j === 1 && k !== 11) return num + 'st';
+    if (j === 2 && k !== 12) return num + 'nd';
+    if (j === 3 && k !== 13) return num + 'rd';
+    return num + 'th';
   };
 
-  const maskEmail = (email?: string | null) => {
-    if (!email) return '';
-    const [name, domain] = email.split('@');
-    if (!domain) {
-      return '••••';
-    }
-    const visible = name.length <= 2 ? name : name.slice(0, 2);
-    return `${visible}***@${domain}`;
-  };
-
-  const handleRecoveryLookup = (e: React.FormEvent) => {
+  const handleRecoveryLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
     setRecoverySuccess('');
@@ -99,169 +85,117 @@ const Login: React.FC = () => {
       return;
     }
 
-    const record = getOfflineCredential(trimmedUsername);
-    if (!record) {
-      setRecoveryError('We could not find that username on this device. Make sure you have signed in before or ask an administrator to confirm.');
-      return;
-    }
-
-    const options = {
-      phone: record.recovery?.phone ?? record.user.phone_number ?? null,
-      email: record.recovery?.email ?? record.user.email ?? null
-    };
-
-    if (!options.phone && !options.email) {
-      setRecoveryError('No recovery phone or email is saved for this account yet. Ask an administrator to add one from the Users page.');
-      return;
-    }
-
-    setRecoveryOptions(options);
-    setRecoveryForm(prev => ({
-      ...prev,
-      username: trimmedUsername,
-      method: options.phone ? 'phone' : 'email',
-      contact: ''
-    }));
-    setRecoveryStep('select');
-  };
-
-  const handleSelectMethod = (method: 'phone' | 'email') => {
-    setRecoveryError('');
-    setRecoverySuccess('');
-    setRecoveryServerNote('');
-    setRecoveryForm(prev => ({
-      ...prev,
-      method,
-      contact: ''
-    }));
-    setRecoveryStep('verify');
-  };
-
-  const handleVerifyContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRecoveryError('');
-    setRecoverySuccess('');
-    setRecoveryServerNote('');
-
-    const contactValue = recoveryForm.contact.trim();
-    if (!contactValue) {
-      setRecoveryError(
-        recoveryForm.method === 'phone'
-          ? 'Enter the phone number linked to your account.'
-          : 'Enter the email address linked to your account.'
-      );
-      return;
-    }
-
-    const result = verifyRecoveryInput(recoveryForm.username, recoveryForm.method, contactValue);
-    if (!result.success) {
-      setRecoveryError(result.message || 'The information provided does not match our records.');
-      return;
-    }
-
-    // Send verification code via email
-    if (recoveryForm.method === 'email') {
-      await sendVerificationCode();
-    } else {
-      // Phone method - skip code for now, go directly to reset
-      setRecoveryStep('reset');
-    }
-  };
-
-  const sendVerificationCode = async () => {
     setRecoveryLoading(true);
-    setRecoveryError('');
 
     try {
-      const response = await fetch('/api/auth/send-verification-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: recoveryForm.username,
-          email: recoveryForm.contact.trim()
-        })
-      });
+      let wordLength = 0;
+      let hasSecretWord = false;
 
-      // Get response text first to handle non-JSON responses
-      const responseText = await response.text();
-      console.log('📋 Server response:', responseText);
-      console.log('📊 Status:', response.status);
-
-      let data: any = {};
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        data = { message: responseText };
+      // Try offline check first
+      const record = getOfflineCredential(trimmedUsername);
+      if (record && record.secretWord) {
+        wordLength = record.secretWord.length;
+        hasSecretWord = true;
       }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send verification code');
-      }
+      // If online, check server for latest status
+      const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+      if (isSupabaseConfigured() && online) {
+        try {
+          const { data, error: fetchError } = await (require('../lib/supabase').supabase as any)
+            .from('users')
+            .select('secret_word')
+            .eq('username', trimmedUsername)
+            .single();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send verification code');
-      }
-
-      // Start countdown timer
-      setCountdown(30);
-      setCanResend(false);
-
-      const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            setCanResend(true);
-            return 0;
+          if (!fetchError && data?.secret_word) {
+            wordLength = data.secret_word.length;
+            hasSecretWord = true;
           }
-          return prev - 1;
-        });
-      }, 1000);
+        } catch (serverError) {
+          console.warn('Server secret word lookup failed:', serverError);
+        }
+      }
 
-      setRecoverySuccess('Verification code sent! Check your email.');
-      setRecoveryStep('verify-code');
+      if (!hasSecretWord) {
+        setRecoveryError('No secret word set for this account. Please contact an administrator.');
+        setRecoveryLoading(false);
+        return;
+      }
 
-    } catch (error: any) {
-      console.error('sendVerificationCode error:', error);
-      setRecoveryError(error.message || 'Failed to send verification code');
+      // Generate random positions to ask about
+      const count = Math.min(3, wordLength);
+      const positions: number[] = [];
+      const availablePositions = Array.from({ length: wordLength }, (_, i) => i + 1);
+
+      for (let i = 0; i < count; i++) {
+        const randomIndex = Math.floor(Math.random() * availablePositions.length);
+        positions.push(availablePositions[randomIndex]);
+        availablePositions.splice(randomIndex, 1);
+      }
+
+      setSecretWordPositions(positions.sort((a, b) => a - b));
+      setRecoveryForm(prev => ({
+        ...prev,
+        username: trimmedUsername,
+        secretWordAnswers: {}
+      }));
+      setRecoveryStep('verify-secret');
+    } catch (error) {
+      console.error('Error during recovery lookup:', error);
+      setRecoveryError('An error occurred. Please try again.');
     } finally {
       setRecoveryLoading(false);
     }
   };
 
-  const handleVerifyCode = async (e: React.FormEvent) => {
+  const handleVerifySecretWord = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
     setRecoverySuccess('');
 
-    if (!recoveryForm.verificationCode || recoveryForm.verificationCode.length !== 6) {
-      setRecoveryError('Please enter the 6-digit verification code');
-      return;
+    // Check all positions have answers
+    for (const position of secretWordPositions) {
+      if (!recoveryForm.secretWordAnswers[position] || recoveryForm.secretWordAnswers[position].trim() === '') {
+        setRecoveryError(`Please provide the ${getOrdinalSuffix(position)} character`);
+        return;
+      }
     }
 
     setRecoveryLoading(true);
 
     try {
-      const response = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: recoveryForm.contact.trim(),
-          code: recoveryForm.verificationCode
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Invalid verification code');
+      const record = getOfflineCredential(recoveryForm.username);
+      if (!record || !record.secretWord) {
+        setRecoveryError('Unable to verify secret word.');
+        setRecoveryLoading(false);
+        return;
       }
 
-      // Store reset token
-      setRecoveryForm(prev => ({ ...prev, resetToken: data.resetToken }));
-      setRecoverySuccess('Code verified! Set your new password.');
+      // Verify the answers (case-insensitive)
+      let isValid = true;
+      for (const position of secretWordPositions) {
+        const expectedChar = record.secretWord.charAt(position - 1);
+        const providedChar = recoveryForm.secretWordAnswers[position].trim();
+
+        if (expectedChar.toLowerCase() !== providedChar.toLowerCase()) {
+          isValid = false;
+          break;
+        }
+      }
+
+      if (!isValid) {
+        setRecoveryError('Incorrect answer(s). Please try again.');
+        setRecoveryLoading(false);
+        return;
+      }
+
+      // Verification successful
+      setRecoverySuccess('Verification successful! Please set your new password.');
       setRecoveryStep('reset');
-    } catch (error: any) {
-      setRecoveryError(error.message || 'Verification failed');
+    } catch (error) {
+      console.error('Error verifying secret word:', error);
+      setRecoveryError('An error occurred during verification.');
     } finally {
       setRecoveryLoading(false);
     }
@@ -298,10 +232,9 @@ const Login: React.FC = () => {
             },
             body: JSON.stringify({
               username: recoveryForm.username,
-              method: recoveryForm.method,
-              contact: recoveryForm.contact.trim(),
               newPassword: recoveryForm.newPassword,
-              resetToken: recoveryForm.resetToken
+              secretWordAnswers: recoveryForm.secretWordAnswers,
+              secretWordPositions: secretWordPositions
             })
           });
           let data: any = null;
@@ -384,7 +317,40 @@ const Login: React.FC = () => {
 
     try {
       await login(username, password);
-      navigate('/dashboard');
+
+      // The user is now set in the context, but let's check secret word
+      // Verify both offline and online if possible
+      let hasSecretWord = false;
+
+      // Offline check
+      const offlineRecord = getOfflineCredential(username);
+      if (offlineRecord?.secretWord) {
+        hasSecretWord = true;
+      }
+
+      // Online check if supabase is configured
+      if (!hasSecretWord && isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const { data, error: fetchError } = await (supabase as any)
+            .from('users')
+            .select('secret_word')
+            .eq('username', username)
+            .single();
+
+          if (!fetchError && data?.secret_word) {
+            hasSecretWord = true;
+          }
+        } catch (err) {
+          console.warn('Post-login secret word check failed:', err);
+        }
+      }
+
+      if (!hasSecretWord) {
+        setLoggedInUser({ username }); // Use username since login() returns void
+        setShowSetSecretWordModal(true);
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -554,74 +520,48 @@ const Login: React.FC = () => {
               </form>
             )}
 
-            {recoveryStep === 'select' && (
-              <div className="space-y-4">
+            {recoveryStep === 'verify-secret' && (
+              <form onSubmit={handleVerifySecretWord} className="space-y-4">
                 <p className="text-sm text-gray-700">
-                  Choose how you would like to verify your identity for <span className="font-semibold">{recoveryForm.username}</span>.
+                  For security, please answer the following questions about your secret word for <span className="font-semibold">{recoveryForm.username}</span>:
                 </p>
-                <div className="space-y-3">
-                  {recoveryOptions.phone && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectMethod('phone')}
-                      className="w-full px-4 py-3 border border-blue-200 rounded-md text-left hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <div className="text-sm font-medium text-gray-900">Verify with phone number</div>
-                      <div className="text-xs text-gray-500">Hint: {maskPhone(recoveryOptions.phone)}</div>
-                    </button>
-                  )}
-                  {recoveryOptions.email && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectMethod('email')}
-                      className="w-full px-4 py-3 border border-blue-200 rounded-md text-left hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <div className="text-sm font-medium text-gray-900">Verify with email address</div>
-                      <div className="text-xs text-gray-500">Hint: {maskEmail(recoveryOptions.email)}</div>
-                    </button>
-                  )}
-                </div>
-                <div className="flex justify-between mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setRecoveryStep('identify')}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeRecoveryModal}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
 
-            {recoveryStep === 'verify' && (
-              <form onSubmit={handleVerifyContact} className="space-y-4">
-                <p className="text-sm text-gray-700">
-                  Enter the {recoveryForm.method === 'phone' ? 'phone number' : 'email address'} associated with this account.
-                  {recoveryForm.method === 'phone' && recoveryOptions.phone && (
-                    <span className="block text-xs text-gray-500 mt-1">Hint: {maskPhone(recoveryOptions.phone)}</span>
-                  )}
-                  {recoveryForm.method === 'email' && recoveryOptions.email && (
-                    <span className="block text-xs text-gray-500 mt-1">Hint: {maskEmail(recoveryOptions.email)}</span>
-                  )}
+                <div className="space-y-3">
+                  {secretWordPositions.map((position, index) => (
+                    <div key={position}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        What is the {getOrdinalSuffix(position)} character of your secret word?
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={1}
+                        value={recoveryForm.secretWordAnswers[position] || ''}
+                        onChange={(e) => {
+                          const value = e.target.value.slice(0, 1);
+                          setRecoveryForm(prev => ({
+                            ...prev,
+                            secretWordAnswers: {
+                              ...prev.secretWordAnswers,
+                              [position]: value
+                            }
+                          }));
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl font-mono"
+                        placeholder="?"
+                        autoFocus={index === 0}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-500">
+                  <strong>Note:</strong> Answers are case-insensitive
                 </p>
-                <input
-                  type={recoveryForm.method === 'phone' ? 'tel' : 'email'}
-                  value={recoveryForm.contact}
-                  onChange={(e) => setRecoveryForm(prev => ({ ...prev, contact: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={recoveryForm.method === 'phone' ? '+2547XXXXXXXX' : 'user@example.com'}
-                />
+
                 <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => setRecoveryStep('select')}
+                    onClick={() => setRecoveryStep('identify')}
                     className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
                   >
                     Back
@@ -631,72 +571,12 @@ const Login: React.FC = () => {
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none disabled:opacity-60"
                     disabled={recoveryLoading}
                   >
-                    {recoveryLoading ? 'Checking...' : 'Continue'}
+                    {recoveryLoading ? 'Verifying...' : 'Verify'}
                   </button>
                 </div>
               </form>
             )}
 
-            {recoveryStep === 'verify-code' && (
-              <form onSubmit={handleVerifyCode} className="space-y-4">
-                <p className="text-sm text-gray-700">
-                  Enter the 6-digit verification code sent to your email: <strong>{maskEmail(recoveryForm.contact)}</strong>
-                </p>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
-                  <input
-                    type="text"
-                    value={recoveryForm.verificationCode}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                      setRecoveryForm(prev => ({ ...prev, verificationCode: value }));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl tracking-widest font-mono"
-                    placeholder="000000"
-                    maxLength={6}
-                    autoFocus
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Code expires in 5 minutes</p>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={sendVerificationCode}
-                    disabled={!canResend || recoveryLoading}
-                    className="text-sm text-blue-600 hover:text-blue-800 focus:outline-none disabled:text-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {countdown > 0 ? `Resend code in ${countdown}s` : 'Resend code'}
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none disabled:opacity-60"
-                    disabled={recoveryLoading || recoveryForm.verificationCode.length !== 6}
-                  >
-                    {recoveryLoading ? 'Verifying...' : 'Verify Code'}
-                  </button>
-                </div>
-
-                <div className="flex flex-col space-y-3 mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setRecoveryStep('verify')}
-                    className="text-sm text-gray-500 hover:text-gray-700 focus:outline-none"
-                  >
-                    ← Back to contact entry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeRecoveryModal}
-                    className="text-sm text-red-500 hover:text-red-700 focus:outline-none font-medium"
-                  >
-                    Cancel reset request
-                  </button>
-                </div>
-              </form>
-            )}
 
             {recoveryStep === 'reset' && (
               <form onSubmit={handleRecoveryReset} className="space-y-4">
@@ -726,7 +606,7 @@ const Login: React.FC = () => {
                 <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => setRecoveryStep('verify')}
+                    onClick={() => setRecoveryStep('verify-secret')}
                     className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
                   >
                     Back
@@ -740,34 +620,55 @@ const Login: React.FC = () => {
                   </button>
                 </div>
               </form>
-            )}
+            )
+            }
 
-            {recoveryStep === 'success' && (
-              <div className="space-y-4">
-                {recoveryServerNote && (
-                  <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm p-3 rounded-md">
-                    {recoveryServerNote}
+            {
+              recoveryStep === 'success' && (
+                <div className="space-y-4">
+                  <div className="text-sm text-green-700 font-medium bg-green-50 p-3 rounded-md border border-green-200">
+                    {recoverySuccess}
                   </div>
-                )}
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername(recoveryForm.username);
-                      setPassword('');
-                      closeRecoveryModal();
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
-                  >
-                    Return to Sign In
-                  </button>
+                  {recoveryServerNote && (
+                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm p-3 rounded-md">
+                      {recoveryServerNote}
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUsername(recoveryForm.username);
+                        setPassword('');
+                        closeRecoveryModal();
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
+                    >
+                      Return to Sign In
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
+              )
+            }
+          </div >
+        </div >
       )}
-    </div>
+      {showSetSecretWordModal && loggedInUser && (
+        <SetSecretWord
+          username={loggedInUser.username}
+          isFirstTime={true}
+          onComplete={async (word) => {
+            // Success handled by parent component (modal logic)
+            setShowSetSecretWordModal(false);
+            navigate('/dashboard');
+          }}
+          onCancel={() => {
+            setShowSetSecretWordModal(false);
+            navigate('/dashboard');
+          }}
+        />
+      )}
+    </div >
   );
 };
 

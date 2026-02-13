@@ -32,6 +32,7 @@ type OfflineCredentialRecord = {
   recovery?: RecoveryInfo;
   source: 'seed' | 'server' | 'manual';
   lastLoginAt?: string | null;
+  secretWord?: string | null;
 };
 
 type OfflineCredentialMap = Record<string, OfflineCredentialRecord>;

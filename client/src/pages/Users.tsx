@@ -13,6 +13,7 @@ interface User {
   phone_number?: string | null;
   email?: string | null;
   recovery_hint?: string | null;
+  secret_word?: string | null;
 }
 
 interface Stall {
@@ -283,6 +284,9 @@ const Users: React.FC = () => {
                   Created
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                  Secret Word
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -309,6 +313,14 @@ const Users: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {new Date(userItem.created_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${userItem.secret_word
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800 font-bold'
+                      }`}>
+                      {userItem.secret_word ? '✅ Set' : '❌ NOT SET'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-3">
