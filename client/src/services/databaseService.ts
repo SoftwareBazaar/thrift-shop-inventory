@@ -266,6 +266,94 @@ export const dbApi = {
     }
   },
 
+  deleteItem: async (itemId: number) => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.deleteItem(itemId);
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('items')
+        .delete()
+        .eq('item_id', itemId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      throw error;
+    }
+  },
+
+  getStockAdditions: async (itemId: number) => {
+    if (!isSupabaseConfigured()) {
+      return { additions: [] };
+    }
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from('stock_additions')
+        .select('*')
+        .eq('item_id', itemId)
+        .order('date_added', { ascending: false });
+
+      if (error) throw error;
+      return { additions: data || [] };
+    } catch (error) {
+      console.error('Error fetching stock additions:', error);
+      throw error;
+    }
+  },
+
+  deleteStockAddition: async (additionId: number) => {
+    if (!isSupabaseConfigured()) {
+      return { success: true };
+    }
+
+    try {
+      const { data: addition, error: fetchError } = await (supabase as any)
+        .from('stock_additions')
+        .select('*')
+        .eq('addition_id', additionId)
+        .single();
+
+      if (fetchError || !addition) throw new Error('Stock addition record not found');
+
+      const { item_id, quantity_added } = addition;
+
+      const { error: deleteError } = await (supabase as any)
+        .from('stock_additions')
+        .delete()
+        .eq('addition_id', additionId);
+
+      if (deleteError) throw deleteError;
+
+      const { data: item, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('initial_stock, total_added, total_allocated')
+        .eq('item_id', item_id)
+        .single();
+
+      if (!itemError && item) {
+        const newTotalAdded = Math.max(0, (item.total_added || 0) - quantity_added);
+        const newCurrentStock = Math.max(0, (item.initial_stock || 0) + newTotalAdded - (item.total_allocated || 0));
+
+        await (supabase as any)
+          .from('items')
+          .update({
+            total_added: newTotalAdded,
+            current_stock: newCurrentStock
+          })
+          .eq('item_id', item_id);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting stock addition:', error);
+      throw error;
+    }
+  },
+
   // Inventory
   getInventory: async (stallId?: number) => {
     if (!isSupabaseConfigured()) {
@@ -660,27 +748,6 @@ export const dbApi = {
     } catch (error) {
       console.error('Error updating item:', error);
       throw new Error((error as any)?.message || 'Failed to update item.');
-    }
-  },
-
-  deleteItem: async (itemId: number) => {
-    if (!isSupabaseConfigured()) {
-      return mockApi.deleteItem(itemId);
-    }
-
-    try {
-      // Note: We might need to handle cascading deletes if foreign key constraints aren't set up for CASCADE
-      // but for simplicity we assume Supabase schema handles it or it's a soft delete
-      const { error } = await (supabase as any)
-        .from('items')
-        .delete()
-        .eq('item_id', itemId);
-
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      throw error;
     }
   },
 

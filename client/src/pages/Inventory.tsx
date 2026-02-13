@@ -66,7 +66,9 @@ const Inventory: React.FC = () => {
   const [editDistQty, setEditDistQty] = useState('');
   const [editDistStallId, setEditDistStallId] = useState<string>('');
   const [isRefreshingDist, setIsRefreshingDist] = useState(false);
+  const [isRefreshingAdditions, setIsRefreshingAdditions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemStockAdditions, setItemStockAdditions] = useState<any[]>([]);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -125,13 +127,39 @@ const Inventory: React.FC = () => {
     }
   }, [user?.role]);
 
+  const fetchItemStockAdditions = useCallback(async (itemId: number) => {
+    setIsRefreshingAdditions(true);
+    try {
+      const response = await dataApi.getStockAdditions(itemId);
+      setItemStockAdditions(response.additions || []);
+    } catch (error) {
+      console.error('Error fetching stock additions:', error);
+    } finally {
+      setIsRefreshingAdditions(false);
+    }
+  }, []);
+
+  const toggleExpand = (itemId: number) => {
+    if (expandedItemId === itemId) {
+      setExpandedItemId(null);
+      setItemDistributions([]);
+      setItemStockAdditions([]);
+    } else {
+      setExpandedItemId(itemId);
+      fetchItemDistributions(itemId);
+      if (user?.role === 'admin') fetchItemStockAdditions(itemId);
+    }
+  };
+
   useEffect(() => {
     if (expandedItemId) {
       fetchItemDistributions(expandedItemId);
+      if (user?.role === 'admin') fetchItemStockAdditions(expandedItemId);
     } else {
       setItemDistributions([]);
+      setItemStockAdditions([]);
     }
-  }, [expandedItemId, fetchItemDistributions]);
+  }, [expandedItemId, fetchItemDistributions, fetchItemStockAdditions, user?.role]);
 
   const fetchCategories = async () => {
     try {
@@ -283,6 +311,21 @@ const Inventory: React.FC = () => {
       alert('Distribution deleted and stock returned to hub.');
     } catch (error: any) {
       alert(error.message || 'Failed to delete distribution');
+    }
+  };
+
+  const handleDeleteStockAddition = async (addition: any) => {
+    if (!window.confirm(`Are you sure you want to delete this stock addition of ${addition.quantity_added} items?\n\nThis will reduce the 'Total Received' count and current stock.`)) {
+      return;
+    }
+
+    try {
+      await dataApi.deleteStockAddition(addition.addition_id);
+      fetchItems(); // Refresh inventory
+      if (expandedItemId) fetchItemStockAdditions(expandedItemId); // Refresh list
+      alert('Stock addition deleted successfully.');
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete stock addition');
     }
   };
 
@@ -957,6 +1000,56 @@ const Inventory: React.FC = () => {
                                   </div>
                                 ) : (
                                   <p className="text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg">No distribution records found for this item.</p>
+                                )}
+                              </div>
+                            )}
+
+                            {user?.role === 'admin' && (
+                              <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-lg font-bold text-gray-900">Stock Additions History</h4>
+                                  {isRefreshingAdditions && <span className="text-xs text-blue-500 animate-pulse">Refreshing...</span>}
+                                </div>
+
+                                {itemStockAdditions.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-[#f0f9ff]">
+                                        <tr>
+                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
+                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty Added</th>
+                                          <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-200">
+                                        {itemStockAdditions.map((addition) => (
+                                          <tr key={addition.addition_id} className="text-sm hover:bg-blue-50/30 transition-colors">
+                                            <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
+                                              {new Date(addition.date_added).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                              <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-green-600 text-white text-xs font-black">
+                                                +{addition.quantity_added}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteStockAddition(addition);
+                                                }}
+                                                className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
+                                              >
+                                                Delete
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg">No additional stock records found (only initial stock).</p>
                                 )}
                               </div>
                             )}

@@ -373,6 +373,23 @@ export const offlineDataApi = {
       console.error('[OfflineDataApi] Error bulk deleting sales:', error);
       throw error;
     }
+  },
+
+  getStockAdditions: dataApi.getStockAdditions,
+
+  deleteStockAddition: async (additionId: number) => {
+    try {
+      if (navigator.onLine) {
+        return await dataApi.deleteStockAddition(additionId);
+      } else {
+        // For simplicity, stock addition cleanup is only supported online for now
+        // as it involves complex recalculations of item totals
+        throw new Error('Stock addition cleanup requires an internet connection.');
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error deleting stock addition:', error);
+      throw error;
+    }
   }
 };
 
