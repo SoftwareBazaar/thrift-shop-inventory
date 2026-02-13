@@ -134,9 +134,10 @@ module.exports = async (req, res) => {
 
             const { Resend } = require('resend');
             const resend = new Resend(process.env.RESEND_API_KEY);
+            const fromEmail = process.env.RESEND_FROM_EMAIL || 'Street Thrift Apparel <onboarding@resend.dev>';
 
             await resend.emails.send({
-                from: 'Street Thrift Apparel <onboarding@resend.dev>', // Use verified domain in production
+                from: fromEmail,
                 to: [providedEmail],
                 subject: 'Password Reset Code - Street Thrift Apparel',
                 html: `

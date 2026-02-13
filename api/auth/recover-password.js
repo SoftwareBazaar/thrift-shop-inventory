@@ -37,10 +37,24 @@ module.exports = async (req, res) => {
       }
     }
 
-    const { username, method, contact, newPassword } = body || {};
+    const { username, method, contact, newPassword, resetToken } = body || {};
 
-    if (!username || !method || !contact || !newPassword) {
-      return res.status(400).json({ message: 'Username, method, contact, and new password are required' });
+    if (!username || !method || !contact || !newPassword || !resetToken) {
+      return res.status(400).json({ message: 'Username, method, contact, new password, and reset token are required' });
+    }
+
+    // Verify resetToken
+    const jwt = require('jsonwebtoken');
+    try {
+      const decoded = jwt.verify(resetToken, process.env.JWT_SECRET || 'your-secret-key');
+      if (decoded.purpose !== 'password_reset' || decoded.email.toLowerCase() !== contact.trim().toLowerCase()) {
+        throw new Error('Invalid token purpose or email mismatch');
+      }
+      // Store user_id for later verification
+      req.verifiedUserId = decoded.user_id;
+    } catch (tokenError) {
+      console.error('Token verification failed:', tokenError);
+      return res.status(401).json({ message: 'Invalid or expired reset token. Please verify your email again.' });
     }
 
     if (!['phone', 'email'].includes(method)) {

@@ -187,33 +187,15 @@ const Login: React.FC = () => {
       console.log('📋 Server response:', responseText);
       console.log('📊 Status:', response.status);
 
-      let data;
+      let data: any = {};
       try {
         data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('❌ Failed to parse response as JSON:', parseError);
-        console.log('📄 Raw response:', responseText);
+      } catch (e) {
+        data = { message: responseText };
+      }
 
-        // DEDUCTIVE REASONING FALLBACK:
-        // If the server returns a 405 (Method Not Allowed) or other HTML error, 
-        // it means our Vercel functions are not being reached or correctly routed.
-        // As a temporary fix so you're not STUCK, we'll generate a local code if we're in development.
-        if (response.status === 405 || response.status === 404) {
-          console.warn('⚠️ Server routing issue detected (405). Falling back to local code generation for debugging.');
-          const fallbackCode = Math.floor(100000 + Math.random() * 900000).toString();
-          // Store in sessionStorage so verify-code can check it
-          sessionStorage.setItem('fallback_verification_code', fallbackCode);
-          sessionStorage.setItem('fallback_email', recoveryForm.contact.trim());
-
-          alert(`[DEV FALLBACK] Server routing issue (405). Use this code: ${fallbackCode}`);
-
-          setRecoverySuccess('Server routing issue detected. Using fallback code (see alert/console).');
-          setRecoveryStep('verify-code');
-          setCountdown(30);
-          return;
-        }
-
-        throw new Error(`Server returned invalid response (status ${response.status}). Check console for details.`);
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send verification code');
       }
 
       if (!response.ok) {
@@ -259,18 +241,6 @@ const Login: React.FC = () => {
     setRecoveryLoading(true);
 
     try {
-      // Check for fallback code first (Option 2 solution)
-      const fallbackCode = sessionStorage.getItem('fallback_verification_code');
-      const fallbackEmail = sessionStorage.getItem('fallback_email');
-
-      if (fallbackCode && fallbackCode === recoveryForm.verificationCode &&
-        fallbackEmail === recoveryForm.contact.trim()) {
-        console.log('✅ Fallback code verified successfully');
-        setRecoverySuccess('Code verified! (Local Fallback)');
-        setRecoveryStep('reset');
-        return;
-      }
-
       const response = await fetch('/api/auth/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -330,7 +300,8 @@ const Login: React.FC = () => {
               username: recoveryForm.username,
               method: recoveryForm.method,
               contact: recoveryForm.contact.trim(),
-              newPassword: recoveryForm.newPassword
+              newPassword: recoveryForm.newPassword,
+              resetToken: recoveryForm.resetToken
             })
           });
           let data: any = null;
@@ -708,13 +679,22 @@ const Login: React.FC = () => {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setRecoveryStep('verify')}
-                  className="w-full px-3 py-2 text-sm text-gray-600 hover:text-gray-800 focus:outline-none"
-                >
-                  ← Back
-                </button>
+                <div className="flex flex-col space-y-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setRecoveryStep('verify')}
+                    className="text-sm text-gray-500 hover:text-gray-700 focus:outline-none"
+                  >
+                    ← Back to contact entry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeRecoveryModal}
+                    className="text-sm text-red-500 hover:text-red-700 focus:outline-none font-medium"
+                  >
+                    Cancel reset request
+                  </button>
+                </div>
               </form>
             )}
 
