@@ -741,9 +741,34 @@ export const dbApi = {
           updateData.total_added = newTotalAdded;
         }
 
-        // Formula: Current Stock = Initial + Total Added - Total Distributed
+        // Formula: Current Stock = Initial + Total Added - Total Distributed - Central Sales - Withdrawals
         const totalDistributed = Number(existingItem.total_allocated || 0);
-        const newCurrentStock = Math.max(0, initialStock + newTotalAdded - totalDistributed);
+
+        // Query central sales (sales from central hub where stall_id is null)
+        const { data: centralSales } = await (supabase as any)
+          .from('sales')
+          .select('quantity_sold')
+          .eq('item_id', numericItemId)
+          .is('stall_id', null);
+
+        const totalCentralSold = (centralSales as any)?.reduce(
+          (sum: number, sale: any) => sum + (sale.quantity_sold || 0),
+          0
+        ) || 0;
+
+        // Query withdrawals
+        const { data: withdrawals } = await (supabase as any)
+          .from('stock_withdrawals')
+          .select('quantity_withdrawn')
+          .eq('item_id', numericItemId);
+
+        const totalWithdrawn = (withdrawals as any)?.reduce(
+          (sum: number, w: any) => sum + (w.quantity_withdrawn || 0),
+          0
+        ) || 0;
+
+        // Use complete formula (matches admin stock calculation in getInventory)
+        const newCurrentStock = Math.max(0, initialStock + newTotalAdded - totalDistributed - totalCentralSold - totalWithdrawn);
         updateData.current_stock = newCurrentStock;
       }
 
