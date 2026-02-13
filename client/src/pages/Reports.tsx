@@ -51,7 +51,7 @@ const Reports: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      
+
       alert('✅ Complete backup exported successfully! Save this file securely.');
     } catch (error) {
       console.error('Backup error:', error);
@@ -72,7 +72,7 @@ const Reports: React.FC = () => {
       try {
         const text = await file.text();
         const backupData = JSON.parse(text);
-        
+
         if (!backupData.users || !backupData.items || !backupData.sales || !backupData.stalls) {
           alert('❌ Invalid backup file format');
           return;
@@ -87,7 +87,7 @@ const Reports: React.FC = () => {
         localStorage.setItem('thrift_shop_items', JSON.stringify(backupData.items));
         localStorage.setItem('thrift_shop_sales', JSON.stringify(backupData.sales));
         localStorage.setItem('thrift_shop_stalls', JSON.stringify(backupData.stalls));
-        
+
         alert('✅ Data restored successfully! Refreshing page...');
         window.location.reload();
       } catch (error) {
@@ -101,29 +101,177 @@ const Reports: React.FC = () => {
   const handleExport = async (reportType: string, format: 'excel' | 'pdf') => {
     setLoading(true);
     try {
-      // Simulate export delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Create mock export data
-      const mockData = `Mock ${reportType} report data for ${dateRange.start_date} to ${dateRange.end_date}`;
-      const blob = new Blob([mockData], { type: 'text/plain' });
-      
-      // Create download link
+      let csvContent = '';
+      let filename = '';
+
+      switch (reportType) {
+        case 'inventory': {
+          const response = await dataApi.getInventory();
+          const items = response.items || [];
+
+          // CSV header
+          csvContent = 'Item ID,Item Name,Category,SKU,Initial Stock,Current Stock,Buying Price,Selling Price,Stock Value,Date Added\n';
+
+          // CSV rows
+          items.forEach((item: any) => {
+            const stockValue = (item.current_stock || 0) * (item.buying_price || item.unit_price || 0);
+            csvContent += `${item.item_id || ''},"${item.item_name || ''}","${item.category || ''}","${item.sku || ''}",${item.initial_stock || 0},${item.current_stock || 0},${item.buying_price || 0},${item.unit_price || 0},${stockValue.toFixed(2)},"${item.date_added || ''}"\n`;
+          });
+
+          filename = `inventory_report_${new Date().toISOString().split('T')[0]}`;
+          break;
+        }
+
+        case 'sales': {
+          const response = await dataApi.getSales();
+          let sales = response.sales || [];
+
+          // Filter by date range if provided
+          if (dateRange.start_date && dateRange.end_date) {
+            sales = sales.filter((sale: any) => {
+              const saleDate = sale.sale_date?.split('T')[0] || sale.sale_date;
+              return saleDate >= dateRange.start_date && saleDate <= dateRange.end_date;
+            });
+          }
+
+          // CSV header
+          csvContent = 'Sale ID,Date,Item Name,Quantity,Unit Price,Total Amount,Payment Method,Payment Status,Customer Name,Served By,Stall\n';
+
+          // CSV rows
+          sales.forEach((sale: any) => {
+            csvContent += `${sale.sale_id || ''},"${sale.sale_date || ''}","${sale.item_name || ''}",${sale.quantity || 0},${sale.unit_price || 0},${sale.total_amount || 0},"${sale.payment_method || ''}","${sale.payment_status || ''}","${sale.customer_name || ''}","${sale.served_by || ''}","${sale.stall_name || ''}"\n`;
+          });
+
+          filename = `sales_report_${dateRange.start_date || 'all'}_to_${dateRange.end_date || 'all'}`;
+          break;
+        }
+
+        case 'stall-performance': {
+          const response = await dataApi.getSales();
+          let sales = response.sales || [];
+
+          // Filter by date range
+          if (dateRange.start_date && dateRange.end_date) {
+            sales = sales.filter((sale: any) => {
+              const saleDate = sale.sale_date?.split('T')[0] || sale.sale_date;
+              return saleDate >= dateRange.start_date && saleDate <= dateRange.end_date;
+            });
+          }
+
+          // Aggregate by stall
+          const stallStats: any = {};
+          sales.forEach((sale: any) => {
+            const stall = sale.stall_name || 'Unknown';
+            if (!stallStats[stall]) {
+              stallStats[stall] = { totalSales: 0, totalRevenue: 0, itemCount: 0 };
+            }
+            stallStats[stall].totalSales += 1;
+            stallStats[stall].totalRevenue += sale.total_amount || 0;
+            stallStats[stall].itemCount += sale.quantity || 0;
+          });
+
+          // CSV header
+          csvContent = 'Stall Name,Total Sales,Items Sold,Total Revenue,Avg Sale Value\n';
+
+          // CSV rows
+          Object.entries(stallStats).forEach(([stall, stats]: [string, any]) => {
+            const avgSale = stats.totalSales > 0 ? stats.totalRevenue / stats.totalSales : 0;
+            csvContent += `"${stall}",${stats.totalSales},${stats.itemCount},${stats.totalRevenue.toFixed(2)},${avgSale.toFixed(2)}\n`;
+          });
+
+          filename = `stall_performance_${dateRange.start_date || 'all'}_to_${dateRange.end_date || 'all'}`;
+          break;
+        }
+
+        case 'top-sellers': {
+          const response = await dataApi.getSales();
+          let sales = response.sales || [];
+
+          // Filter by date range
+          if (dateRange.start_date && dateRange.end_date) {
+            sales = sales.filter((sale: any) => {
+              const saleDate = sale.sale_date?.split('T')[0] || sale.sale_date;
+              return saleDate >= dateRange.start_date && saleDate <= dateRange.end_date;
+            });
+          }
+
+          // Aggregate by item
+          const itemStats: any = {};
+          sales.forEach((sale: any) => {
+            const itemName = sale.item_name || 'Unknown';
+            if (!itemStats[itemName]) {
+              itemStats[itemName] = { quantity: 0, revenue: 0, salesCount: 0 };
+            }
+            itemStats[itemName].quantity += sale.quantity || 0;
+            itemStats[itemName].revenue += sale.total_amount || 0;
+            itemStats[itemName].salesCount += 1;
+          });
+
+          // Sort by quantity sold
+          const sortedItems = Object.entries(itemStats).sort((a: any, b: any) => b[1].quantity - a[1].quantity);
+
+          // CSV header
+          csvContent = 'Rank,Item Name,Quantity Sold,Total Revenue,Number of Sales,Avg Sale Value\n';
+
+          // CSV rows
+          sortedItems.forEach(([itemName, stats]: [string, any], index) => {
+            const avgSale = stats.salesCount > 0 ? stats.revenue / stats.salesCount : 0;
+            csvContent += `${index + 1},"${itemName}",${stats.quantity},${stats.revenue.toFixed(2)},${stats.salesCount},${avgSale.toFixed(2)}\n`;
+          });
+
+          filename = `top_sellers_${dateRange.start_date || 'all'}_to_${dateRange.end_date || 'all'}`;
+          break;
+        }
+
+        case 'credit-sales': {
+          const response = await dataApi.getSales();
+          let sales = response.sales || [];
+
+          // Filter credit sales
+          sales = sales.filter((sale: any) => sale.payment_status !== 'paid');
+
+          // Filter by date range
+          if (dateRange.start_date && dateRange.end_date) {
+            sales = sales.filter((sale: any) => {
+              const saleDate = sale.sale_date?.split('T')[0] || sale.sale_date;
+              return saleDate >= dateRange.start_date && saleDate <= dateRange.end_date;
+            });
+          }
+
+          // CSV header
+          csvContent = 'Sale ID,Date,Customer Name,Item Name,Quantity,Total Amount,Payment Status,Days Outstanding\n';
+
+          // CSV rows
+          const today = new Date();
+          sales.forEach((sale: any) => {
+            const saleDate = new Date(sale.sale_date);
+            const daysOutstanding = Math.floor((today.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24));
+            csvContent += `${sale.sale_id || ''},"${sale.sale_date || ''}","${sale.customer_name || ''}","${sale.item_name || ''}",${sale.quantity || 0},${sale.total_amount || 0},"${sale.payment_status || ''}",${daysOutstanding}\n`;
+          });
+
+          filename = `credit_sales_${dateRange.start_date || 'all'}_to_${dateRange.end_date || 'all'}`;
+          break;
+        }
+
+        default:
+          throw new Error('Unknown report type');
+      }
+
+      // Create and download CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
-      const extension = format === 'excel' ? 'xlsx' : 'pdf';
-      link.setAttribute('download', `${reportType}_report.${extension}`);
+      link.setAttribute('download', `${filename}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      
-      alert(`${reportType} report exported successfully as ${format.toUpperCase()}`);
+
+      alert(`✅ ${reportType} report exported successfully!`);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Failed to export report');
+      alert('❌ Failed to export report. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -161,8 +309,8 @@ const Reports: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Reports & Analytics</h1>
-        <p style={{color: 'var(--neutral-600)'}}>Generate and export various business reports</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Reports & Analytics</h1>
+        <p style={{ color: 'var(--neutral-600)' }}>Generate and export various business reports</p>
       </div>
 
       {/* Date Range Selector */}
@@ -211,11 +359,10 @@ const Reports: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <span className="mr-2">{tab.icon}</span>
                 {tab.name}

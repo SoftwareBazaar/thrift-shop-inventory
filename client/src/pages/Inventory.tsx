@@ -38,6 +38,7 @@ const Inventory: React.FC = () => {
   const [selectedStall, setSelectedStall] = useState<number | ''>('');
   const [showDistributeModal, setShowDistributeModal] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
@@ -56,6 +57,8 @@ const Inventory: React.FC = () => {
     notes: ''
   });
   const [addStockQuantity, setAddStockQuantity] = useState('');
+  const [withdrawQuantity, setWithdrawQuantity] = useState('');
+  const [withdrawReason, setWithdrawReason] = useState('');
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   const [itemDistributions, setItemDistributions] = useState<any[]>([]);
   const [showEditDistModal, setShowEditDistModal] = useState(false);
@@ -300,6 +303,40 @@ const Inventory: React.FC = () => {
     } catch (error: any) {
       console.error('Error adding stock:', error);
       alert(error.response?.data?.message || 'Failed to add stock');
+    }
+  };
+
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem || !withdrawQuantity) return;
+
+    const quantityToWithdraw = parseInt(withdrawQuantity);
+    if (quantityToWithdraw <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    if (quantityToWithdraw > selectedItem.current_stock) {
+      alert(`Cannot withdraw ${quantityToWithdraw} items. Only ${selectedItem.current_stock} available in stock.`);
+      return;
+    }
+
+    try {
+      // Reduce current stock by withdrawal amount
+      const newCurrentStock = selectedItem.current_stock - quantityToWithdraw;
+
+      await dataApi.updateItem(selectedItem.item_id, {
+        current_stock: newCurrentStock
+      });
+
+      setShowWithdrawModal(false);
+      setWithdrawQuantity('');
+      setWithdrawReason('');
+      fetchItems(); // Refresh items
+      alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) for ${withdrawReason || 'owner use'}`);
+    } catch (error: any) {
+      console.error('Error withdrawing stock:', error);
+      alert(error.response?.data?.message || '❌ Failed to withdraw stock');
     }
   };
 
@@ -717,6 +754,19 @@ const Inventory: React.FC = () => {
                               className="text-green-600 hover:text-green-900"
                             >
                               Add Stock
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                                setWithdrawQuantity('');
+                                setWithdrawReason('');
+                                setShowWithdrawModal(true);
+                              }}
+                              className="text-orange-600 hover:text-orange-900"
+                              title="Owner withdrawal"
+                            >
+                              Withdraw
                             </button>
                             <button
                               onClick={(e) => {
@@ -1324,6 +1374,80 @@ const Inventory: React.FC = () => {
           </div>
         )
       }
+
+      {/* Owner Withdrawal Modal */}
+      {showWithdrawModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏠 Owner Withdrawal</h3>
+            <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <p className="text-sm text-orange-800">
+                  <strong>Item:</strong> {selectedItem.item_name}
+                </p>
+                <p className="text-sm text-orange-800">
+                  <strong>Available Stock:</strong> {selectedItem.current_stock}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantity to Withdraw *
+                </label>
+                <input
+                  type="number"
+                  value={withdrawQuantity}
+                  onChange={(e) => setWithdrawQuantity(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  min="1"
+                  max={selectedItem.current_stock}
+                  required
+                  placeholder="Enter quantity"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={withdrawReason}
+                  onChange={(e) => setWithdrawReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="E.g., Personal use, Gift, etc."
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-xs text-yellow-800">
+                  ⚠️ This will permanently reduce the available stock by the specified quantity.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWithdrawModal(false);
+                    setWithdrawQuantity('');
+                    setWithdrawReason('');
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700"
+                >
+                  Confirm Withdrawal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
