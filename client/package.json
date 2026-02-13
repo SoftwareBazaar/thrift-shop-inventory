@@ -22,6 +22,8 @@
     "react-router-dom": "^6.20.1",
     "react-scripts": "5.0.1",
     "recharts": "^2.8.0",
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1",
     "bcryptjs": "^2.4.3",
     "@types/bcryptjs": "^2.4.2",
     "crypto-browserify": "^3.12.0",
