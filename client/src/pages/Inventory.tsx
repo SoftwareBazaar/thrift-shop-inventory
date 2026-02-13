@@ -140,15 +140,7 @@ const Inventory: React.FC = () => {
   }, []);
 
   const toggleExpand = (itemId: number) => {
-    if (expandedItemId === itemId) {
-      setExpandedItemId(null);
-      setItemDistributions([]);
-      setItemStockAdditions([]);
-    } else {
-      setExpandedItemId(itemId);
-      fetchItemDistributions(itemId);
-      if (user?.role === 'admin') fetchItemStockAdditions(itemId);
-    }
+    setExpandedItemId(prev => prev === itemId ? null : itemId);
   };
 
   useEffect(() => {
@@ -706,7 +698,7 @@ const Inventory: React.FC = () => {
                 return (
                   <React.Fragment key={item.item_id}>
                     <tr
-                      onClick={() => setExpandedItemId(isExpanded ? null : item.item_id)}
+                      onClick={() => toggleExpand(item.item_id)}
                       className={`hover:bg-blue-50/40 cursor-pointer transition-all group ${isExpanded ? 'bg-blue-50/50 shadow-inner' : ''}`}
                     >
                       <td className="px-4 py-4 whitespace-nowrap text-center">
