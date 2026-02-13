@@ -5,15 +5,120 @@
 /* Import Inter font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* Earthtone Color System */
+@layer base {
+  :root {
+    /* Earthtone Color Variables - Light Mode */
+    --background: 40 20% 97%;
+    --foreground: 25 35% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 25 35% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 35% 20%;
+
+    --primary: 20 45% 40%;
+    --primary-foreground: 40 20% 98%;
+
+    --secondary: 95 20% 48%;
+    --secondary-foreground: 40 20% 98%;
+
+    --muted: 40 15% 92%;
+    --muted-foreground: 25 15% 45%;
+
+    --accent: 25 55% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 5 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 80 45% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 85% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 35 20% 88%;
+    --input: 35 20% 88%;
+    --ring: 20 45% 40%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 20 45% 40%;
+    --sidebar-foreground: 40 20% 98%;
+    --sidebar-primary: 25 55% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 20 45% 48%;
+    --sidebar-accent-foreground: 40 20% 98%;
+    --sidebar-border: 20 30% 30%;
+    --sidebar-ring: 25 55% 50%;
+    --sidebar-muted-foreground: 40 15% 70%;
+  }
+
+  .dark {
+    --background: 25 30% 15%;
+    --foreground: 40 20% 95%;
+
+    --card: 20 35% 22%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 20 35% 22%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 25 55% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 95 20% 35%;
+    --secondary-foreground: 40 20% 95%;
+
+    --muted: 20 30% 28%;
+    --muted-foreground: 40 15% 65%;
+
+    --accent: 25 55% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 5 60% 40%;
+    --destructive-foreground: 40 20% 95%;
+
+    --success: 80 45% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 85% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 20 30% 28%;
+    --input: 20 30% 28%;
+    --ring: 25 55% 50%;
+
+    --sidebar-background: 25 35% 12%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 25 55% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 20 35% 20%;
+    --sidebar-accent-foreground: 40 20% 95%;
+    --sidebar-border: 20 30% 20%;
+    --sidebar-ring: 25 55% 50%;
+    --sidebar-muted-foreground: 40 15% 65%;
+  }
+}
+
 /* Base styles */
-body {
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f9fafb;
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
 }
 
 code {
@@ -28,79 +133,91 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: hsl(var(--muted));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: hsl(var(--muted-foreground) / 0.5);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: hsl(var(--muted-foreground) / 0.7);
 }
 
 /* Custom components */
 @layer components {
   .btn {
     @apply px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-    min-height: 44px; /* Touch-friendly minimum height */
+    min-height: 44px;
+    /* Touch-friendly minimum height */
   }
-  
+
   .btn-primary {
     @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
   }
-  
+
   .btn-secondary {
     @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
   }
-  
+
   .btn-success {
     @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
   }
-  
+
   .btn-danger {
     @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
-  
+
   .btn-warning {
     @apply bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500;
   }
-  
+
   .card {
     @apply bg-white rounded-lg shadow-sm border border-gray-200;
   }
-  
+
   .card-header {
     @apply px-6 py-4 border-b border-gray-200;
   }
-  
+
   .card-body {
     @apply px-6 py-4;
   }
-  
+
   .form-input {
-    @apply w-full px-3 py-2 sm:py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-base;
-    min-height: 44px; /* Touch-friendly minimum height */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    @apply w-full px-3 py-2 sm:py-2.5 rounded-md focus:outline-none transition-colors text-base;
+    border: 1px solid hsl(var(--input));
+    min-height: 44px;
+    /* Touch-friendly minimum height */
   }
-  
+
+  .form-input:focus {
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+  }
+
   .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    color: hsl(var(--foreground));
+    @apply block text-sm font-medium mb-1;
   }
-  
+
   .form-error {
-    @apply text-red-600 text-sm mt-1;
+    color: hsl(var(--destructive));
+    @apply text-sm mt-1;
   }
-  
+
   .table {
     @apply min-w-full divide-y divide-gray-200;
   }
-  
+
   .table th {
     @apply px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
   }
-  
+
   .table td {
     @apply px-3 sm:px-6 py-4 text-sm text-gray-900;
   }
@@ -111,23 +228,23 @@ code {
       @apply whitespace-normal;
     }
   }
-  
+
   .status-badge {
     @apply inline-flex px-2 py-1 text-xs font-semibold rounded-full;
   }
-  
+
   .status-active {
     @apply bg-green-100 text-green-800;
   }
-  
+
   .status-inactive {
     @apply bg-red-100 text-red-800;
   }
-  
+
   .status-pending {
     @apply bg-yellow-100 text-yellow-800;
   }
-  
+
   .status-warning {
     @apply bg-orange-100 text-orange-800;
   }
@@ -138,19 +255,19 @@ code {
   .text-shadow {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
-  
+
   .backdrop-blur {
     backdrop-filter: blur(4px);
   }
-  
+
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
-  
+
   .animate-slide-in {
     animation: slideIn 0.3s ease-out;
   }
-  
+
   .animate-bounce-in {
     animation: bounceIn 0.6s ease-out;
   }
@@ -162,6 +279,7 @@ code {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -172,6 +290,7 @@ code {
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -182,12 +301,15 @@ code {
     transform: scale(0.3);
     opacity: 0;
   }
+
   50% {
     transform: scale(1.05);
   }
+
   70% {
     transform: scale(0.9);
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -196,7 +318,9 @@ code {
 
 /* Loading spinner */
 .spinner {
-  @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600;
+  @apply animate-spin rounded-full border-2;
+  border-color: hsl(var(--muted));
+  border-top-color: hsl(var(--primary));
 }
 
 /* Modal styles */
@@ -205,7 +329,9 @@ code {
 }
 
 .modal-content {
-  @apply bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto;
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  @apply rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto;
 }
 
 /* Mobile modal improvements */
@@ -220,11 +346,11 @@ code {
   .mobile-stack {
     @apply flex-col;
   }
-  
+
   .mobile-full {
     @apply w-full;
   }
-  
+
   .mobile-hidden {
     @apply hidden;
   }
@@ -241,7 +367,8 @@ code {
 
   /* Better form inputs on mobile */
   .form-input {
-    @apply text-base; /* Prevents zoom on iOS */
+    @apply text-base;
+    /* Prevents zoom on iOS */
   }
 
   /* Modal improvements for mobile */
@@ -252,6 +379,7 @@ code {
 
 /* Small mobile devices */
 @media (max-width: 640px) {
+
   /* Reduce padding on very small screens */
   .card-body {
     @apply px-3 py-3;
@@ -277,7 +405,9 @@ code {
 
 /* Tablet improvements */
 @media (min-width: 641px) and (max-width: 1024px) {
-  .table td, .table th {
+
+  .table td,
+  .table th {
     @apply px-4 py-3 text-sm;
   }
 }
@@ -301,7 +431,7 @@ code {
   .no-print {
     display: none !important;
   }
-  
+
   .print-break {
     page-break-after: always;
   }

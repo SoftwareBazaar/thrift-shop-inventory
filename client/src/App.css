@@ -2,68 +2,72 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-/* Thrift Shop Professional Theme - Deep Ocean & Gold */
+/* Thrift Shop Professional Theme - Earthtone Palette */
 :root {
-  /* Primary Colors - Deep Ocean & Teal */
-  --primary-50: #f0f9ff;
-  --primary-100: #e0f2fe;
-  --primary-200: #bae6fd;
-  --primary-300: #7dd3fc;
-  --primary-400: #38bdf8;
-  --primary-500: #0ea5e9;
-  --primary-600: #0284c7;
-  --primary-700: #0369a1;
-  --primary-800: #075985;
-  --primary-900: #0c4a6e;
+  /* Primary Colors - Warm Brown/Terracotta */
+  --primary-50: #faf6f3;
+  --primary-100: #f4ede6;
+  --primary-200: #e7d4c4;
+  --primary-300: #d9bba2;
+  --primary-400: #be8960;
+  --primary-500: #8B5A3C;
+  --primary-600: #7a4f34;
+  --primary-700: #6a432d;
+  --primary-800: #5a3725;
+  --primary-900: #5D3A1A;
 
-  /* Secondary Colors - Warm Gold & Bronze */
-  --secondary-50: #fffbeb;
-  --secondary-100: #fef3c7;
-  --secondary-200: #fde68a;
-  --secondary-300: #fcd34d;
-  --secondary-400: #fbbf24;
-  --secondary-500: #f59e0b;
-  --secondary-600: #d97706;
-  --secondary-700: #b45309;
-  --secondary-800: #92400e;
-  --secondary-900: #78350f;
+  /* Secondary Colors - Sage Green */
+  --secondary-50: #f5f7f4;
+  --secondary-100: #ebefe9;
+  --secondary-200: #d3dace;
+  --secondary-300: #bbc5b3;
+  --secondary-400: #8b9b7d;
+  --secondary-500: #7C9473;
+  --secondary-600: #6d8265;
+  --secondary-700: #5f7157;
+  --secondary-800: #516049;
+  --secondary-900: #5A6F52;
 
-  /* Accent Colors - Forest Green & Emerald */
-  --accent-50: #f0fdf4;
-  --accent-100: #dcfce7;
-  --accent-200: #bbf7d0;
-  --accent-300: #86efac;
-  --accent-400: #4ade80;
-  --accent-500: #22c55e;
-  --accent-600: #16a34a;
-  --accent-700: #15803d;
-  --accent-800: #166534;
-  --accent-900: #14532d;
+  /* Accent Colors - Burnt Orange/Amber */
+  --accent-50: #fdf7f2;
+  --accent-100: #fbefe5;
+  --accent-200: #f5d7c2;
+  --accent-300: #efc0a0;
+  --accent-400: #e3915b;
+  --accent-500: #C87941;
+  --accent-600: #b36a3a;
+  --accent-700: #9e5c32;
+  --accent-800: #894d2b;
+  --accent-900: #A55A2A;
 
-  /* Neutral Colors - Professional Grays */
-  --neutral-50: #f8fafc;
-  --neutral-100: #f1f5f9;
-  --neutral-200: #e2e8f0;
-  --neutral-300: #cbd5e1;
-  --neutral-400: #94a3b8;
-  --neutral-500: #64748b;
-  --neutral-600: #475569;
-  --neutral-700: #334155;
-  --neutral-800: #1e293b;
-  --neutral-900: #0f172a;
+  /* Neutral Colors - Warm Grays with Beige */
+  --neutral-50: #faf9f7;
+  --neutral-100: #f5f3f0;
+  --neutral-200: #ebe7e1;
+  --neutral-300: #d9d3ca;
+  --neutral-400: #b5ada0;
+  --neutral-500: #8e8376;
+  --neutral-600: #6e6559;
+  --neutral-700: #504942;
+  --neutral-800: #3a342e;
+  --neutral-900: #251f1a;
 
-  /* Status Colors */
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --info: #3b82f6;
+  /* Status Colors - Earthtone Variations */
+  --success: #6b8e23;
+  /* Olive green */
+  --warning: #d4af37;
+  /* Gold/amber */
+  --error: #a0522d;
+  /* Sienna/rustic red */
+  --info: #8B7355;
+  /* Tan/khaki */
 }
 
 /* Custom styles for the Thrift Shop Inventory Management System */
 
 .App {
   text-align: left;
-  background: linear-gradient(135deg, var(--primary-50) 0%, var(--neutral-50) 100%);
+  background: linear-gradient(135deg, var(--neutral-50) 0%, var(--primary-50) 100%);
   min-height: 100vh;
 }
 
@@ -310,6 +314,7 @@
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -402,6 +407,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -416,6 +422,7 @@
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -426,7 +433,7 @@
   .mobile-stack {
     flex-direction: column;
   }
-  
+
   .mobile-full {
     width: 100%;
   }
@@ -437,7 +444,7 @@
   .no-print {
     display: none !important;
   }
-  
+
   .print-break {
     page-break-after: always;
   }
