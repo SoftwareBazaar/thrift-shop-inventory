@@ -68,6 +68,7 @@ export const offlineDataApi = {
         }
 
         // Admin: return all items with admin stock calculation
+        const offlineWithdrawals = await offlineStorage.getWithdrawals();
         const itemsWithAdminStock = items.map(item => {
           const totalDistributed = distributions
             .filter(d => d.item_id === item.item_id)
@@ -77,36 +78,20 @@ export const offlineDataApi = {
             .filter(s => s.item_id === item.item_id)
             .reduce((sum, s) => sum + s.quantity_sold, 0);
 
-          const withdrawals = distributions.filter(d => false); // Placeholder or fetch if we had getWithdrawals
-          // For now, let's fetch withdrawals from offline storage if we can
-          // Actually, I should await it here or outside
-          return {
-            ...item,
-            current_stock: 0, // Will be updated below
-            total_allocated: totalDistributed
-          };
-        });
-
-        // Actually handle withdrawals correctly in admin stock calculation
-        const offlineWithdrawals = await offlineStorage.getWithdrawals();
-        const itemsWithWithdrawals = itemsWithAdminStock.map(item => {
-          const totalSold = sales
-            .filter(s => s.item_id === item.item_id)
-            .reduce((sum, s) => sum + s.quantity_sold, 0);
-
           const totalWithdrawn = offlineWithdrawals
             .filter(w => w.item_id === item.item_id)
             .reduce((sum, w) => sum + w.quantity_withdrawn, 0);
 
-          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - item.total_allocated - totalSold - totalWithdrawn);
+          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed - totalSold - totalWithdrawn);
 
           return {
             ...item,
-            current_stock: adminStock
+            current_stock: adminStock,
+            total_allocated: totalDistributed
           };
         });
 
-        return { items: itemsWithWithdrawals };
+        return { items: itemsWithAdminStock };
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting inventory:', error);
