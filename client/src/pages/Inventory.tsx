@@ -692,7 +692,6 @@ const Inventory: React.FC = () => {
                 const managedTotal = totalReceived;
                 const centralPercent = managedTotal > 0 ? Math.round((centralStock / managedTotal) * 100) : 0;
                 const distributedPercent = managedTotal > 0 ? Math.round(((item.total_allocated || 0) / managedTotal) * 100) : 0;
-                const totalInventory = totalReceived;
                 const isExpanded = expandedItemId === item.item_id;
                 const columnSpan = user?.role === 'admin' ? 8 : 5;
 
