@@ -121,6 +121,40 @@
   }
 }
 
+/* Enhanced Typography for Better Visibility */
+@layer base {
+  body {
+    font-weight: 500;
+    /* Increase from default 400 to medium */
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 700;
+    /* Bold headings */
+  }
+
+  h1 {
+    font-weight: 800;
+    /* Extra bold for main headings */
+  }
+
+  strong,
+  b {
+    font-weight: 700;
+  }
+
+  /* Make numbers more prominent */
+  input[type="number"],
+  .numeric-value {
+    font-weight: 600;
+  }
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
@@ -149,8 +183,10 @@ code {
 /* Custom components */
 @layer components {
   .btn {
-    @apply px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-4 py-2 sm:py-2.5 rounded-lg font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
     min-height: 44px;
+    font-weight: 700;
+    /* Bold button text */
     /* Touch-friendly minimum height */
   }
 
@@ -180,6 +216,8 @@ code {
 
   .card-header {
     @apply px-6 py-4 border-b border-gray-200;
+    font-weight: 700;
+    /* Bold card headers */
   }
 
   .card-body {
@@ -192,6 +230,8 @@ code {
     @apply w-full px-3 py-2 sm:py-2.5 rounded-md focus:outline-none transition-colors text-base;
     border: 1px solid hsl(var(--input));
     min-height: 44px;
+    font-weight: 500;
+    /* Medium weight for better readability */
     /* Touch-friendly minimum height */
   }
 
@@ -202,12 +242,16 @@ code {
 
   .form-label {
     color: hsl(var(--foreground));
-    @apply block text-sm font-medium mb-1;
+    @apply block text-sm mb-1;
+    font-weight: 600;
+    /* Semi-bold labels */
   }
 
   .form-error {
     color: hsl(var(--destructive));
     @apply text-sm mt-1;
+    font-weight: 600;
+    /* Make errors stand out */
   }
 
   .table {
@@ -230,7 +274,9 @@ code {
   }
 
   .status-badge {
-    @apply inline-flex px-2 py-1 text-xs font-semibold rounded-full;
+    @apply inline-flex px-2 py-1 text-xs rounded-full;
+    font-weight: 700;
+    /* Bold badge text */
   }
 
   .status-active {
