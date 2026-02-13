@@ -322,11 +322,12 @@ const Inventory: React.FC = () => {
     }
 
     try {
-      // Reduce current stock by withdrawal amount
-      const newCurrentStock = selectedItem.current_stock - quantityToWithdraw;
+      // Reduce total_added to decrease the overall system count
+      // This ensures the withdrawn items are removed from total inventory
+      const newTotalAdded = Math.max(0, (selectedItem.total_added || 0) - quantityToWithdraw);
 
       await dataApi.updateItem(selectedItem.item_id, {
-        current_stock: newCurrentStock
+        total_added: newTotalAdded
       });
 
       setShowWithdrawModal(false);
