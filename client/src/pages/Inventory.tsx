@@ -308,7 +308,7 @@ const Inventory: React.FC = () => {
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem || !withdrawQuantity) return;
+    if (!selectedItem || !withdrawQuantity || !user) return;
 
     const quantityToWithdraw = parseInt(withdrawQuantity);
     if (quantityToWithdraw <= 0) {
@@ -322,12 +322,20 @@ const Inventory: React.FC = () => {
     }
 
     try {
-      // Reduce total_added to decrease the overall system count
-      // This ensures the withdrawn items are removed from total inventory
-      const newTotalAdded = Math.max(0, (selectedItem.total_added || 0) - quantityToWithdraw);
-
-      await dataApi.updateItem(selectedItem.item_id, {
-        total_added: newTotalAdded
+      // Record withdrawal as a 0-price sale from central store (stall_id: null)
+      // This is the most robust way to record stock leaving the system
+      // and ensures the central stock calculation (initial + added - distributed - central_sold)
+      // remains correct even when recalculated from history.
+      await dataApi.createSale({
+        item_id: selectedItem.item_id,
+        stall_id: null, // Central store withdrawal
+        quantity_sold: quantityToWithdraw,
+        unit_price: 0,
+        total_amount: 0,
+        sale_type: 'cash',
+        recorded_by: user.user_id,
+        customer_name: `Owner: ${withdrawReason || 'Withdrawal'}`,
+        notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Handled as stock movement.`
       });
 
       setShowWithdrawModal(false);
