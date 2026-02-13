@@ -635,8 +635,8 @@ export const mockApi = {
       throw new Error('Quantity must be greater than zero.');
     }
 
-    if (!saleData.unit_price || saleData.unit_price <= 0) {
-      throw new Error('Selling price must be greater than zero.');
+    if (saleData.unit_price === undefined || saleData.unit_price === null || saleData.unit_price < 0) {
+      throw new Error('Selling price must be zero or greater.');
     }
 
     // Find the item to get its details
