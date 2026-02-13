@@ -562,7 +562,7 @@ export const dbApi = {
             0
           ) || 0;
 
-          // Sum withdrawal quantities
+          // Sum withdrawal quantities (withdrawals ARE deducted from stock)
           const { data: withdrawals } = await (supabase as any)
             .from('stock_withdrawals')
             .select('quantity_withdrawn')
@@ -756,7 +756,7 @@ export const dbApi = {
           0
         ) || 0;
 
-        // Query withdrawals
+        // Query withdrawals (these ARE deducted from available stock)
         const { data: withdrawals } = await (supabase as any)
           .from('stock_withdrawals')
           .select('quantity_withdrawn')
@@ -767,7 +767,7 @@ export const dbApi = {
           0
         ) || 0;
 
-        // Use complete formula (matches admin stock calculation in getInventory)
+        // Complete formula: withdrawals reduce available stock
         const newCurrentStock = Math.max(0, initialStock + newTotalAdded - totalDistributed - totalCentralSold - totalWithdrawn);
         updateData.current_stock = newCurrentStock;
       }
