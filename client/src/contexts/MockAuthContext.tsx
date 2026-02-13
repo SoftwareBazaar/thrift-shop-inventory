@@ -80,6 +80,7 @@ const toOfflineUser = (user: User): OfflineUser => ({
   phone_number: (user as any)?.phone_number ?? null,
   email: (user as any)?.email ?? null,
   recovery_hint: (user as any)?.recovery_hint ?? null,
+  secret_word: (user as any)?.secret_word ?? null,
 });
 
 const fromOfflineUser = (user: OfflineUser): User => ({
@@ -93,6 +94,7 @@ const fromOfflineUser = (user: OfflineUser): User => ({
   phone_number: user.phone_number ?? null,
   email: user.email ?? null,
   recovery_hint: user.recovery_hint ?? null,
+  secret_word: user.secret_word ?? null,
 });
 
 const cacheCredentials = async (user: User, password: string, passwordVersion?: string | null) => {

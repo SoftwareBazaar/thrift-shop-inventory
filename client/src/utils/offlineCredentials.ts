@@ -16,6 +16,7 @@ export type OfflineUser = {
   email?: string | null;
   recovery_hint?: string | null;
   password_hash?: string | null;
+  secret_word?: string | null;
 };
 
 type RecoveryInfo = {
@@ -255,6 +256,7 @@ export const upsertOfflineCredentialFromPassword = async (
     ),
     source: existing?.source === 'seed' && source !== 'seed' ? 'manual' : source,
     lastLoginAt: existing?.lastLoginAt ?? null,
+    secretWord: existing?.secretWord ?? user.secret_word ?? null,
   };
 
   persistCredentialMap(map);
@@ -278,6 +280,26 @@ export const updateOfflinePassword = async (
     passwordVerifier,
     passwordUpdatedAt: new Date().toISOString(),
     source: record.source === 'seed' ? 'manual' : record.source,
+  };
+
+  persistCredentialMap(map);
+};
+
+export const updateOfflineSecretWord = async (
+  username: string,
+  secretWord: string
+) => {
+  await ensureOfflineCredentialSeeds();
+  const map = loadCredentialMap();
+  const key = normaliseUsername(username);
+  const record = map[key];
+  if (!record) {
+    throw new Error('Account not found in offline credentials');
+  }
+
+  map[key] = {
+    ...record,
+    secretWord: secretWord.trim(),
   };
 
   persistCredentialMap(map);
@@ -339,6 +361,7 @@ export const syncOfflineUserProfile = (
     ...record,
     passwordVerifier,
     passwordUpdatedAt,
+    secretWord: user.secret_word ?? record.secretWord ?? null,
     user: {
       ...record.user,
       ...user,

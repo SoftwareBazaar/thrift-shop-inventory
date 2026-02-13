@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import {
   getOfflineCredential,
   updateOfflinePassword as updateOfflinePasswordStore,
+  updateOfflineSecretWord,
 } from '../utils/offlineCredentials';
 import { normaliseUsername, derivePasswordHash } from '../utils/passwordUtils';
 import SetSecretWord from '../components/SetSecretWord';
@@ -653,9 +654,30 @@ const Login: React.FC = () => {
           username={loggedInUser.username}
           isFirstTime={true}
           onComplete={async (word) => {
-            // Success handled by parent component (modal logic)
-            setShowSetSecretWordModal(false);
-            navigate('/dashboard');
+            try {
+              // 1. Save to Supabase if online
+              const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+              if (isSupabaseConfigured() && online) {
+                const { error: updateError } = await (supabase as any)
+                  .from('users')
+                  .update({ secret_word: word.trim() })
+                  .eq('username', loggedInUser.username);
+
+                if (updateError) throw updateError;
+              }
+
+              // 2. Save to offline storage
+              await updateOfflineSecretWord(loggedInUser.username, word);
+
+              // 3. Close modal and navigate
+              setShowSetSecretWordModal(false);
+              navigate('/dashboard');
+              alert('✅ Secret word saved successfully! You can use it to recover your password if needed.');
+            } catch (err: any) {
+              console.error('Failed to save secret word:', err);
+              alert('❌ Failed to save secret word. Please try again.');
+              throw err;
+            }
           }}
           onCancel={() => {
             setShowSetSecretWordModal(false);
