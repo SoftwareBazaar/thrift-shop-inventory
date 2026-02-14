@@ -278,11 +278,7 @@ const AdminDashboard: React.FC = () => {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-yellow-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10 pr-10">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
-            <p className="text-lg font-bold text-yellow-600 break-words">{formatCurrency(todaySales)}</p>
-          </div>
-          <div className="absolute right-2 bottom-2">
+          <div className="absolute left-2 bottom-2">
             <div className="flex flex-col items-center bg-white border border-gray-200 rounded-lg shadow-sm" style={{ width: '40px' }}>
               <div className="bg-red-500 text-white text-[7px] font-bold py-0.5 w-full text-center rounded-t">
                 {new Date().toLocaleString('en', { month: 'short' }).toUpperCase()}
@@ -290,38 +286,42 @@ const AdminDashboard: React.FC = () => {
               <div className="text-xl font-bold text-gray-800 py-1">{new Date().getDate()}</div>
             </div>
           </div>
+          <div className="flex flex-col relative z-10 pl-12">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Sales</h3>
+            <p className="text-lg font-bold text-yellow-600 break-words">{formatCurrency(todaySales)}</p>
+          </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10 pr-10">
+          <div className="absolute left-2 bottom-2 text-4xl opacity-30">💰</div>
+          <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
             <p className="text-lg font-bold text-blue-600 break-words">{formatCurrency(analytics?.cumulativeRevenue || 0)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-10">💰</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10 pr-10">
+          <div className="absolute left-2 bottom-2 text-4xl opacity-30">📦</div>
+          <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
             <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-10">📦</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10 pr-10">
+          <div className="absolute left-2 bottom-2 text-4xl opacity-30">🏦</div>
+          <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
             <p className="text-base font-bold text-indigo-600 break-words">{formatCurrency(totalStockValue)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-10">🏦</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
-          <div className="flex flex-col relative z-10 pr-10">
+          <div className="absolute left-2 bottom-2 text-4xl opacity-30">📈</div>
+          <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
             <p className={`text-lg font-bold ${profitTone} break-words`}>{formatCurrency(grossProfit)}</p>
           </div>
-          <div className="absolute right-2 bottom-2 text-4xl opacity-10">📈</div>
         </div>
       </div>
 
