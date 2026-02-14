@@ -714,8 +714,8 @@ const Inventory: React.FC = () => {
                               ></div>
                             </div>
                             <div className="flex justify-between text-[11px] text-gray-400">
-                              <span>Total in system</span>
-                              <span>{centralStock + distributedLive}</span>
+                              <span>Total received</span>
+                              <span>{totalReceived}</span>
                             </div>
                           </div>
                         ) : (
@@ -855,13 +855,13 @@ const Inventory: React.FC = () => {
                               </div>
                               <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                 <div className="text-xs font-semibold uppercase text-indigo-700">
-                                  Total in System
+                                  Total Received
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-indigo-900">
-                                  {centralStock + distributedLive}
+                                  {totalReceived}
                                 </div>
                                 <p className="mt-1 text-xs text-indigo-700">
-                                  Hub + Stall Stock
+                                  Initial + Items Added
                                 </p>
                               </div>
                             </div>

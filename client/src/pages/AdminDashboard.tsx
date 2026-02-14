@@ -207,19 +207,18 @@ const AdminDashboard: React.FC = () => {
 
   const items = inventoryResponse?.items || [];
   const totalStockValue = items.reduce((sum: number, item: any) => {
-    // Current Stock in system = Central Stock + Distributed Stock
+    // Current Stock in system = Central Stock + Distributed Stock (unsold)
     const centralStock = Number(item.current_stock) || 0;
-    const distributedStock = Number(item.total_allocated || 0) - (allSales.filter(s => s.item_id === item.item_id || s.item_name === item.item_name).reduce((sum, s) => sum + s.quantity_sold, 0));
-    const unsoldStock = centralStock + Math.max(0, distributedStock);
+    const itemSales = allSales.filter(s => s.item_id === item.item_id || s.item_name === item.item_name);
+    const totalSold = itemSales.reduce((sum, s: any) => sum + (s.quantity_sold || 0), 0);
+    const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - totalSold);
+
+    const unsoldStock = centralStock + distributedLive;
     return sum + (unsoldStock * (Number(item.buying_price) || 0));
   }, 0);
 
-  const totalCostOfGoodsSold = allSales.reduce((sum: number, sale: any) => {
-    return sum + ((sale.quantity_sold || 0) * (sale.buying_price || 0));
-  }, 0);
-
   const revenue = analytics?.cumulativeRevenue || 0;
-  const grossProfit = revenue - totalCostOfGoodsSold;
+  const grossProfit = revenue - totalStockValue;
   const profitTone = grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
 
   if (loading) {
