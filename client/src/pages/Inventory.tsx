@@ -680,11 +680,9 @@ const Inventory: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
-                          {user?.role === 'admin' && (
-                            <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
-                              Total Received: {totalReceived}
-                            </div>
-                          )}
+                          <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
+                            TOTAL IN SYSTEM: {centralStock + distributedLive}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -716,8 +714,8 @@ const Inventory: React.FC = () => {
                               ></div>
                             </div>
                             <div className="flex justify-between text-[11px] text-gray-400">
-                              <span>Total received</span>
-                              <span>{(item.initial_stock || 0) + (item.total_added || 0)}</span>
+                              <span>Total in system</span>
+                              <span>{centralStock + distributedLive}</span>
                             </div>
                           </div>
                         ) : (
@@ -739,7 +737,7 @@ const Inventory: React.FC = () => {
                       )}
                       {user?.role === 'admin' && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(managedTotal * (item.buying_price || 0))}
+                          {formatCurrency((centralStock + distributedLive) * (item.buying_price || 0))}
                         </td>
                       )}
                       {user?.role === 'admin' && (
@@ -857,13 +855,13 @@ const Inventory: React.FC = () => {
                               </div>
                               <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                 <div className="text-xs font-semibold uppercase text-indigo-700">
-                                  Total Received
+                                  Total in System
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-indigo-900">
-                                  {totalReceived}
+                                  {centralStock + distributedLive}
                                 </div>
                                 <p className="mt-1 text-xs text-indigo-700">
-                                  Initial + Items Added
+                                  Hub + Stall Stock
                                 </p>
                               </div>
                             </div>
@@ -878,9 +876,8 @@ const Inventory: React.FC = () => {
                               <h4 className="text-sm font-semibold text-gray-900">Stock flow</h4>
                               <p className="mt-1 text-xs text-gray-500">
                                 {(item.initial_stock || 0)} initial + {(item.total_added || 0)} added ={' '}
-                                {(item.initial_stock || 0) + (item.total_added || 0)} received overall.{' '}
-                                {distributedLive} currently at stalls, {totalSoldForItem} sold, leaving {centralStock}{' '}
-                                back at the hub.
+                                {totalReceived} received overall.{' '}
+                                {distributedLive} currently at stalls, {centralStock} at hub (Total in system: {centralStock + distributedLive}).
                               </p>
                               <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                                 <div className="rounded border border-gray-100 bg-gray-50 p-3">

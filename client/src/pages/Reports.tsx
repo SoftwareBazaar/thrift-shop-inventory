@@ -38,12 +38,21 @@ const Reports: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'inventory') {
-        const response = await dataApi.getInventory();
-        const items = response.items || [];
+        const invResponse = await dataApi.getInventory();
+        const items = invResponse.items || [];
+        const salesResponse = await dataApi.getSales();
+        const allSales = salesResponse.sales || [];
+        const itemsSoldMap: any = {};
+        allSales.forEach((s: any) => {
+          itemsSoldMap[s.item_id] = (itemsSoldMap[s.item_id] || 0) + (s.quantity_sold || s.quantity || 0);
+        });
+
         const categories: any = {};
         items.forEach((item: any) => {
           const cat = item.category || 'Other';
-          categories[cat] = (categories[cat] || 0) + (item.current_stock * (item.buying_price || 0));
+          const soldCount = itemsSoldMap[item.item_id] || 0;
+          const unsoldStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - soldCount);
+          categories[cat] = (categories[cat] || 0) + (unsoldStock * (item.buying_price || 0));
         });
         setInventoryStats(
           Object.entries(categories)
@@ -150,12 +159,17 @@ const Reports: React.FC = () => {
     try {
       let csvContent = '';
       if (reportType === 'inventory') {
-        const response = await dataApi.getInventory();
-        const items = response.items || [];
-        csvContent = 'Item ID,Item Name,Category,Current Stock,Buying Price,Selling Price,Stock Value\n';
+        const invResponse = await dataApi.getInventory();
+        const items = invResponse.items || [];
+        const salesResponse = await dataApi.getSales();
+        const allSales = salesResponse.sales || [];
+        csvContent = 'Item ID,Item Name,Category,Unsold Stock,Buying Price,Selling Price,Stock Value\n';
         items.forEach((item: any) => {
-          const val = (item.current_stock || 0) * (item.buying_price || 0);
-          csvContent += `${item.item_id},"${item.item_name}","${item.category}",${item.current_stock},${item.buying_price},${item.unit_price},${val.toFixed(2)}\n`;
+          const itemSales = allSales.filter((s: any) => s.item_id === item.item_id || s.item_name === item.item_name) || [];
+          const soldCount = itemSales.reduce((sum: number, s: any) => sum + (s.quantity_sold || s.quantity || 0), 0);
+          const unsoldStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - soldCount);
+          const val = unsoldStock * (item.buying_price || 0);
+          csvContent += `${item.item_id},"${item.item_name}","${item.category}",${unsoldStock},${item.buying_price},${item.unit_price},${val.toFixed(2)}\n`;
         });
       } else if (reportType === 'sales') {
         const response = await dataApi.getSales();
