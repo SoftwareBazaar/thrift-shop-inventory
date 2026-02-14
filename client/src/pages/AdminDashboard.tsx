@@ -293,7 +293,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
-          <div className="absolute left-2 bottom-2 text-4xl opacity-30">💰</div>
+          <div className="absolute left-2 bottom-2 text-4xl opacity-100">💰</div>
           <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
             <p className="text-lg font-bold text-blue-600 break-words">{formatCurrency(analytics?.cumulativeRevenue || 0)}</p>
@@ -301,7 +301,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
-          <div className="absolute left-2 bottom-2 text-4xl opacity-30">📦</div>
+          <div className="absolute left-2 bottom-2 text-4xl opacity-100">📦</div>
           <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
             <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
@@ -309,7 +309,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-indigo-500 relative overflow-hidden">
-          <div className="absolute left-2 bottom-2 text-4xl opacity-30">🏦</div>
+          <div className="absolute left-2 bottom-2 text-4xl opacity-100">🏦</div>
           <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</h3>
             <p className="text-base font-bold text-indigo-600 break-words">{formatCurrency(totalStockValue)}</p>
@@ -317,7 +317,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
-          <div className="absolute left-2 bottom-2 text-4xl opacity-30">📈</div>
+          <div className="absolute left-2 bottom-2 text-4xl opacity-100">📈</div>
           <div className="flex flex-col relative z-10 pl-12">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
             <p className={`text-lg font-bold ${profitTone} break-words`}>{formatCurrency(grossProfit)}</p>
