@@ -390,8 +390,53 @@ export const offlineDataApi = {
       console.error('[OfflineDataApi] Error deleting stock addition:', error);
       throw error;
     }
+  },
+
+  // Withdraw from distribution - queue if offline
+  withdrawFromDistribution: async (distributionId: number, quantityToWithdraw: number) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.withdrawFromDistribution(distributionId, quantityToWithdraw);
+
+        // Refresh cached data after withdrawal
+        const inventory = await dataApi.getInventory();
+        if (inventory.items) {
+          for (const item of inventory.items) {
+            await offlineStorage.saveItem(item);
+          }
+        }
+
+        const distributions = await dataApi.getDistributions();
+        if (distributions.distributions) {
+          // Clear and refresh distributions
+          for (const dist of distributions.distributions) {
+            await offlineStorage.saveDistribution(dist);
+          }
+        }
+
+        return result;
+      } else {
+        // Offline: queue for sync
+        console.log('[OfflineDataApi] Withdrawing from distribution offline, queuing for sync');
+        await syncService.queueOperation('UPDATE', 'distributions', {
+          distribution_id: distributionId,
+          quantity_to_withdraw: quantityToWithdraw
+        });
+
+        // Return success for offline operation
+        return {
+          success: true,
+          withdrawnQuantity: quantityToWithdraw,
+          remainingDistribution: 0 // We don't know the exact value offline
+        };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error withdrawing from distribution:', error);
+      throw error;
+    }
   }
 };
+
 
 
 export default offlineDataApi;
