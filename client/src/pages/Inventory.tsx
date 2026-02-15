@@ -69,6 +69,11 @@ const Inventory: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [itemStockAdditions, setItemStockAdditions] = useState<any[]>([]);
 
+  // Withdraw from distribution state
+  const [showWithdrawFromDistModal, setShowWithdrawFromDistModal] = useState(false);
+  const [withdrawFromDist, setWithdrawFromDist] = useState<any>(null);
+  const [withdrawFromDistQty, setWithdrawFromDistQty] = useState('');
+
   const fetchItems = useCallback(async () => {
     try {
       // For non-admin users, pass their stall_id to get only distributed stock
@@ -319,6 +324,38 @@ const Inventory: React.FC = () => {
       alert(error.message || 'Failed to delete stock addition');
     }
   };
+
+  const handleWithdrawFromDistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!withdrawFromDist || !withdrawFromDistQty || isSubmitting) return;
+
+    const quantityToWithdraw = parseInt(withdrawFromDistQty);
+    if (quantityToWithdraw <= 0) {
+      alert('Withdrawal quantity must be greater than 0');
+      return;
+    }
+
+    if (quantityToWithdraw > withdrawFromDist.quantity_allocated) {
+      alert(`Cannot withdraw ${quantityToWithdraw} items. Only ${withdrawFromDist.quantity_allocated} items are distributed to ${withdrawFromDist.stall_name}.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await dataApi.withdrawFromDistribution(withdrawFromDist.distribution_id, quantityToWithdraw);
+      setShowWithdrawFromDistModal(false);
+      setWithdrawFromDist(null);
+      setWithdrawFromDistQty('');
+      await fetchItems(); // Refresh inventory
+      if (expandedItemId) await fetchItemDistributions(expandedItemId); // Refresh distribution list
+      alert(`✅ Successfully withdrew ${quantityToWithdraw} item(s) from ${withdrawFromDist.stall_name}. Items returned to central hub.`);
+    } catch (error: any) {
+      alert(error.message || 'Failed to withdraw from distribution');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
 
   const handleAddStockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -943,6 +980,18 @@ const Inventory: React.FC = () => {
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
+                                                  setWithdrawFromDist(dist);
+                                                  setWithdrawFromDistQty('');
+                                                  setShowWithdrawFromDistModal(true);
+                                                }}
+                                                className="bg-orange-50 text-orange-700 px-3 py-1 rounded-md hover:bg-orange-600 hover:text-white transition-all mr-2 border border-orange-200"
+                                                title="Withdraw items from this user back to central"
+                                              >
+                                                Withdraw
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
                                                   handleDeleteDist(dist);
                                                 }}
                                                 className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
@@ -1515,7 +1564,92 @@ const Inventory: React.FC = () => {
           </div>
         </div>
       )}
-    </div >
+
+      {/* Withdraw from Distribution Modal */}
+      {
+        showWithdrawFromDistModal && withdrawFromDist && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Withdraw from User - {selectedItem?.item_name}
+              </h3>
+              <form onSubmit={handleWithdrawFromDistSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    User/Stall
+                  </label>
+                  <input
+                    type="text"
+                    value={withdrawFromDist.stall_name}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Currently Distributed
+                  </label>
+                  <input
+                    type="text"
+                    value={withdrawFromDist.quantity_allocated}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity to Withdraw *
+                  </label>
+                  <input
+                    type="number"
+                    value={withdrawFromDistQty}
+                    onChange={(e) => setWithdrawFromDistQty(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    min="1"
+                    max={withdrawFromDist.quantity_allocated}
+                    required
+                    placeholder="Enter quantity to withdraw"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Items will be returned to central inventory for redistribution
+                  </p>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-xs text-yellow-800">
+                    ℹ️ This will reduce {withdrawFromDist.stall_name}'s stock and add the items back to central inventory.
+                    You can then redistribute these items to other users.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWithdrawFromDistModal(false);
+                      setWithdrawFromDist(null);
+                      setWithdrawFromDistQty('');
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Processing...' : 'Withdraw Items'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+    </div>
   );
 };
 

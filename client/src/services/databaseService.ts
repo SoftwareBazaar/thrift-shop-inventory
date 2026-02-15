@@ -1055,6 +1055,88 @@ export const dbApi = {
     }
   },
 
+  // Withdraw partial or full quantity from a user's distribution
+  withdrawFromDistribution: async (distributionId: number, quantityToWithdraw: number) => {
+    if (!isSupabaseConfigured()) {
+      return (mockApi as any).withdrawFromDistribution(distributionId, quantityToWithdraw);
+    }
+
+    try {
+      // 1. Get the existing distribution
+      const { data: existingDist, error: fetchError } = await (supabase as any)
+        .from('stock_distribution')
+        .select('*')
+        .eq('distribution_id', distributionId)
+        .single();
+
+      if (fetchError || !existingDist) throw new Error('Distribution not found');
+
+      const itemId = existingDist.item_id;
+      const currentQuantity = existingDist.quantity_allocated;
+
+      // Validate quantity
+      if (quantityToWithdraw <= 0) {
+        throw new Error('Withdrawal quantity must be greater than 0');
+      }
+
+      if (quantityToWithdraw > currentQuantity) {
+        throw new Error(`Cannot withdraw ${quantityToWithdraw} items. Only ${currentQuantity} items are distributed to this user.`);
+      }
+
+      // 2. Update or delete the distribution based on quantity
+      if (quantityToWithdraw === currentQuantity) {
+        // Full withdrawal - delete the distribution
+        const { error: deleteError } = await (supabase as any)
+          .from('stock_distribution')
+          .delete()
+          .eq('distribution_id', distributionId);
+
+        if (deleteError) throw deleteError;
+      } else {
+        // Partial withdrawal - update the distribution
+        const newQuantity = currentQuantity - quantityToWithdraw;
+        const { error: updateError } = await (supabase as any)
+          .from('stock_distribution')
+          .update({ quantity_allocated: newQuantity })
+          .eq('distribution_id', distributionId);
+
+        if (updateError) throw updateError;
+      }
+
+      // 3. Return withdrawn stock to central inventory
+      const { data: itemRecord, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('current_stock, total_allocated')
+        .eq('item_id', itemId)
+        .single();
+
+      if (!itemError && itemRecord) {
+        const newCurrentStock = (itemRecord.current_stock || 0) + quantityToWithdraw;
+        const newTotalAllocated = Math.max(0, (itemRecord.total_allocated || 0) - quantityToWithdraw);
+
+        await (supabase as any)
+          .from('items')
+          .update({
+            current_stock: newCurrentStock,
+            total_allocated: newTotalAllocated
+          })
+          .eq('item_id', itemId);
+
+        console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${newCurrentStock}`);
+      }
+
+      return {
+        success: true,
+        withdrawnQuantity: quantityToWithdraw,
+        remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw
+      };
+    } catch (error) {
+      console.error('Error withdrawing from distribution:', error);
+      throw error;
+    }
+  },
+
+
   // Sales
   getSales: async () => {
     if (!isSupabaseConfigured()) {

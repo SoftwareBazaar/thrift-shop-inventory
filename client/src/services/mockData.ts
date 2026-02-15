@@ -969,6 +969,58 @@ export const mockApi = {
     return { success: true };
   },
 
+  withdrawFromDistribution: async (distributionId: number, quantityToWithdraw: number): Promise<{ success: boolean; withdrawnQuantity: number; remainingDistribution: number }> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const distributions = getStorageData<StockDistribution[]>('stock_distributions', []);
+    const items = getStorageData<InventoryItem[]>('items', mockInventory);
+
+    const distIndex = distributions.findIndex(d => d.distribution_id === distributionId);
+    if (distIndex === -1) throw new Error('Distribution not found');
+
+    const dist = distributions[distIndex];
+    const itemId = dist.item_id;
+    const currentQuantity = dist.quantity_allocated;
+
+    // Validate quantity
+    if (quantityToWithdraw <= 0) {
+      throw new Error('Withdrawal quantity must be greater than 0');
+    }
+
+    if (quantityToWithdraw > currentQuantity) {
+      throw new Error(`Cannot withdraw ${quantityToWithdraw} items. Only ${currentQuantity} items are distributed to this user.`);
+    }
+
+    const item = items.find(i => i.item_id === itemId);
+    if (!item) throw new Error('Item not found');
+
+    // Update item stock - return to central
+    item.current_stock += quantityToWithdraw;
+    item.total_allocated -= quantityToWithdraw;
+
+    // Update or delete the distribution based on quantity
+    if (quantityToWithdraw === currentQuantity) {
+      // Full withdrawal - delete the distribution
+      const filteredDist = distributions.filter(d => d.distribution_id !== distributionId);
+      setStorageData('stock_distributions', filteredDist);
+    } else {
+      // Partial withdrawal - update the distribution
+      distributions[distIndex] = {
+        ...dist,
+        quantity_allocated: currentQuantity - quantityToWithdraw
+      };
+      setStorageData('stock_distributions', distributions);
+    }
+
+    setStorageData('items', items);
+
+    return {
+      success: true,
+      withdrawnQuantity: quantityToWithdraw,
+      remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw
+    };
+  },
+
+
   deleteSale: async (saleId: number): Promise<{ success: boolean }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);
