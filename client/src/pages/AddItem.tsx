@@ -72,18 +72,33 @@ const AddItem: React.FC = () => {
     }
 
     try {
-      await dataApi.createItem({
+      const result = await dataApi.createItem({
         item_name: formData.item_name,
         category: formData.category,
         initial_stock: parseInt(formData.initial_stock),
         current_stock: parseInt(formData.initial_stock),
         buying_price: parseFloat(formData.buying_price),
         unit_price: parseFloat(formData.unit_price),
-        created_by: user?.user_id || 1 // Use current user ID, default to admin (1) if not logged in
+        created_by: user?.user_id || 1
       });
-      
-      setSuccessMessage('Item added successfully!');
-      
+
+      // If a stall was selected, distribute all initial stock to it immediately
+      if (formData.selectedStall && result?.item?.item_id) {
+        try {
+          await dataApi.distributeStock({
+            item_id: result.item.item_id,
+            distributions: [{ stall_id: parseInt(formData.selectedStall), quantity: parseInt(formData.initial_stock) }],
+            notes: `Auto-distributed on item creation`
+          });
+          setSuccessMessage(`✅ Item added and ${formData.initial_stock} unit(s) distributed to the selected stall!`);
+        } catch (distErr) {
+          console.error('Distribution after item creation failed:', distErr);
+          setSuccessMessage(`✅ Item added! ⚠️ Stock distribution failed — please distribute manually from Inventory.`);
+        }
+      } else {
+        setSuccessMessage('✅ Item added successfully!');
+      }
+
       // Clear form
       setFormData({
         item_name: '',
@@ -112,8 +127,8 @@ const AddItem: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{color: 'var(--primary-800)'}}>Add New Item</h1>
-          <p style={{color: 'var(--neutral-600)'}}>Add a new product to your inventory</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Add New Item</h1>
+          <p style={{ color: 'var(--neutral-600)' }}>Add a new product to your inventory</p>
         </div>
         <button
           onClick={() => navigate('/inventory')}
@@ -143,7 +158,7 @@ const AddItem: React.FC = () => {
                   required
                   disabled={loading}
                 />
-                <VoiceAssistant 
+                <VoiceAssistant
                   onTextReceived={(text) => setFormData(prev => ({ ...prev, item_name: text }))}
                   disabled={loading}
                 />
@@ -167,7 +182,7 @@ const AddItem: React.FC = () => {
                   required
                   disabled={loading}
                 />
-                <VoiceAssistant 
+                <VoiceAssistant
                   onTextReceived={(text) => setFormData(prev => ({ ...prev, category: text }))}
                   disabled={loading}
                 />
@@ -239,8 +254,9 @@ const AddItem: React.FC = () => {
             {/* Stall Assignment */}
             <div>
               <label htmlFor="selectedStall" className="block text-sm font-medium text-gray-700 mb-2">
-                Assign to Stall (Optional)
+                Distribute Initial Stock to Stall (Optional)
               </label>
+              <p className="text-xs text-gray-500 mb-2">Select a stall to automatically distribute all initial stock there upon saving.</p>
               <select
                 id="selectedStall"
                 name="selectedStall"
