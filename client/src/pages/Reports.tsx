@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { dataApi } from '../services/dataService';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  BarChart, Bar, LineChart, Line, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
 const Reports: React.FC = () => {
@@ -271,32 +271,22 @@ const Reports: React.FC = () => {
                   <button onClick={() => handleExport('inventory', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
                 </div>
               </div>
-              <div ref={reportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="h-80 bg-gray-50 rounded-xl p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={inventoryStats} cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} dataKey="value">
-                        {inventoryStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => `KSh ${v.toLocaleString()}`} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-4">
-                  <div className="bg-blue-600 text-white p-6 rounded-xl">
-                    <p className="text-blue-100 text-sm">Total Inventory Value</p>
-                    <p className="text-3xl font-bold">KSh {inventoryStats.reduce((a, b) => a + b.value, 0).toLocaleString()}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {inventoryStats.slice(0, 4).map((s, i) => (
-                      <div key={i} className="p-4 border rounded-xl">
-                        <p className="text-xs text-gray-500 uppercase">{s.name}</p>
-                        <p className="text-lg font-bold">KSh {s.value.toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <div className="bg-blue-600 text-white px-6 py-4 rounded-xl flex justify-between items-center">
+                <p className="text-blue-100 text-sm font-medium">Total Inventory Value</p>
+                <p className="text-2xl font-bold">KSh {inventoryStats.reduce((a, b) => a + b.value, 0).toLocaleString()}</p>
+              </div>
+              <div ref={reportRef} className="bg-gray-50 rounded-xl p-4" style={{ height: `${Math.max(320, inventoryStats.length * 40)}px` }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={inventoryStats} layout="vertical" margin={{ left: 10, right: 60, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={(v: any) => `KSh ${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                    <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v: any) => [`KSh ${v.toLocaleString()}`, 'Value']} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} label={{ position: 'right', formatter: (v: any) => `KSh ${v.toLocaleString()}`, fontSize: 11 }}>
+                      {inventoryStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           )}
