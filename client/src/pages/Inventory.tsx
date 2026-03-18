@@ -744,17 +744,14 @@ const Inventory: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
-                          <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
-                            TOTAL IN SYSTEM: {centralStock + distributedLive}
-                          </div>
-                          {user?.role === 'admin' && stallAllocMap.has(item.item_id) && (() => {
+                          {user?.role === 'admin' && stallAllocMap.has(item.item_id) ? (() => {
                             const allocs = stallAllocMap.get(item.item_id)!;
-                            // Group by stall_name and sum quantity_allocated across all batches
+                            // Group all distribution batches by stall_name, sum quantities
                             const byStall = new Map<string, number>();
                             allocs.forEach(a => {
                               byStall.set(a.stall_name, (byStall.get(a.stall_name) || 0) + a.quantity_allocated);
                             });
-                            // Subtract stall-specific sales from the grouped total (only once per stall)
+                            // Per-stall remaining = allocated to stall - sold by that stall
                             const stallSold = (stallName: string) =>
                               salesData
                                 .filter(s =>
@@ -763,19 +760,32 @@ const Inventory: React.FC = () => {
                                 )
                                 .reduce((t: number, s: any) => t + (s.quantity_sold || 0), 0);
                             const stallEntries = Array.from(byStall.entries())
-                              .map(([name, totalAllocated]) => ({ name, remaining: Math.max(0, totalAllocated - stallSold(name)) }))
-                              .filter(s => s.remaining > 0);
-                            if (stallEntries.length === 0) return null;
+                              .map(([name, totalAllocated]) => ({ name, remaining: Math.max(0, totalAllocated - stallSold(name)) }));
+                            // Total in system = central stock + sum of all stall remainings
+                            const stallTotal = stallEntries.reduce((t, s) => t + s.remaining, 0);
+                            const totalInSystem = centralStock + stallTotal;
+                            const active = stallEntries.filter(s => s.remaining > 0);
                             return (
-                              <div className="flex flex-wrap gap-x-2 mt-0.5">
-                                {stallEntries.map((s, i) => (
-                                  <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
-                                    {s.name}: {s.remaining}
-                                  </span>
-                                ))}
-                              </div>
+                              <>
+                                <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
+                                  TOTAL IN SYSTEM: {totalInSystem}
+                                </div>
+                                {active.length > 0 && (
+                                  <div className="flex flex-wrap gap-x-2 mt-0.5">
+                                    {active.map((s, i) => (
+                                      <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
+                                        {s.name}: {s.remaining}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
                             );
-                          })()}
+                          })() : (
+                            <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
+                              TOTAL IN SYSTEM: {centralStock + distributedLive}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
