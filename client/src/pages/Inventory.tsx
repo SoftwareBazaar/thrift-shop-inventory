@@ -749,6 +749,12 @@ const Inventory: React.FC = () => {
                           </div>
                           {user?.role === 'admin' && stallAllocMap.has(item.item_id) && (() => {
                             const allocs = stallAllocMap.get(item.item_id)!;
+                            // Group by stall_name and sum quantity_allocated across all batches
+                            const byStall = new Map<string, number>();
+                            allocs.forEach(a => {
+                              byStall.set(a.stall_name, (byStall.get(a.stall_name) || 0) + a.quantity_allocated);
+                            });
+                            // Subtract stall-specific sales from the grouped total (only once per stall)
                             const stallSold = (stallName: string) =>
                               salesData
                                 .filter(s =>
@@ -756,13 +762,15 @@ const Inventory: React.FC = () => {
                                   s.stall_name === stallName
                                 )
                                 .reduce((t: number, s: any) => t + (s.quantity_sold || 0), 0);
-                            const active = allocs.filter(a => Math.max(0, a.quantity_allocated - stallSold(a.stall_name)) > 0);
-                            if (active.length === 0) return null;
+                            const stallEntries = Array.from(byStall.entries())
+                              .map(([name, totalAllocated]) => ({ name, remaining: Math.max(0, totalAllocated - stallSold(name)) }))
+                              .filter(s => s.remaining > 0);
+                            if (stallEntries.length === 0) return null;
                             return (
                               <div className="flex flex-wrap gap-x-2 mt-0.5">
-                                {active.map((a, i) => (
+                                {stallEntries.map((s, i) => (
                                   <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
-                                    {a.stall_name}: {Math.max(0, a.quantity_allocated - stallSold(a.stall_name))}
+                                    {s.name}: {s.remaining}
                                   </span>
                                 ))}
                               </div>
