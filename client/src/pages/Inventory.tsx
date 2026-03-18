@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { dataApi } from '../services/dataService';
+import UserSaleItems from '../components/UserSaleItems';
 
 interface Item {
   item_id: number;
@@ -589,6 +590,20 @@ const Inventory: React.FC = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--primary-800)' }}>Inventory</h1>
+            <p style={{ color: 'var(--neutral-600)' }}>Manage your available items</p>
+          </div>
+        </div>
+        <UserSaleItems />
       </div>
     );
   }

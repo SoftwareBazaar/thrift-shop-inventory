@@ -63,7 +63,7 @@ function App() {
                   </ProtectedRoute>
                 }>
                   <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-                  <Route path="/inventory" element={<ProtectedRoute requireAdmin><ErrorBoundary><Inventory /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
                   <Route path="/add-item" element={<ErrorBoundary><AddItem /></ErrorBoundary>} />
                   <Route path="/sales" element={<ErrorBoundary><Sales /></ErrorBoundary>} />
                   <Route path="/record-sale" element={<ErrorBoundary><RecordSale /></ErrorBoundary>} />
