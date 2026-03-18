@@ -32,7 +32,7 @@ const Layout: React.FC = () => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { name: 'Inventory', href: '/inventory', icon: '📦' },
+    ...(user?.role === 'admin' ? [{ name: 'Inventory', href: '/inventory', icon: '📦' }] : []),
     { name: 'Sales', href: '/sales', icon: '💰' },
     ...(user?.role === 'admin' ? [
       { name: 'Reports', href: '/reports', icon: '📈' },

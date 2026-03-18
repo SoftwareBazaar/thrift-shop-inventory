@@ -69,10 +69,33 @@ const Inventory: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [itemStockAdditions, setItemStockAdditions] = useState<any[]>([]);
 
+  // Per-stall allocation map: item_id -> [{stall_name, quantity_allocated}]
+  const [stallAllocMap, setStallAllocMap] = useState<Map<number, { stall_name: string; quantity_allocated: number }[]>>(new Map());
+
   // Withdraw from distribution state
   const [showWithdrawFromDistModal, setShowWithdrawFromDistModal] = useState(false);
   const [withdrawFromDist, setWithdrawFromDist] = useState<any>(null);
   const [withdrawFromDistQty, setWithdrawFromDistQty] = useState('');
+
+  const fetchAllStallAllocations = useCallback(async (itemList: any[]) => {
+    if (user?.role !== 'admin' || itemList.length === 0) return;
+    try {
+      const results = await Promise.all(
+        itemList.map(item =>
+          dataApi.getDistributions(item.item_id)
+            .then(res => ({ item_id: item.item_id, distributions: res.distributions || [] }))
+            .catch(() => ({ item_id: item.item_id, distributions: [] }))
+        )
+      );
+      const map = new Map<number, { stall_name: string; quantity_allocated: number }[]>();
+      results.forEach(({ item_id, distributions }) => {
+        map.set(item_id, distributions);
+      });
+      setStallAllocMap(map);
+    } catch (error) {
+      console.error('Error fetching stall allocations:', error);
+    }
+  }, [user?.role]);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -87,12 +110,16 @@ const Inventory: React.FC = () => {
         a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
       );
       setItems(sortedItems);
+      // Refresh stall allocations whenever items are fetched (admin only)
+      if (user?.role === 'admin') {
+        fetchAllStallAllocations(sortedItems);
+      }
     } catch (error) {
       console.error('Error fetching items:', error);
     } finally {
       setLoading(false);
     }
-  }, [user?.role, user?.stall_id]);
+  }, [user?.role, user?.stall_id, fetchAllStallAllocations]);
 
   const fetchSales = useCallback(async () => {
     try {
@@ -720,6 +747,27 @@ const Inventory: React.FC = () => {
                           <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
                             TOTAL IN SYSTEM: {centralStock + distributedLive}
                           </div>
+                          {user?.role === 'admin' && stallAllocMap.has(item.item_id) && (() => {
+                            const allocs = stallAllocMap.get(item.item_id)!;
+                            const stallSold = (stallName: string) =>
+                              salesData
+                                .filter(s =>
+                                  (s.item_id != null ? Number(s.item_id) === item.item_id : s.item_name === item.item_name) &&
+                                  s.stall_name === stallName
+                                )
+                                .reduce((t: number, s: any) => t + (s.quantity_sold || 0), 0);
+                            const active = allocs.filter(a => Math.max(0, a.quantity_allocated - stallSold(a.stall_name)) > 0);
+                            if (active.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap gap-x-2 mt-0.5">
+                                {active.map((a, i) => (
+                                  <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
+                                    {a.stall_name}: {Math.max(0, a.quantity_allocated - stallSold(a.stall_name))}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
