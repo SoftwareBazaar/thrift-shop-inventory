@@ -759,41 +759,44 @@ const Inventory: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
-                          {user?.role === 'admin' && stallAllocMap.has(item.item_id) ? (() => {
-                            const allocs = stallAllocMap.get(item.item_id)!;
+                          {user?.role === 'admin' ? (() => {
+                            const allocs = stallAllocMap.get(item.item_id) || [];
                             // Group all distribution batches by stall_name, sum quantities
-                            const byStall = new Map<string, number>();
+                            const byStallName = new Map<string, number>();
                             allocs.forEach(a => {
-                              byStall.set(a.stall_name, (byStall.get(a.stall_name) || 0) + a.quantity_allocated);
+                              byStallName.set(a.stall_name, (byStallName.get(a.stall_name) || 0) + a.quantity_allocated);
                             });
-                            // Per-stall remaining = allocated to stall - sold by that stall
-                            const stallSold = (stallName: string) =>
+
+                            // Per-stall remaining = allocated to stall - sold by that stall (using main stalls list)
+                            const stallSoldCount = (stallName: string) =>
                               salesData
                                 .filter(s =>
                                   (s.item_id != null ? Number(s.item_id) === item.item_id : s.item_name === item.item_name) &&
                                   s.stall_name === stallName
                                 )
                                 .reduce((t: number, s: any) => t + (s.quantity_sold || 0), 0);
-                            const stallEntries = Array.from(byStall.entries())
-                              .map(([name, totalAllocated]) => ({ name, remaining: Math.max(0, totalAllocated - stallSold(name)) }));
+
+                            const stallEntries = stalls.map(stall => ({
+                              name: stall.stall_name,
+                              remaining: Math.max(0, (byStallName.get(stall.stall_name) || 0) - stallSoldCount(stall.stall_name))
+                            }));
+
                             // Total in system = central stock + sum of all stall remainings
                             const stallTotal = stallEntries.reduce((t, s) => t + s.remaining, 0);
                             const totalInSystem = centralStock + stallTotal;
-                            const active = stallEntries.filter(s => s.remaining > 0);
+                            
                             return (
                               <>
                                 <div className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
                                   TOTAL IN SYSTEM: {totalInSystem}
                                 </div>
-                                {active.length > 0 && (
-                                  <div className="flex flex-wrap gap-x-2 mt-0.5">
-                                    {active.map((s, i) => (
-                                      <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
-                                        {s.name}: {s.remaining}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
+                                <div className="flex flex-col mt-0.5 space-y-0">
+                                  {stallEntries.map((s, i) => (
+                                    <span key={i} className="text-[10px] font-semibold text-blue-600 whitespace-nowrap">
+                                      {s.name} - {s.remaining}
+                                    </span>
+                                  ))}
+                                </div>
                               </>
                             );
                           })() : (
