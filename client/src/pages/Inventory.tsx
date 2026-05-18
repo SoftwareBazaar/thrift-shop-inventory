@@ -741,7 +741,8 @@ const Inventory: React.FC = () => {
                 const stallSoldForItem = getItemsSold(item.item_id, item.item_name, true);
                 const distributedLive = Math.max(0, (item.total_allocated || 0) - stallSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
-                const totalReceived = (item.initial_stock || 0) + (item.total_added || 0);
+                // Total Received = at stalls (unsold) + sold (all items received into system)
+                const totalReceived = distributedLive + totalSoldForItem;
                 const managedTotal = totalReceived;
                 const centralPercent = managedTotal > 0 ? Math.round((centralStock / managedTotal) * 100) : 0;
                 const distributedPercent = managedTotal > 0 ? Math.round(((item.total_allocated || 0) / managedTotal) * 100) : 0;
