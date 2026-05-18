@@ -1114,69 +1114,39 @@ const Inventory: React.FC = () => {
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty Added</th>
-                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Running Total</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                      {/* Show initial stock as first entry */}
-                                      <tr className="text-sm bg-blue-50/50 hover:bg-blue-50/70 transition-colors font-semibold">
-                                        <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-bold">
-                                          Initial Stock
-                                        </td>
-                                        <td className="px-3 py-3 whitespace-nowrap text-center">
-                                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-black">
-                                            +{item.initial_stock || 0}
-                                          </span>
-                                        </td>
-                                        <td className="px-3 py-3 whitespace-nowrap text-center">
-                                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold">
-                                            {item.initial_stock || 0}
-                                          </span>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-right text-gray-400">
-                                          —
-                                        </td>
-                                      </tr>
-
-                                      {/* Show all subsequent additions with running total */}
+                                      {/* Show all stock additions with dates */}
                                       {itemStockAdditions && itemStockAdditions.length > 0 ? (
-                                        itemStockAdditions.map((addition, index) => {
-                                          const runningTotal = (item.initial_stock || 0) + 
-                                            itemStockAdditions.slice(0, index + 1).reduce((sum, a) => sum + (a.quantity_added || 0), 0);
-                                          return (
-                                            <tr key={addition.addition_id} className="text-sm hover:bg-green-50/30 transition-colors">
-                                              <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
-                                                {new Date(addition.date_added).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                              </td>
-                                              <td className="px-3 py-3 whitespace-nowrap text-center">
-                                                <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-green-600 text-white text-xs font-black">
-                                                  +{addition.quantity_added}
-                                                </span>
-                                              </td>
-                                              <td className="px-3 py-3 whitespace-nowrap text-center">
-                                                <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-green-100 text-green-900 text-xs font-bold">
-                                                  {runningTotal}
-                                                </span>
-                                              </td>
-                                              <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteStockAddition(addition);
-                                                  }}
-                                                  className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
-                                                >
-                                                  Delete
-                                                </button>
-                                              </td>
-                                            </tr>
-                                          );
-                                        })
+                                        itemStockAdditions.map((addition) => (
+                                          <tr key={addition.addition_id} className="text-sm hover:bg-green-50/30 transition-colors">
+                                            <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
+                                              {new Date(addition.date_added).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                              <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-green-600 text-white text-xs font-black">
+                                                +{addition.quantity_added}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteStockAddition(addition);
+                                                }}
+                                                className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
+                                              >
+                                                Delete
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))
                                       ) : (
                                         <tr className="text-sm text-gray-500 italic">
-                                          <td colSpan={4} className="px-3 py-3 text-center bg-gray-50">
-                                            No additional stock records (only initial stock shown above)
+                                          <td colSpan={3} className="px-3 py-3 text-center bg-gray-50">
+                                            No stock additions recorded yet
                                           </td>
                                         </tr>
                                       )}
