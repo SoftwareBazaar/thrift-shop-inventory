@@ -354,6 +354,72 @@ export const dbApi = {
     }
   },
 
+  getStockWithdrawals: async (itemId: number) => {
+    if (!isSupabaseConfigured()) {
+      return { withdrawals: [] };
+    }
+
+    try {
+      const { data: withdrawals, error } = await (supabase as any)
+        .from('stock_withdrawals')
+        .select('*')
+        .eq('item_id', itemId)
+        .order('date_withdrawn', { ascending: false });
+
+      if (error) throw error;
+      return { withdrawals: withdrawals || [] };
+    } catch (error) {
+      console.error('Error fetching stock withdrawals:', error);
+      return { withdrawals: [] };
+    }
+  },
+
+  deleteStockWithdrawal: async (withdrawalId: number) => {
+    if (!isSupabaseConfigured()) {
+      return { success: true };
+    }
+
+    try {
+      const { data: withdrawal, error: fetchError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .select('*')
+        .eq('withdrawal_id', withdrawalId)
+        .single();
+
+      if (fetchError || !withdrawal) throw new Error('Stock withdrawal record not found');
+
+      const { item_id, quantity_withdrawn } = withdrawal;
+
+      const { error: deleteError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .delete()
+        .eq('withdrawal_id', withdrawalId);
+
+      if (deleteError) throw deleteError;
+
+      // Update item's current_stock (add back the withdrawn quantity)
+      const { data: item, error: itemError } = await (supabase as any)
+        .from('items')
+        .select('current_stock')
+        .eq('item_id', item_id)
+        .single();
+
+      if (!itemError && item) {
+        const newCurrentStock = (item.current_stock || 0) + quantity_withdrawn;
+
+        await (supabase as any)
+          .from('items')
+          .update({ current_stock: newCurrentStock })
+          .eq('item_id', item_id);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting stock withdrawal:', error);
+      throw error;
+    }
+  },
+
   // Inventory
   getInventory: async (stallId?: number) => {
     if (!isSupabaseConfigured()) {

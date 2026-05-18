@@ -392,6 +392,21 @@ export const offlineDataApi = {
     }
   },
 
+  getStockWithdrawals: dataApi.getStockWithdrawals,
+
+  deleteStockWithdrawal: async (withdrawalId: number) => {
+    try {
+      if (navigator.onLine) {
+        return await dataApi.deleteStockWithdrawal(withdrawalId);
+      } else {
+        throw new Error('Stock withdrawal deletion requires an internet connection.');
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error deleting stock withdrawal:', error);
+      throw error;
+    }
+  },
+
   // Withdraw from distribution - queue if offline
   withdrawFromDistribution: async (distributionId: number, quantityToWithdraw: number) => {
     try {

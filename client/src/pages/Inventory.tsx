@@ -69,6 +69,8 @@ const Inventory: React.FC = () => {
   const [isRefreshingAdditions, setIsRefreshingAdditions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [itemStockAdditions, setItemStockAdditions] = useState<any[]>([]);
+  const [itemStockWithdrawals, setItemStockWithdrawals] = useState<any[]>([]);
+  const [isRefreshingWithdrawals, setIsRefreshingWithdrawals] = useState(false);
 
   // Per-stall allocation map: item_id -> [{stall_name, quantity_allocated}]
   const [stallAllocMap, setStallAllocMap] = useState<Map<number, { stall_name: string; quantity_allocated: number }[]>>(new Map());
@@ -171,6 +173,18 @@ const Inventory: React.FC = () => {
     }
   }, []);
 
+  const fetchItemStockWithdrawals = useCallback(async (itemId: number) => {
+    setIsRefreshingWithdrawals(true);
+    try {
+      const response = await dataApi.getStockWithdrawals(itemId);
+      setItemStockWithdrawals(response.withdrawals || []);
+    } catch (error) {
+      console.error('Error fetching stock withdrawals:', error);
+    } finally {
+      setIsRefreshingWithdrawals(false);
+    }
+  }, []);
+
   const toggleExpand = (itemId: number) => {
     setExpandedItemId(prev => prev === itemId ? null : itemId);
   };
@@ -178,12 +192,16 @@ const Inventory: React.FC = () => {
   useEffect(() => {
     if (expandedItemId) {
       fetchItemDistributions(expandedItemId);
-      if (user?.role === 'admin') fetchItemStockAdditions(expandedItemId);
+      if (user?.role === 'admin') {
+        fetchItemStockAdditions(expandedItemId);
+        fetchItemStockWithdrawals(expandedItemId);
+      }
     } else {
       setItemDistributions([]);
       setItemStockAdditions([]);
+      setItemStockWithdrawals([]);
     }
-  }, [expandedItemId, fetchItemDistributions, fetchItemStockAdditions, user?.role]);
+  }, [expandedItemId, fetchItemDistributions, fetchItemStockAdditions, fetchItemStockWithdrawals, user?.role]);
 
   const fetchCategories = async () => {
     try {
@@ -1155,11 +1173,75 @@ const Inventory: React.FC = () => {
                                 </div>
                               </div>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+
+                            {user?.role === 'admin' && (
+                              <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-lg font-bold text-gray-900">Stock Withdrawals History</h4>
+                                  {isRefreshingWithdrawals && <span className="text-xs text-blue-500 animate-pulse">Refreshing...</span>}
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-[#fff3cd]">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Date</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider text-center">Qty Withdrawn</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Reason</th>
+                                        <th className="px-4 py-3 text-right text-[11px] font-bold text-amber-900 uppercase tracking-wider">Options</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                      {itemStockWithdrawals && itemStockWithdrawals.length > 0 ? (
+                                        itemStockWithdrawals.map((withdrawal) => (
+                                          <tr key={withdrawal.withdrawal_id} className="text-sm hover:bg-amber-50/30 transition-colors">
+                                            <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
+                                              {new Date(withdrawal.date_withdrawn).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center">
+                                              <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-black">
+                                                -{withdrawal.quantity_withdrawn}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-gray-600 text-xs">
+                                              {withdrawal.reason || '—'}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (window.confirm(`Delete withdrawal of ${withdrawal.quantity_withdrawn} units?`)) {
+                                                    dataApi.deleteStockWithdrawal(withdrawal.withdrawal_id)
+                                                      .then(() => {
+                                                        fetchItems();
+                                                        if (expandedItemId) fetchItemStockWithdrawals(expandedItemId);
+                                                        alert('Withdrawal deleted successfully.');
+                                                      })
+                                                      .catch((error) => {
+                                                        console.error('Error deleting withdrawal:', error);
+                                                        alert('Failed to delete withdrawal.');
+                                                      });
+                                                  }
+                                                }}
+                                                className="bg-red-50 text-red-700 px-3 py-1 rounded-md hover:bg-red-600 hover:text-white transition-all border border-red-200"
+                                              >
+                                                Delete
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))
+                                      ) : (
+                                        <tr className="text-sm text-gray-500 italic">
+                                          <td colSpan={4} className="px-3 py-3 text-center bg-gray-50">
+                                            No stock withdrawals recorded
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
                 );
               })}
             </tbody>
