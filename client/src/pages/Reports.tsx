@@ -64,7 +64,9 @@ const Reports: React.FC = () => {
         let sales = response.sales || [];
         if (dateRange.start_date && dateRange.end_date) {
           sales = sales.filter((s: any) => {
-            const date = s.sale_date.split('T')[0];
+            const rawDate = s.date_time || s.sale_date;
+            if (!rawDate) return false;
+            const date = rawDate.split('T')[0];
             return date >= dateRange.start_date && date <= dateRange.end_date;
           });
         }
@@ -83,7 +85,9 @@ const Reports: React.FC = () => {
         let sales = response.sales || [];
         if (dateRange.start_date && dateRange.end_date) {
           sales = sales.filter((s: any) => {
-            const date = s.sale_date.split('T')[0];
+            const rawDate = s.date_time || s.sale_date;
+            if (!rawDate) return false;
+            const date = rawDate.split('T')[0];
             return date >= dateRange.start_date && date <= dateRange.end_date;
           });
         }
@@ -99,7 +103,9 @@ const Reports: React.FC = () => {
         let sales = response.sales || [];
         if (dateRange.start_date && dateRange.end_date) {
           sales = sales.filter((s: any) => {
-            const date = s.sale_date.split('T')[0];
+            const rawDate = s.date_time || s.sale_date;
+            if (!rawDate) return false;
+            const date = rawDate.split('T')[0];
             return date >= dateRange.start_date && date <= dateRange.end_date;
           });
         }
