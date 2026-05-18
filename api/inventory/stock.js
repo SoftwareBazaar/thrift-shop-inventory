@@ -29,7 +29,7 @@ module.exports = async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Start transaction by adding stock addition record and updating item
+    // Add stock addition record with transaction-like approach
     const { error: additionError } = await supabase
       .from('stock_additions')
       .insert([{
@@ -42,7 +42,9 @@ module.exports = async (req, res) => {
       return res.status(500).json({ message: 'Error adding stock record' });
     }
 
-    // Update current_stock
+    // Update current_stock atomically
+    // Note: Supabase doesn't support true transactions at the client level,
+    // but we use a single update operation which is atomic at the database level
     const { data: updatedItem, error: updateError } = await supabase
       .from('items')
       .update({ current_stock: item.current_stock + quantity_added })

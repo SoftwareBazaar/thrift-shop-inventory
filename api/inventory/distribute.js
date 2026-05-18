@@ -23,6 +23,34 @@ module.exports = async (req, res) => {
       return res.status(400).json({ message: 'Valid item, stall, and quantity are required' });
     }
 
+    // Try to use atomic RPC function first (if database supports it)
+    try {
+      const { data: result, error: rpcError } = await supabase
+        .rpc('distribute_stock_atomic', {
+          p_item_id: id,
+          p_stall_id: stall_id,
+          p_quantity_allocated: quantity_allocated,
+          p_distributed_by: authResult.user.user_id
+        });
+
+      if (!rpcError && result && result.length > 0) {
+        // RPC function succeeded
+        const distribution = result[0];
+        return res.json({
+          message: 'Stock distributed successfully',
+          distribution
+        });
+      }
+
+      // If RPC fails, fall back to manual transaction
+      if (rpcError) {
+        console.warn('RPC function not available, using fallback method:', rpcError.message);
+      }
+    } catch (rpcException) {
+      console.warn('RPC call failed, using fallback method:', rpcException.message);
+    }
+
+    // FALLBACK: Manual transaction-like approach with validation
     // Check if item exists and has enough stock
     const { data: item, error: itemError } = await supabase
       .from('items')
@@ -51,14 +79,16 @@ module.exports = async (req, res) => {
     }
 
     // Add distribution record
-    const { error: distError } = await supabase
+    const { data: distribution, error: distError } = await supabase
       .from('stock_distribution')
       .insert([{
         item_id: id,
         stall_id,
         quantity_allocated,
         distributed_by: authResult.user.user_id
-      }]);
+      }])
+      .select()
+      .single();
 
     if (distError) {
       return res.status(500).json({ message: 'Error creating distribution record' });

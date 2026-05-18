@@ -62,6 +62,18 @@ const Reports: React.FC = () => {
       } else if (activeTab === 'sales') {
         const response = await dataApi.getSales();
         let sales = response.sales || [];
+        
+        // Fetch items to get buying prices for profit calculation
+        const invResponse = await dataApi.getInventory();
+        const items = invResponse.items || [];
+        const itemsMap: any = {};
+        items.forEach((item: any) => {
+          itemsMap[item.item_id] = {
+            buying_price: item.buying_price || 0,
+            item_name: item.item_name
+          };
+        });
+        
         if (dateRange.start_date && dateRange.end_date) {
           sales = sales.filter((s: any) => {
             const rawDate = s.date_time || s.sale_date;
@@ -70,15 +82,34 @@ const Reports: React.FC = () => {
             return date >= dateRange.start_date && date <= dateRange.end_date;
           });
         }
+        
         const dates: any = {};
         sales.forEach((sale: any) => {
           const rawDate = sale.date_time || sale.sale_date;
           if (!rawDate) return;
           const date = rawDate.split('T')[0];
-          dates[date] = (dates[date] || 0) + (sale.total_amount || 0);
+          
+          // Calculate profit: (unit_price - buying_price) * quantity_sold
+          const itemInfo = itemsMap[sale.item_id] || { buying_price: 0 };
+          const profit_per_unit = (sale.unit_price || 0) - (itemInfo.buying_price || 0);
+          const total_profit = profit_per_unit * (sale.quantity_sold || 0);
+          
+          if (!dates[date]) {
+            dates[date] = { revenue: 0, profit: 0, cost: 0 };
+          }
+          dates[date].revenue += (sale.total_amount || 0);
+          dates[date].profit += total_profit;
+          dates[date].cost += (itemInfo.buying_price || 0) * (sale.quantity_sold || 0);
         });
+        
         setSalesTrends(Object.entries(dates)
-          .map(([date, amount]) => ({ date, amount }))
+          .map(([date, data]: any) => ({ 
+            date, 
+            revenue: data.revenue,
+            profit: data.profit,
+            cost: data.cost,
+            margin: data.revenue > 0 ? ((data.profit / data.revenue) * 100).toFixed(2) : 0
+          }))
           .sort((a, b) => a.date.localeCompare(b.date)));
       } else if (activeTab === 'stall-performance') {
         const response = await dataApi.getSales();
@@ -180,9 +211,24 @@ const Reports: React.FC = () => {
       } else if (reportType === 'sales') {
         const response = await dataApi.getSales();
         let sales = response.sales || [];
-        csvContent = 'Date,Item Name,Quantity,Total Amount,Payment Method,Stall\n';
+        
+        // Fetch items to get buying prices for profit calculation
+        const invResponse = await dataApi.getInventory();
+        const items = invResponse.items || [];
+        const itemsMap: any = {};
+        items.forEach((item: any) => {
+          itemsMap[item.item_id] = {
+            buying_price: item.buying_price || 0,
+            item_name: item.item_name
+          };
+        });
+        
+        csvContent = 'Date,Item Name,Quantity,Unit Price,Total Amount,Buying Price,Profit,Payment Method,Stall\n';
         sales.forEach((s: any) => {
-          csvContent += `"${s.sale_date}","${s.item_name}",${s.quantity},${s.total_amount},"${s.payment_method}","${s.stall_name}"\n`;
+          const itemInfo = itemsMap[s.item_id] || { buying_price: 0 };
+          const profit_per_unit = (s.unit_price || 0) - (itemInfo.buying_price || 0);
+          const total_profit = profit_per_unit * (s.quantity_sold || 0);
+          csvContent += `"${s.date_time || s.sale_date}","${s.item_name}",${s.quantity_sold || s.quantity},${s.unit_price},${s.total_amount},${itemInfo.buying_price},${total_profit.toFixed(2)},"${s.payment_method}","${s.stall_name}"\n`;
         });
       }
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -300,7 +346,7 @@ const Reports: React.FC = () => {
           {activeTab === 'sales' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">Revenue Trends</h3>
+                <h3 className="text-lg font-bold">Revenue & Profit Trends</h3>
                 <div className="flex space-x-2">
                   <button onClick={() => handleExport('sales', 'excel')} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export CSV'}</button>
                   <button onClick={() => handleExport('sales', 'pdf')} disabled={loading} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">{loading ? '...' : 'Export PDF'}</button>
@@ -314,18 +360,28 @@ const Reports: React.FC = () => {
                       <XAxis dataKey="date" />
                       <YAxis />
                       <Tooltip formatter={(v: any) => `KSh ${v.toLocaleString()}`} />
-                      <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} name="Revenue" />
+                      <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} name="Profit" />
+                      <Line type="monotone" dataKey="cost" stroke="#ef4444" strokeWidth={3} dot={{ r: 4 }} name="Cost" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="bg-gray-900 text-white p-6 rounded-xl flex justify-between items-center">
-                  <div>
-                    <p className="text-gray-400 text-sm">Period Total Revenue</p>
-                    <p className="text-3xl font-bold">KSh {salesTrends.reduce((a, b) => a + b.amount, 0).toLocaleString()}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                    <p className="text-blue-600 text-sm font-medium">Total Revenue</p>
+                    <p className="text-2xl font-bold text-blue-900">KSh {salesTrends.reduce((a, b) => a + (b.revenue || 0), 0).toLocaleString()}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-gray-400 text-sm">Sales Count</p>
-                    <p className="text-xl font-bold">{salesTrends.length} Days</p>
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+                    <p className="text-green-600 text-sm font-medium">Total Profit</p>
+                    <p className="text-2xl font-bold text-green-900">KSh {salesTrends.reduce((a, b) => a + (b.profit || 0), 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl">
+                    <p className="text-red-600 text-sm font-medium">Total Cost</p>
+                    <p className="text-2xl font-bold text-red-900">KSh {salesTrends.reduce((a, b) => a + (b.cost || 0), 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl">
+                    <p className="text-purple-600 text-sm font-medium">Profit Margin</p>
+                    <p className="text-2xl font-bold text-purple-900">{salesTrends.length > 0 ? ((salesTrends.reduce((a, b) => a + (b.profit || 0), 0) / salesTrends.reduce((a, b) => a + (b.revenue || 0), 0)) * 100).toFixed(1) : 0}%</p>
                   </div>
                 </div>
               </div>
