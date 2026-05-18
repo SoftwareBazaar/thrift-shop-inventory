@@ -1108,18 +1108,34 @@ const Inventory: React.FC = () => {
                                   {isRefreshingAdditions && <span className="text-xs text-blue-500 animate-pulse">Refreshing...</span>}
                                 </div>
 
-                                {itemStockAdditions.length > 0 ? (
-                                  <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                      <thead className="bg-[#f0f9ff]">
-                                        <tr>
-                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
-                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty Added</th>
-                                          <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-gray-200">
-                                        {itemStockAdditions.map((addition) => (
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-[#f0f9ff]">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty Added</th>
+                                        <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                      {/* Show initial stock as first entry */}
+                                      <tr className="text-sm bg-blue-50/50 hover:bg-blue-50/70 transition-colors font-semibold">
+                                        <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-bold">
+                                          Initial Stock
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-nowrap text-center">
+                                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-black">
+                                            +{item.initial_stock || 0}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right text-gray-400">
+                                          —
+                                        </td>
+                                      </tr>
+
+                                      {/* Show all subsequent additions */}
+                                      {itemStockAdditions.length > 0 ? (
+                                        itemStockAdditions.map((addition) => (
                                           <tr key={addition.addition_id} className="text-sm hover:bg-blue-50/30 transition-colors">
                                             <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
                                               {new Date(addition.date_added).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -1141,13 +1157,17 @@ const Inventory: React.FC = () => {
                                               </button>
                                             </td>
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg">No additional stock records found (only initial stock).</p>
-                                )}
+                                        ))
+                                      ) : (
+                                        <tr className="text-sm text-gray-500 italic">
+                                          <td colSpan={3} className="px-3 py-3 text-center bg-gray-50">
+                                            No additional stock records (only initial stock shown above)
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             )}
                           </div>
