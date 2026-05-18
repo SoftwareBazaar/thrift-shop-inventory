@@ -532,11 +532,11 @@ const Inventory: React.FC = () => {
   });
 
   const getItemsSold = (itemId: number, fallbackName: string, stallOnly: boolean = false) => {
-    return salesData
+    const matchingSales = salesData
       .filter((sale) => {
-        // First filter by item
+        // First filter by item - ensure both are numbers for comparison
         const matchesItem = sale.item_id != null
-          ? Number(sale.item_id) === itemId
+          ? Number(sale.item_id) === Number(itemId)
           : sale.item_name === fallbackName;
 
         if (!matchesItem) return false;
@@ -553,8 +553,14 @@ const Inventory: React.FC = () => {
 
         // Admin sees all sales (unless stallOnly is set, which we handled above)
         return true;
-      })
-      .reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
+      });
+    
+    // Debug logging
+    if (matchingSales.length > 0) {
+      console.log(`Item ${itemId} (${fallbackName}): Found ${matchingSales.length} sales`, matchingSales);
+    }
+    
+    return matchingSales.reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
   };
 
   const formatCurrency = (amount: number) => {
