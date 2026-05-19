@@ -1242,18 +1242,17 @@ const Inventory: React.FC = () => {
                                 </div>
                               </div>
                             )}
+                          </div>
                           </td>
                         </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                      )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {
         filteredItems.length === 0 && (
