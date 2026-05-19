@@ -1,0 +1,12 @@
+{
+  "name": "Monthly Backup Reminder",
+  "version": "1.0.0",
+  "description": "Reminds admin to download backup data every month to prevent data loss",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "IMPORTANT: Monthly Backup Reminder for Admin\n\n⚠️ CRITICAL: It has been approximately 1 month since the last backup reminder.\n\nPlease perform the following backup tasks immediately:\n\n1. **Download Database Backup:**\n   - Go to Supabase Dashboard → Database → Backups\n   - Download the latest backup file\n   - Store it in a secure location (external drive, cloud storage)\n   - Verify the backup file is not corrupted\n\n2. **Backup Checklist:**\n   - [ ] Database backup downloaded\n   - [ ] Backup file verified (check file size and integrity)\n   - [ ] Backup stored in secure location\n   - [ ] Backup location documented\n   - [ ] Team members notified of backup location\n\n3. **Data Integrity Check:**\n   - [ ] Run inventory reconciliation report\n   - [ ] Verify Total Received = At Stalls + Sold (for all products)\n   - [ ] Check for any negative stock values\n   - [ ] Review sales and distribution logs for anomalies\n\n4. **Critical Issues to Monitor:**\n   - Watch for stock discrepancies\n   - Monitor for failed transactions\n   - Check for orphaned records\n   - Verify all sales are properly recorded\n\n5. **Documentation:**\n   - Update backup log with today's date\n   - Document any issues found\n   - Note any data corrections made\n\n⚠️ REMINDER: Data integrity issues have been identified in the system. See DATA_INTEGRITY_ISSUES.md for details.\n\nAfter completing these tasks, please confirm in the chat that the backup has been completed successfully."
+  }
+}

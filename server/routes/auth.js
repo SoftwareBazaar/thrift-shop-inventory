@@ -1,0 +1,296 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const pool = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
+
+const router = express.Router();
+
+const MIN_PASSWORD_LENGTH = 6;
+const MIN_SPECIAL_CHARS = 2;
+
+const hasRequiredSpecialChars = (password = '') => {
+  const specialChars = password.replace(/[A-Za-z0-9]/g, '');
+  return specialChars.length >= MIN_SPECIAL_CHARS;
+};
+
+// Register new user (Admin only)
+router.post('/register', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { username, password, full_name, role, stall_id } = req.body;
+
+    // Validate required fields
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate role
+    if (!['admin', 'user'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    // Check if username already exists
+    const existingUser = await pool.query(
+      'SELECT user_id FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const password_hash = await bcrypt.hash(password, saltRounds);
+
+    // Insert new user
+    const result = await pool.query(
+      'INSERT INTO users (username, password_hash, full_name, role, stall_id) VALUES ($1, $2, $3, $4, $5) RETURNING user_id, username, full_name, role, stall_id, status',
+      [username, password_hash, full_name, role, stall_id]
+    );
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required' });
+    }
+
+    // Get user from database (including password_version for session tracking)
+    const userResult = await pool.query(
+      'SELECT user_id, username, password_hash, password_version, full_name, role, stall_id, status FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if account is active
+    if (user.status !== 'active') {
+      return res.status(401).json({ message: 'Account is inactive' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.user_id, username: user.username, role: user.role },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    // Create session record for token validation and password change tracking
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+    // Get client IP and user agent for session tracking
+    const ipAddress = req.ip || req.connection.remoteAddress || null;
+    const userAgent = req.headers['user-agent'] || null;
+
+    try {
+      await pool.query(
+        `INSERT INTO sessions (user_id, token_hash, password_version, ip_address, user_agent, expires_at) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [user.user_id, tokenHash, user.password_version, ipAddress, userAgent, expiresAt]
+      );
+    } catch (sessionError) {
+      console.error('Session creation error:', sessionError);
+      // Continue with login even if session creation fails (for backward compatibility)
+    }
+
+    // Clean up expired sessions periodically
+    pool.query('SELECT cleanup_expired_sessions()').catch(err =>
+      console.warn('Expired session cleanup failed:', err)
+    );
+
+    // Remove password_hash and password_version from response
+    const { password_hash, password_version, ...userWithoutPassword } = user;
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: userWithoutPassword,
+      passwordVersion: password_version // Send to client for offline sync
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Change password
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long` });
+    }
+
+    if (!hasRequiredSpecialChars(newPassword)) {
+      return res.status(400).json({ message: `Password must include at least ${MIN_SPECIAL_CHARS} non-alphanumeric characters` });
+    }
+
+    const userId = req.user.user_id;
+
+    const userResult = await pool.query(
+      'SELECT username, password_hash FROM users WHERE user_id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Try bcrypt verification first (for legacy passwords)
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(oldPassword, user.password_hash);
+    } catch (bcryptError) {
+      // If bcrypt fails, the hash might be from derivePasswordHash
+      console.log('Bcrypt verification failed, trying derivePasswordHash...');
+    }
+
+    // If bcrypt failed, try derivePasswordHash (for newer/client-hashed passwords)
+    if (!isValidPassword) {
+      const crypto = require('crypto');
+      // Derive hash using the same method as client: normaliseUsername(username)|password
+      const derivedHash = crypto.createHash('sha256')
+        .update(user.username.toLowerCase() + '|' + oldPassword)
+        .digest('hex');
+
+      isValidPassword = derivedHash === user.password_hash;
+    }
+
+    if (!isValidPassword) {
+      console.log(`Password verification failed for user ${userId}`);
+      return res.status(401).json({ message: 'Incorrect current password' });
+    }
+
+    console.log(`Password verified successfully for user ${userId}, updating to new password...`);
+
+    // Hash the new password with bcrypt for server-side storage
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password - the trigger will automatically update password_version and invalidate sessions
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE user_id = $2',
+      [newPasswordHash, userId]
+    );
+
+    // Get the new password version for the client
+    const updatedUserResult = await pool.query(
+      'SELECT password_version FROM users WHERE user_id = $1',
+      [userId]
+    );
+    const newPasswordVersion = updatedUserResult.rows[0]?.password_version;
+
+    // Log the password change for audit trail
+    console.log(`Password changed for user ${userId}. All sessions invalidated.`);
+
+    res.json({
+      message: 'Password updated successfully. You will be logged out on all devices.',
+      passwordVersion: newPasswordVersion,
+      sessionsInvalidated: true
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get current user profile
+router.get('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { password_hash, ...userWithoutPassword } = req.user;
+    res.json({ user: userWithoutPassword });
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Update user profile
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { full_name, password } = req.body;
+    const userId = req.user.user_id;
+
+    let updateQuery = 'UPDATE users SET full_name = $1';
+    let queryParams = [full_name];
+    let paramIndex = 2;
+
+    // Update password if provided
+    if (password) {
+      const saltRounds = 10;
+      const password_hash = await bcrypt.hash(password, saltRounds);
+      updateQuery += `, password_hash = $${paramIndex}`;
+      queryParams.push(password_hash);
+      paramIndex++;
+    }
+
+    updateQuery += ` WHERE user_id = $${paramIndex} RETURNING user_id, username, full_name, role, stall_id, status`;
+    queryParams.push(userId);
+
+    const result = await pool.query(updateQuery, queryParams);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Logout (client-side token removal)
+// Password recovery routes (imported from standalone functions)
+const sendVerificationEmail = require('../../api/auth/send-verification-email');
+const verifyCode = require('../../api/auth/verify-code');
+const recoverPassword = require('../../api/auth/recover-password');
+
+router.post('/send-verification-email', sendVerificationEmail);
+router.post('/verify-code', verifyCode);
+router.post('/recover-password', recoverPassword);
+
+router.post('/logout', authenticateToken, (req, res) => {
+  res.json({ message: 'Logout successful' });
+});
+
+module.exports = router;

@@ -1,0 +1,12 @@
+# We now need API routes for the authentication endpoints
+# Excluding only server/ since those are for local development
+
+# Exclude server files
+server/
+
+# Exclude development files
+node_modules/
+.env
+.env.local
+*.log
+
