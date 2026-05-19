@@ -50,65 +50,11 @@ module.exports = async (req, res) => {
       console.warn('RPC call failed, using fallback method:', rpcException.message);
     }
 
-    // FALLBACK: Manual transaction-like approach with validation
-    // Check if item exists and has enough stock
-    const { data: item, error: itemError } = await supabase
-      .from('items')
-      .select('current_stock')
-      .eq('item_id', id)
-      .single();
-
-    if (itemError || !item) {
-      return res.status(404).json({ message: 'Item not found' });
-    }
-
-    if (item.current_stock < quantity_allocated) {
-      return res.status(400).json({ message: 'Insufficient stock available' });
-    }
-
-    // Check if stall exists
-    const { data: stall } = await supabase
-      .from('stalls')
-      .select('stall_id')
-      .eq('stall_id', stall_id)
-      .eq('status', 'active')
-      .single();
-
-    if (!stall) {
-      return res.status(404).json({ message: 'Stall not found or inactive' });
-    }
-
-    // Add distribution record
-    const { data: distribution, error: distError } = await supabase
-      .from('stock_distribution')
-      .insert([{
-        item_id: id,
-        stall_id,
-        quantity_allocated,
-        distributed_by: authResult.user.user_id
-      }])
-      .select()
-      .single();
-
-    if (distError) {
-      return res.status(500).json({ message: 'Error creating distribution record' });
-    }
-
-    // Update current_stock
-    const { data: updatedItem, error: updateError } = await supabase
-      .from('items')
-      .update({ current_stock: item.current_stock - quantity_allocated })
-      .eq('item_id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return res.status(500).json({ message: 'Error updating stock' });
-    }
-
-    res.json({
-      message: 'Stock distributed successfully',
-      item: updatedItem
+    // RPC function is required for atomic distribution
+    // Fallback is not safe due to race conditions
+    return res.status(503).json({
+      message: 'Distribution service temporarily unavailable. Please try again.',
+      error: 'RPC function required for atomic operations'
     });
   } catch (error) {
     console.error('Distribute stock error:', error);
