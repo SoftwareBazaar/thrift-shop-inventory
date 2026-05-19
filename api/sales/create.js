@@ -133,7 +133,12 @@ module.exports = async (req, res) => {
 
       if (creditError) {
         console.error('Credit sale creation error:', creditError);
-        // Note: Sale is already recorded, credit record is optional
+        // CRITICAL: Credit sale creation failed - this is NOT optional
+        // Return error instead of silently ignoring
+        return res.status(500).json({
+          message: 'Failed to create credit sale record',
+          error: creditError.message
+        });
       }
     }
 
