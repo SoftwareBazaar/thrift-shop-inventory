@@ -26,7 +26,9 @@ module.exports = async (req, res) => {
       .select(`
         *,
         stock_distribution(quantity_allocated),
-        stock_additions(quantity_added)
+        stock_additions(quantity_added),
+        sales(quantity_sold),
+        stock_withdrawals(quantity_withdrawn)
       `);
 
     // If user is not admin, only show items from their stall
@@ -63,12 +65,24 @@ module.exports = async (req, res) => {
     const processedItems = items.map(item => {
       const total_allocated = item.stock_distribution?.reduce((sum, sd) => sum + (sd.quantity_allocated || 0), 0) || 0;
       const total_added = item.stock_additions?.reduce((sum, sa) => sum + (sa.quantity_added || 0), 0) || 0;
+      const total_sold = item.sales?.reduce((sum, s) => sum + (s.quantity_sold || 0), 0) || 0;
+      const total_withdrawn = item.stock_withdrawals?.reduce((sum, sw) => sum + (sw.quantity_withdrawn || 0), 0) || 0;
+      
+      // Verify current_stock calculation
+      // current_stock = initial_stock + total_added - total_allocated - total_sold - total_withdrawn
+      const calculated_stock = (item.initial_stock || 0) + total_added - total_allocated - total_sold - total_withdrawn;
+      
       return {
         ...item,
         total_allocated,
         total_added,
+        total_sold,
+        total_withdrawn,
+        calculated_stock, // For debugging/verification
         stock_distribution: undefined,
-        stock_additions: undefined
+        stock_additions: undefined,
+        sales: undefined,
+        stock_withdrawals: undefined
       };
     });
 
