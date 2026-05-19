@@ -30,6 +30,15 @@ module.exports = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Validate quantities and prices are positive
+    if (initial_stock <= 0) {
+      return res.status(400).json({ message: 'Initial stock must be greater than 0' });
+    }
+
+    if (unit_price <= 0) {
+      return res.status(400).json({ message: 'Unit price must be greater than 0' });
+    }
+
     // Check if SKU already exists
     if (sku) {
       const { data: existingSku } = await supabase

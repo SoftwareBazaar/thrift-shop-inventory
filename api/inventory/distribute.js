@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     const { id, stall_id, quantity_allocated } = req.body;
 
     if (!id || !stall_id || !quantity_allocated || quantity_allocated <= 0) {
-      return res.status(400).json({ message: 'Valid item, stall, and quantity are required' });
+      return res.status(400).json({ message: 'Valid item, stall, and positive quantity are required' });
     }
 
     // Try to use atomic RPC function first (if database supports it)

@@ -29,6 +29,15 @@ module.exports = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Validate quantities are positive
+    if (quantity_sold <= 0) {
+      return res.status(400).json({ message: 'Quantity sold must be greater than 0' });
+    }
+
+    if (unit_price <= 0) {
+      return res.status(400).json({ message: 'Unit price must be greater than 0' });
+    }
+
     // Validate sale type
     if (!['cash', 'credit'].includes(sale_type)) {
       return res.status(400).json({ message: 'Invalid sale type' });
