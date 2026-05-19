@@ -174,8 +174,32 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
-    const interval = setInterval(() => fetchAdminData(), 5000);
-    return () => clearInterval(interval);
+    
+    // Add event listeners for real-time updates (fast path)
+    const handleSalesUpdate = () => {
+      console.log('🔄 Real-time sales update detected');
+      fetchAdminData();
+    };
+    
+    const handleInventoryUpdate = () => {
+      console.log('🔄 Real-time inventory update detected');
+      fetchAdminData();
+    };
+    
+    window.addEventListener('sales-updated', handleSalesUpdate);
+    window.addEventListener('inventory-updated', handleInventoryUpdate);
+    
+    // Fallback polling (increased to 30s to reduce unnecessary requests)
+    const interval = setInterval(() => {
+      console.log('📡 Polling admin data (fallback)');
+      fetchAdminData();
+    }, 30000);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('sales-updated', handleSalesUpdate);
+      window.removeEventListener('inventory-updated', handleInventoryUpdate);
+    };
   }, [fetchAdminData]);
 
   const formatCurrency = (amount: number) => {
@@ -207,12 +231,16 @@ const AdminDashboard: React.FC = () => {
 
   const items = inventoryResponse?.items || [];
   const totalStockValue = items.reduce((sum: number, item: any) => {
-    // Current Stock in system = Central Stock + Distributed Stock (unsold)
+    // Current Stock in system: central stock + distributed stock (unsold at stalls)
+    // Note: current_stock already accounts for distributions and sales deductions
+    // So we only count current_stock + unsold items at stalls
     const centralStock = Number(item.current_stock) || 0;
     const itemSales = allSales.filter(s => s.item_id === item.item_id || s.item_name === item.item_name);
     const totalSold = itemSales.reduce((sum, s: any) => sum + (s.quantity_sold || 0), 0);
+    // Unsold at stalls = allocated - sold at stalls
     const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - totalSold);
-
+    
+    // Total unsold stock = central (already in current_stock) + unsold at stalls
     const unsoldStock = centralStock + distributedLive;
     return sum + (unsoldStock * (Number(item.buying_price) || 0));
   }, 0);

@@ -54,27 +54,32 @@ module.exports = async (req, res) => {
       return res.status(500).json({ message: 'Internal server error' });
     }
 
-    // Calculate summary
+    // Ensure all sales have valid sale_type (cash or credit)
+    const validSales = sales.map(s => ({
+      ...s,
+      sale_type: s.sale_type || 'cash' // Default to cash if missing
+    }));
+
+    // Calculate summary with consistent Number() conversion
+    const totalRevenue = validSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
     const summary = {
-      total_sales: sales.length,
-      total_revenue: sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0),
-      total_units_sold: sales.reduce((sum, s) => sum + (s.quantity_sold || 0), 0),
-      average_sale_value: sales.length > 0
-        ? sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0) / sales.length
-        : 0,
-      cash_sales: sales.filter(s => s.sale_type === 'cash').length,
-      credit_sales: sales.filter(s => s.sale_type === 'credit').length,
-      cash_revenue: sales
+      total_sales: validSales.length,
+      total_revenue: totalRevenue,
+      total_units_sold: validSales.reduce((sum, s) => sum + (s.quantity_sold || 0), 0),
+      average_sale_value: validSales.length > 0 ? totalRevenue / validSales.length : 0,
+      cash_sales: validSales.filter(s => s.sale_type === 'cash').length,
+      credit_sales: validSales.filter(s => s.sale_type === 'credit').length,
+      cash_revenue: validSales
         .filter(s => s.sale_type === 'cash')
-        .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0),
-      credit_revenue: sales
+        .reduce((sum, s) => sum + Number(s.total_amount || 0), 0),
+      credit_revenue: validSales
         .filter(s => s.sale_type === 'credit')
-        .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0)
+        .reduce((sum, s) => sum + Number(s.total_amount || 0), 0)
     };
 
     // Get top items (simplified - you might want to use a separate query for better performance)
     const itemCounts = {};
-    sales.forEach(sale => {
+    validSales.forEach(sale => {
       if (!itemCounts[sale.item_id]) {
         itemCounts[sale.item_id] = {
           item_id: sale.item_id,
@@ -83,7 +88,7 @@ module.exports = async (req, res) => {
         };
       }
       itemCounts[sale.item_id].quantity += sale.quantity_sold || 0;
-      itemCounts[sale.item_id].revenue += parseFloat(sale.total_amount || 0);
+      itemCounts[sale.item_id].revenue += Number(sale.total_amount || 0);
     });
 
     const topItems = Object.values(itemCounts)

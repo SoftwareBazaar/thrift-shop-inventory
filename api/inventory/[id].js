@@ -32,12 +32,18 @@ module.exports = async (req, res) => {
 
       const total_allocated = item.stock_distribution?.reduce((sum, sd) => sum + (sd.quantity_allocated || 0), 0) || 0;
       const total_added = item.stock_additions?.reduce((sum, sa) => sum + (sa.quantity_added || 0), 0) || 0;
+      const total_sold = item.sales?.reduce((sum, s) => sum + (s.quantity_sold || 0), 0) || 0;
+      const total_withdrawn = item.stock_withdrawals?.reduce((sum, sw) => sum + (sw.quantity_withdrawn || 0), 0) || 0;
+      const calculated_stock = Math.max(0, (item.initial_stock || 0) + total_added - total_allocated - total_sold - total_withdrawn);
 
       res.json({
         item: {
           ...item,
           total_allocated,
-          total_added
+          total_added,
+          total_sold,
+          total_withdrawn,
+          calculated_stock
         },
         distribution: item.stock_distribution || []
       });

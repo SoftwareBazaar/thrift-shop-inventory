@@ -41,6 +41,9 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'items' },
       async () => {
+        console.log('📡 Real-time: Inventory changed');
+        // Fire window event for components to listen
+        window.dispatchEvent(new Event('inventory-updated'));
         if (callbacks.inventory) {
           const { data } = await (supabase as any)
             .from('items')
@@ -58,6 +61,9 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'sales' },
       async () => {
+        console.log('📡 Real-time: Sales changed');
+        // Fire window event for components to listen
+        window.dispatchEvent(new Event('sales-updated'));
         if (callbacks.sales) {
           const { data } = await (supabase as any)
             .from('sales')
@@ -81,6 +87,9 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'users' },
       async () => {
+        console.log('📡 Real-time: Users changed');
+        // Fire window event for components to listen
+        window.dispatchEvent(new Event('users-updated'));
         if (callbacks.users) {
           const { data } = await (supabase as any)
             .from('users')

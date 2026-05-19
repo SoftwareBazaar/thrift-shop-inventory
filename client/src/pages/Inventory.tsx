@@ -139,13 +139,32 @@ const Inventory: React.FC = () => {
     fetchStalls();
     fetchSales();
 
-    // Auto-refresh every 5 seconds to sync data across all users
+    // Add event listeners for real-time updates (fast path)
+    const handleInventoryUpdate = () => {
+      console.log('🔄 Real-time inventory update detected');
+      fetchItems();
+    };
+    
+    const handleSalesUpdate = () => {
+      console.log('🔄 Real-time sales update detected');
+      fetchSales();
+    };
+    
+    window.addEventListener('inventory-updated', handleInventoryUpdate);
+    window.addEventListener('sales-updated', handleSalesUpdate);
+
+    // Fallback polling (increased to 30s to reduce unnecessary requests)
     const interval = setInterval(() => {
+      console.log('📡 Polling inventory data (fallback)');
       fetchItems();
       fetchSales();
-    }, 5000);
+    }, 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('inventory-updated', handleInventoryUpdate);
+      window.removeEventListener('sales-updated', handleSalesUpdate);
+    };
   }, [fetchItems, fetchSales]);
 
   const fetchItemDistributions = useCallback(async (itemId: number) => {

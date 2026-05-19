@@ -55,10 +55,25 @@ const UserSaleItems: React.FC = () => {
 
   useEffect(() => {
     fetchItemsData();
-    const interval = setInterval(() => {
+    
+    // Add event listeners for real-time updates (fast path)
+    const handleInventoryUpdate = () => {
+      console.log('🔄 Real-time inventory update detected');
       fetchItemsData();
-    }, 5000);
-    return () => clearInterval(interval);
+    };
+    
+    window.addEventListener('inventory-updated', handleInventoryUpdate);
+    
+    // Fallback polling (increased to 20s to reduce unnecessary requests)
+    const interval = setInterval(() => {
+      console.log('📡 Polling sales items (fallback)');
+      fetchItemsData();
+    }, 20000);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('inventory-updated', handleInventoryUpdate);
+    };
   }, [fetchItemsData]);
 
   const handleItemSelect = (item: SaleItem) => {

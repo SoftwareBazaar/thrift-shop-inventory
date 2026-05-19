@@ -68,9 +68,9 @@ module.exports = async (req, res) => {
       const total_sold = item.sales?.reduce((sum, s) => sum + (s.quantity_sold || 0), 0) || 0;
       const total_withdrawn = item.stock_withdrawals?.reduce((sum, sw) => sum + (sw.quantity_withdrawn || 0), 0) || 0;
       
-      // Verify current_stock calculation
+      // Verify current_stock calculation with Math.max to prevent negatives
       // current_stock = initial_stock + total_added - total_allocated - total_sold - total_withdrawn
-      const calculated_stock = (item.initial_stock || 0) + total_added - total_allocated - total_sold - total_withdrawn;
+      const calculated_stock = Math.max(0, (item.initial_stock || 0) + total_added - total_allocated - total_sold - total_withdrawn);
       
       return {
         ...item,
