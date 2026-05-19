@@ -137,16 +137,9 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Update current_stock (trigger should handle this, but we do it explicitly for reliability)
-    const { error: updateError } = await supabase
-      .from('items')
-      .update({ current_stock: item.current_stock - quantity_sold })
-      .eq('item_id', item_id);
-
-    if (updateError) {
-      console.error('Stock update error:', updateError);
-      // Sale is recorded, stock update failed - this is logged for audit
-    }
+    // Stock is already decremented by the RPC function or trigger
+    // Do NOT decrement again here to avoid double deduction
+    // The RPC function handles this atomically
 
     res.status(201).json({
       message: 'Sale recorded successfully',
