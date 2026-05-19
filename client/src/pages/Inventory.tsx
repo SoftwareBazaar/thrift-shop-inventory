@@ -1034,6 +1034,11 @@ const Inventory: React.FC = () => {
                                   <div className="text-xs uppercase text-gray-500">New items added</div>
                                   <div className="mt-1 text-lg font-semibold text-gray-900">{item.total_added}</div>
                                 </div>
+                                  <div className="rounded border border-gray-100 bg-gray-50 p-3">
+                                  <div className="text-xs uppercase text-gray-500">Total Inventory</div>
+                                  <div className="mt-1 text-lg font-semibold text-gray-900">{totalReceived}</div>
+                                  <div className="mt-1 text-xs text-gray-400">Initial + Added</div>
+                                </div>
                                 <div className="rounded border border-gray-100 bg-gray-50 p-3">
                                   <div className="text-xs uppercase text-gray-500">Allocated So Far</div>
                                   <div className="mt-1 text-lg font-semibold text-gray-900">{distributedLive + totalSoldForItem}</div>
