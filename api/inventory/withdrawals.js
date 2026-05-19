@@ -9,7 +9,7 @@ const { adminOnly } = require('../middleware');
 // Record a stock withdrawal
 router.post('/', adminOnly, async (req, res) => {
     try {
-        const { itemId, quantityWithdrawn, reason, notes, batchNumber } = req.body;
+        const { itemId, quantityWithdrawn, reason, notes } = req.body;
         
         // Validate inputs
         if (!itemId || !quantityWithdrawn || quantityWithdrawn <= 0) {
@@ -43,10 +43,10 @@ router.post('/', adminOnly, async (req, res) => {
         // Record withdrawal
         const result = await db.query(`
             INSERT INTO stock_withdrawals 
-            (item_id, quantity_withdrawn, reason, withdrawn_by, notes, batch_number)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (item_id, quantity_withdrawn, reason, withdrawn_by, notes, date_withdrawn)
+            VALUES ($1, $2, $3, $4, $5, NOW())
             RETURNING *
-        `, [itemId, quantityWithdrawn, reason, req.user.user_id, notes || null, batchNumber || null]);
+        `, [itemId, quantityWithdrawn, reason, req.user.user_id, notes || null]);
         
         // Update item stock
         await db.query(
@@ -56,9 +56,9 @@ router.post('/', adminOnly, async (req, res) => {
         
         // Log to activity log
         await db.query(`
-            INSERT INTO activity_log (user_id, action, table_name, record_id, new_values)
-            VALUES ($1, 'WITHDRAWAL', 'stock_withdrawals', $2, $3)
-        `, [req.user.user_id, result.rows[0].withdrawal_id, JSON.stringify(result.rows[0])]);
+            INSERT INTO activity_log (table_name, operation, record_id, new_values)
+            VALUES ('stock_withdrawals', 'INSERT', $1, $2)
+        `, [result.rows[0].withdrawal_id, JSON.stringify(result.rows[0])]);
         
         await db.query('COMMIT');
         
