@@ -9,6 +9,7 @@ const inventoryRoutes = require('./routes/inventory');
 const salesRoutes = require('./routes/sales');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/reports');
+const contentRoutes = require('./routes/content');
 const auditRoutes = require('./api/audit');
 const creditSalesRoutes = require('./api/credit-sales');
 const reconciliationRoutes = require('./api/reconciliation');
@@ -45,6 +46,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files for uploads
+app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -60,6 +64,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/content', contentRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/credit-sales', creditSalesRoutes);
 app.use('/api/reconciliation', reconciliationRoutes);
