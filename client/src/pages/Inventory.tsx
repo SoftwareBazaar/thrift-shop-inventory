@@ -1001,7 +1001,7 @@ const Inventory: React.FC = () => {
                               </div>
                               <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                 <div className="text-xs font-semibold uppercase text-indigo-700">
-                                  Total Received
+                                  Total Inventory
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-indigo-900">
                                   {totalReceived}
@@ -1022,8 +1022,8 @@ const Inventory: React.FC = () => {
                               <h4 className="text-sm font-semibold text-gray-900">Stock flow</h4>
                               <p className="mt-1 text-xs text-gray-500">
                                 {(item.initial_stock || 0)} initial + {(item.total_added || 0)} added ={' '}
-                                {totalReceived} received overall.{' '}
-                                {distributedLive} currently at stalls, {centralStock} at hub (Total in system: {centralStock + distributedLive}).
+                                {totalReceived} total inventory.{' '}
+                                {distributedLive + totalSoldForItem} allocated so far ({distributedLive} at stalls, {totalSoldForItem} sold), {centralStock} available in central.
                               </p>
                               <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                                 <div className="rounded border border-gray-100 bg-gray-50 p-3">
@@ -1035,8 +1035,9 @@ const Inventory: React.FC = () => {
                                   <div className="mt-1 text-lg font-semibold text-gray-900">{item.total_added}</div>
                                 </div>
                                 <div className="rounded border border-gray-100 bg-gray-50 p-3">
-                                  <div className="text-xs uppercase text-gray-500">Allocated so far</div>
-                                  <div className="mt-1 text-lg font-semibold text-gray-900">{item.total_allocated || 0}</div>
+                                  <div className="text-xs uppercase text-gray-500">Allocated So Far</div>
+                                  <div className="mt-1 text-lg font-semibold text-gray-900">{distributedLive + totalSoldForItem}</div>
+                                  <div className="mt-1 text-xs text-gray-400">At Stalls + Sold</div>
                                 </div>
                               </div>
                             </div>
