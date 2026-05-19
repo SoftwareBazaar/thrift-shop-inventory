@@ -1254,7 +1254,6 @@ const Inventory: React.FC = () => {
         </tbody>
       </table>
     </div>
-  </div>
 
       {
         filteredItems.length === 0 && (
