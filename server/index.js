@@ -9,6 +9,10 @@ const inventoryRoutes = require('./routes/inventory');
 const salesRoutes = require('./routes/sales');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/reports');
+const auditRoutes = require('./api/audit');
+const creditSalesRoutes = require('./api/credit-sales');
+const reconciliationRoutes = require('./api/reconciliation');
+const withdrawalsRoutes = require('./api/inventory/withdrawals');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,6 +60,10 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/credit-sales', creditSalesRoutes);
+app.use('/api/reconciliation', reconciliationRoutes);
+app.use('/api/inventory/withdrawals', withdrawalsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
