@@ -59,10 +59,6 @@ const ContentManagement: React.FC = () => {
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   // Fetch content
-  useEffect(() => {
-    fetchContent();
-  }, [filterType, filterStatus]);
-
   const fetchContent = async () => {
     try {
       setLoading(true);
@@ -95,6 +91,11 @@ const ContentManagement: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Fetch content when filters change
+  useEffect(() => {
+    fetchContent();
+  }, [filterType, filterStatus]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
