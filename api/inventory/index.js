@@ -68,17 +68,17 @@ module.exports = async (req, res) => {
       const total_sold = item.sales?.reduce((sum, s) => sum + (s.quantity_sold || 0), 0) || 0;
       const total_withdrawn = item.stock_withdrawals?.reduce((sum, sw) => sum + (sw.quantity_withdrawn || 0), 0) || 0;
       
-      // Verify current_stock calculation with Math.max to prevent negatives
-      // current_stock = initial_stock + total_added - total_allocated - total_sold - total_withdrawn
-      const calculated_stock = Math.max(0, (item.initial_stock || 0) + total_added - total_allocated - total_sold - total_withdrawn);
+      // Use current_stock from database (which is updated by withdrawal API)
+      // This ensures withdrawals are reflected immediately
+      const current_stock = item.current_stock || 0;
       
       return {
         ...item,
+        current_stock, // Use the database value
         total_allocated,
         total_added,
         total_sold,
         total_withdrawn,
-        calculated_stock, // For debugging/verification
         stock_distribution: undefined,
         stock_additions: undefined,
         sales: undefined,
