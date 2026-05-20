@@ -1537,20 +1537,28 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('stock_withdrawals')
-        .insert([{
-          item_id: withdrawalData.item_id,
-          quantity_withdrawn: withdrawalData.quantity_withdrawn,
+      // Call backend API instead of Supabase directly
+      // This ensures stock is updated synchronously
+      const response = await fetch('/api/inventory/withdrawals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          itemId: withdrawalData.item_id,
+          quantityWithdrawn: withdrawalData.quantity_withdrawn,
           reason: withdrawalData.reason,
-          withdrawn_by: withdrawalData.withdrawn_by,
           notes: withdrawalData.notes
-        }])
-        .select()
-        .single();
+        })
+      });
 
-      if (error) throw error;
-      return { withdrawal: data };
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create withdrawal');
+      }
+
+      const result = await response.json();
+      return { withdrawal: result.data };
     } catch (error) {
       console.error('Error creating withdrawal:', error);
       throw error;
