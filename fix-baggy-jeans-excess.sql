@@ -1,22 +1,19 @@
--- Fix Baggy Jeans inventory - correct initial_stock and total_added
--- Date: 26/02/2026, 18:20
--- Issue: initial_stock is hardcoded as 12, but should be 3 (from addition history)
--- Solution: Set initial_stock to 3, and adjust total_added to 97
+-- Fix Baggy jeans - remove the duplicate 3 from stock_additions
+-- The 3 added on 26/02/2026, 18:20 is actually the initial stock, not an addition
+-- We need to delete this entry so total_added = 97 instead of 100
 
--- Step 1: Check current state
-SELECT item_id, item_name, initial_stock, current_stock FROM items WHERE item_name = 'Baggy Jeans';
-
--- Step 2: Check stock additions history
+-- Step 1: Find the addition to delete
 SELECT addition_id, item_id, quantity_added, date_added FROM stock_additions 
-WHERE item_id = (SELECT item_id FROM items WHERE item_name = 'Baggy Jeans' LIMIT 1)
+WHERE item_id = 80 
 ORDER BY date_added;
 
--- Step 3: Update initial_stock from 12 to 3
-UPDATE items 
-SET initial_stock = 3
-WHERE item_name = 'Baggy Jeans';
+-- Step 2: Delete the 3-unit addition from 26/02/2026, 18:20
+DELETE FROM stock_additions 
+WHERE item_id = 80 
+AND quantity_added = 3 
+AND DATE(date_added) = '2026-02-26';
 
--- Step 4: Verify the fix
+-- Step 3: Verify the fix
 SELECT 
   item_id,
   item_name,
@@ -24,10 +21,10 @@ SELECT
   current_stock,
   (SELECT SUM(quantity_added) FROM stock_additions WHERE item_id = items.item_id) as total_added
 FROM items 
-WHERE item_name = 'Baggy Jeans';
+WHERE item_id = 80;
 
--- Expected result after fix:
--- initial_stock: 3 (corrected from 12)
--- current_stock: 100 (stays the same)
--- total_added: 97 (sum of all additions except the initial 3)
--- This means: 3 (initial) + 97 (added) = 100 total inventory
+-- Expected result:
+-- initial_stock: 3
+-- current_stock: 100
+-- total_added: 97 (was 100, now 100 - 3 = 97)
+-- Total Inventory: 3 + 97 = 100
