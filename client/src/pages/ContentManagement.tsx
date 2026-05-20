@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './ContentManagement.css';
 
 interface Content {
@@ -59,7 +59,7 @@ const ContentManagement: React.FC = () => {
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   // Fetch content
-  const fetchContent = async () => {
+  const fetchContent = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -90,7 +90,7 @@ const ContentManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiUrl, filterType, filterStatus, token]);
 
   // Fetch content when filters change
   useEffect(() => {
