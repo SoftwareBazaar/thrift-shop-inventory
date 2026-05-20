@@ -95,7 +95,7 @@ const ContentManagement: React.FC = () => {
   // Fetch content when filters change
   useEffect(() => {
     fetchContent();
-  }, [filterType, filterStatus]);
+  }, [filterType, filterStatus, fetchContent]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
