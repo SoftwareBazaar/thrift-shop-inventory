@@ -91,11 +91,11 @@ module.exports = async (req, res) => {
       console.warn('RPC call failed, using fallback method:', rpcException.message);
     }
 
-    // FALLBACK: Manual transaction-like approach with validation
-    // Check if item exists and has enough stock
+    // FALLBACK: Check stall stock, not central stock
+    // Get item info
     const { data: item, error: itemError } = await supabase
       .from('items')
-      .select('current_stock, item_name, buying_price')
+      .select('item_name, buying_price')
       .eq('item_id', item_id)
       .single();
 
@@ -103,8 +103,28 @@ module.exports = async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.current_stock < quantity_sold) {
-      return res.status(400).json({ message: 'Insufficient stock available' });
+    // Check if stall has enough stock (allocated - already sold)
+    const { data: distributions } = await supabase
+      .from('stock_distribution')
+      .select('quantity_allocated')
+      .eq('item_id', item_id)
+      .eq('stall_id', stall_id);
+
+    const totalAllocated = distributions?.reduce((sum, d) => sum + (d.quantity_allocated || 0), 0) || 0;
+
+    const { data: stallSales } = await supabase
+      .from('sales')
+      .select('quantity_sold')
+      .eq('item_id', item_id)
+      .eq('stall_id', stall_id);
+
+    const totalSold = stallSales?.reduce((sum, s) => sum + (s.quantity_sold || 0), 0) || 0;
+    const availableAtStall = totalAllocated - totalSold;
+
+    if (availableAtStall < quantity_sold) {
+      return res.status(400).json({ 
+        message: `Insufficient stock at stall. Available: ${availableAtStall}, Requested: ${quantity_sold}` 
+      });
     }
 
     // Insert sale record
@@ -151,9 +171,8 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Stock is already decremented by the RPC function or trigger
-    // Do NOT decrement again here to avoid double deduction
-    // The RPC function handles this atomically
+    // Sales happen from stalls, NOT from central stock
+    // Do NOT update items.current_stock here
 
     res.status(201).json({
       message: 'Sale recorded successfully',
