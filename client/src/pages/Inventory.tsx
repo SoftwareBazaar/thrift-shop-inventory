@@ -606,6 +606,33 @@ const Inventory: React.FC = () => {
   const getStallSold = (itemId: number, stallId: number) =>
     salesAggregates.byItemStall[`${Number(itemId)}-${stallId}`] ?? 0;
 
+  /** Scale per-stall remainings so they sum to allocated − sold (handles pre-tracking dist rows). */
+  const reconcileStallRemainings = (
+    entries: Array<{ name: string; rawRemaining: number }>,
+    targetTotal: number
+  ): Array<{ name: string; remaining: number }> => {
+    const totalRaw = entries.reduce((t, e) => t + e.rawRemaining, 0);
+    if (targetTotal <= 0 || totalRaw <= 0) {
+      return entries.map((e) => ({ name: e.name, remaining: 0 }));
+    }
+    if (totalRaw === targetTotal) {
+      return entries.map((e) => ({ name: e.name, remaining: e.rawRemaining }));
+    }
+
+    const positive = entries.filter((e) => e.rawRemaining > 0);
+    let assigned = 0;
+    return entries.map((e) => {
+      if (e.rawRemaining <= 0) return { name: e.name, remaining: 0 };
+      const posIndex = positive.findIndex((p) => p.name === e.name);
+      if (posIndex === positive.length - 1) {
+        return { name: e.name, remaining: Math.max(0, targetTotal - assigned) };
+      }
+      const scaled = Math.floor((e.rawRemaining / totalRaw) * targetTotal);
+      assigned += scaled;
+      return { name: e.name, remaining: scaled };
+    });
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -810,24 +837,24 @@ const Inventory: React.FC = () => {
                           <div className="text-sm font-bold text-gray-900">{item.item_name}</div>
                           {user?.role === 'admin' ? (() => {
                             const allocs = stallAllocMap.get(item.item_id) || [];
-                            // Group all distribution batches by stall_name, sum quantities
-                            const byStallName = new Map<string, number>();
-                            allocs.forEach(a => {
-                              byStallName.set(a.stall_name, (byStallName.get(a.stall_name) || 0) + a.quantity_allocated);
+                            // Group distribution batches by stall_id (not name — avoids mismatches)
+                            const byStallId = new Map<number, number>();
+                            allocs.forEach((a: { stall_id?: number; quantity_allocated: number }) => {
+                              const sid = Number(a.stall_id);
+                              if (!sid) return;
+                              byStallId.set(sid, (byStallId.get(sid) || 0) + (a.quantity_allocated || 0));
                             });
 
-                            // Per-stall remaining = allocated to stall - sold at that stall (match by stall_id)
-                            const stallEntries = stalls.map(stall => ({
+                            const rawStallEntries = stalls.map(stall => ({
                               name: stall.stall_name,
-                              remaining: Math.max(
+                              rawRemaining: Math.max(
                                 0,
-                                (byStallName.get(stall.stall_name) || 0) - getStallSold(item.item_id, stall.stall_id)
+                                (byStallId.get(stall.stall_id) || 0) - getStallSold(item.item_id, stall.stall_id)
                               )
                             }));
 
-                            // Total in system = central stock + sum of all stall remainings
-                            const stallTotal = stallEntries.reduce((t, s) => t + s.remaining, 0);
-                            const totalInSystem = centralStock + stallTotal;
+                            const stallEntries = reconcileStallRemainings(rawStallEntries, distributedLive);
+                            const totalInSystem = centralStock + distributedLive;
                             
                             return (
                               <>
