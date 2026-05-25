@@ -36,8 +36,7 @@ const Layout: React.FC = () => {
     { name: 'Sales', href: '/sales', icon: '💰' },
     ...(user?.role === 'admin' ? [
       { name: 'Reports', href: '/reports', icon: '📈' },
-      { name: 'Users', href: '/users', icon: '👥' },
-      { name: 'Content Management', href: '/content-management', icon: '📝' }
+      { name: 'Users', href: '/users', icon: '👥' }
     ] : []),
   ];
 

@@ -9,7 +9,6 @@ import Inventory from './pages/Inventory';
 import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
-import ContentManagement from './pages/ContentManagement';
 import Layout from './components/Layout';
 import AddItem from './pages/AddItem';
 import RecordSale from './pages/RecordSale';
@@ -71,7 +70,6 @@ function App() {
                   <Route path="/credit-sales" element={<ErrorBoundary><CreditSales /></ErrorBoundary>} />
                   <Route path="/reports" element={<ProtectedRoute requireAdmin><ErrorBoundary><Reports /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/users" element={<ProtectedRoute requireAdmin><ErrorBoundary><Users /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/content-management" element={<ProtectedRoute requireAdmin><ErrorBoundary><ContentManagement /></ErrorBoundary></ProtectedRoute>} />
                 </Route>
               </Routes>
             </ErrorBoundary>
