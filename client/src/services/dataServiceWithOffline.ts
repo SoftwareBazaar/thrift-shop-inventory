@@ -210,6 +210,33 @@ export const offlineDataApi = {
     }
   },
 
+  getSalesAggregates: async () => {
+    const buildFromSales = (sales: any[]) => {
+      const byItem: Record<number, number> = {};
+      const byItemStall: Record<string, number> = {};
+      for (const sale of sales) {
+        const itemId = Number(sale.item_id);
+        const qty = Number(sale.quantity_sold) || 0;
+        byItem[itemId] = (byItem[itemId] || 0) + qty;
+        const stallKey = `${itemId}-${sale.stall_id ?? 'null'}`;
+        byItemStall[stallKey] = (byItemStall[stallKey] || 0) + qty;
+      }
+      return { byItem, byItemStall };
+    };
+
+    try {
+      if (navigator.onLine) {
+        return await dataApi.getSalesAggregates();
+      }
+      const sales = await offlineStorage.getSales();
+      return buildFromSales(sales);
+    } catch (error) {
+      console.error('[OfflineDataApi] Error getting sales aggregates:', error);
+      const sales = await offlineStorage.getSales();
+      return buildFromSales(sales);
+    }
+  },
+
   // Get sales - try online first, fallback to offline
   getSales: async () => {
     try {

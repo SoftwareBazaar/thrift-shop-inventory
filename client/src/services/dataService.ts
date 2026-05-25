@@ -13,7 +13,7 @@ export const dataApi = offlineDataApi;
 export const setupRealtime = setupRealtimeSubscriptions;
 
 // Export types (direct pass-through)
-export type { User, Sale, Stall, Item, SaleInput } from './databaseService';
+export type { User, Sale, Stall, Item, SaleInput, SalesAggregates } from './databaseService';
 
 // Export for direct use
 export default dataApi;

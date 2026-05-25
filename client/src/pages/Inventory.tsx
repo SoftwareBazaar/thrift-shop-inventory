@@ -42,6 +42,10 @@ const Inventory: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
+  const [salesAggregates, setSalesAggregates] = useState<{
+    byItem: Record<number, number>;
+    byItemStall: Record<string, number>;
+  }>({ byItem: {}, byItemStall: {} });
   const [editFormData, setEditFormData] = useState({
     item_name: '',
     category: '',
@@ -126,8 +130,12 @@ const Inventory: React.FC = () => {
 
   const fetchSales = useCallback(async () => {
     try {
-      const response = await dataApi.getSales();
-      setSalesData(response.sales);
+      const [salesResponse, aggregates] = await Promise.all([
+        dataApi.getSales(),
+        dataApi.getSalesAggregates()
+      ]);
+      setSalesData(salesResponse.sales);
+      setSalesAggregates(aggregates);
     } catch (error) {
       console.error('Error fetching sales:', error);
     }
@@ -569,36 +577,34 @@ const Inventory: React.FC = () => {
   });
 
   const getItemsSold = (itemId: number, fallbackName: string, stallOnly: boolean = false) => {
-    const matchingSales = salesData
-      .filter((sale) => {
-        // First filter by item - ensure both are numbers for comparison
-        const matchesItem = sale.item_id != null
-          ? Number(sale.item_id) === Number(itemId)
-          : sale.item_name === fallbackName;
+    const numericItemId = Number(itemId);
 
-        if (!matchesItem) return false;
-
-        // If stallOnly is requested, exclude central sales (where stall_id is null)
-        if (stallOnly && (sale.stall_id === null || sale.stall_id === undefined)) {
-          return false;
-        }
-
-        // For non-admin users, only show their own sales
-        if (user?.role !== 'admin' && user?.user_id) {
+    // Non-admin: filter by recorded user from loaded sales list
+    if (user?.role !== 'admin' && user?.user_id) {
+      return salesData
+        .filter((sale) => {
+          const matchesItem = sale.item_id != null
+            ? Number(sale.item_id) === numericItemId
+            : sale.item_name === fallbackName;
+          if (!matchesItem) return false;
+          if (stallOnly && (sale.stall_id === null || sale.stall_id === undefined)) return false;
           return sale.recorded_by === user.user_id;
-        }
-
-        // Admin sees all sales (unless stallOnly is set, which we handled above)
-        return true;
-      });
-    
-    // Debug logging
-    if (matchingSales.length > 0) {
-      console.log(`Item ${itemId} (${fallbackName}): Found ${matchingSales.length} sales`, matchingSales);
+        })
+        .reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
     }
-    
-    return matchingSales.reduce((total, sale) => total + (sale.quantity_sold || 0), 0);
+
+    // Admin: use full-database aggregates (paginated fetch avoids 1000-row Supabase cap)
+    if (stallOnly) {
+      return Object.entries(salesAggregates.byItemStall)
+        .filter(([key]) => key.startsWith(`${numericItemId}-`) && !key.endsWith('-null'))
+        .reduce((sum, [, qty]) => sum + qty, 0);
+    }
+
+    return salesAggregates.byItem[numericItemId] ?? 0;
   };
+
+  const getStallSold = (itemId: number, stallId: number) =>
+    salesAggregates.byItemStall[`${Number(itemId)}-${stallId}`] ?? 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -810,18 +816,13 @@ const Inventory: React.FC = () => {
                               byStallName.set(a.stall_name, (byStallName.get(a.stall_name) || 0) + a.quantity_allocated);
                             });
 
-                            // Per-stall remaining = allocated to stall - sold by that stall (using main stalls list)
-                            const stallSoldCount = (stallName: string) =>
-                              salesData
-                                .filter(s =>
-                                  (s.item_id != null ? Number(s.item_id) === item.item_id : s.item_name === item.item_name) &&
-                                  s.stall_name === stallName
-                                )
-                                .reduce((t: number, s: any) => t + (s.quantity_sold || 0), 0);
-
+                            // Per-stall remaining = allocated to stall - sold at that stall (match by stall_id)
                             const stallEntries = stalls.map(stall => ({
                               name: stall.stall_name,
-                              remaining: Math.max(0, (byStallName.get(stall.stall_name) || 0) - stallSoldCount(stall.stall_name))
+                              remaining: Math.max(
+                                0,
+                                (byStallName.get(stall.stall_name) || 0) - getStallSold(item.item_id, stall.stall_id)
+                              )
                             }));
 
                             // Total in system = central stock + sum of all stall remainings

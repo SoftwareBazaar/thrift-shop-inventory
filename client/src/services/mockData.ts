@@ -635,6 +635,23 @@ export const mockApi = {
     return { sales };
   },
 
+  getSalesAggregates: async () => {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const sales = getStorageData<Sale[]>('sales', mockSales);
+    const byItem: Record<number, number> = {};
+    const byItemStall: Record<string, number> = {};
+
+    for (const sale of sales) {
+      const itemId = Number(sale.item_id);
+      const qty = Number(sale.quantity_sold) || 0;
+      byItem[itemId] = (byItem[itemId] || 0) + qty;
+      const stallKey = `${itemId}-${sale.stall_id ?? 'null'}`;
+      byItemStall[stallKey] = (byItemStall[stallKey] || 0) + qty;
+    }
+
+    return { byItem, byItemStall };
+  },
+
   createSale: async (saleData: SaleInput): Promise<{ sale: Sale }> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const sales = getStorageData<Sale[]>('sales', mockSales);

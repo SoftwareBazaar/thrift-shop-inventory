@@ -1,46 +1,72 @@
--- SIMPLE FIX FOR MEN'S SWEATERS INVENTORY
--- Initial: 19
--- Added: 94
--- Total Received: 113
--- Sold: 33
--- Allocated: 33 (23 tracked + 10 before tracking table existed)
--- Available: 47
+-- =============================================================================
+-- SUPERSEDED — diagnostic only (do not run UPDATE from this file)
+-- Canonical production fix: final-fix-mens-sweaters.sql (current_stock = 65)
+-- =============================================================================
+-- Men's Sweaters: 37 sold, 48 allocated, 11 at stalls, 65 available central
 
--- Fix 1: Set total_allocated to 33 (actual total including pre-tracking allocations)
-UPDATE items
-SET total_allocated = 33
-WHERE item_id = 51;
-
--- Fix 2: Calculate and set correct current_stock
--- 113 (total) - 33 (sold) - 33 (allocated) = 47
-UPDATE items
-SET current_stock = 47
-WHERE item_id = 51;
-
--- Verify the fix
-SELECT 'CORRECTED INVENTORY FOR MEN''S SWEATERS:' as section;
+-- Current state verification:
 SELECT 
+  'CURRENT STATE' as status,
+  i.item_id,
+  i.item_name,
+  i.initial_stock as initial,
+  i.total_added as new_added,
+  (i.initial_stock + i.total_added) as total_inventory,
+  i.total_allocated as allocated_so_far,
+  (SELECT SUM(quantity_sold) FROM sales WHERE item_id = 51) as total_sold,
+  (i.total_allocated - (SELECT SUM(quantity_sold) FROM sales WHERE item_id = 51)) as at_stalls,
+  i.current_stock as available_central
+FROM items i
+WHERE i.item_id = 51;
+
+-- Show all sales for Men's Sweaters
+SELECT 
+  sale_id,
   item_id,
-  item_name,
-  initial_stock,
-  current_stock,
-  total_allocated,
-  'Available for distribution: 47 units' as note
-FROM items
+  stall_id,
+  quantity_sold,
+  date_time,
+  recorded_by,
+  sale_type
+FROM sales
+WHERE item_id = 51
+ORDER BY date_time DESC;
+
+-- Count sales
+SELECT 
+  COUNT(*) as number_of_sales,
+  SUM(quantity_sold) as total_units_sold
+FROM sales
 WHERE item_id = 51;
 
--- Summary
-SELECT 'INVENTORY SUMMARY:' as section;
+-- Apply fix via final-fix-mens-sweaters.sql (not here).
+
+-- Expected state after running final-fix-mens-sweaters.sql:
 SELECT 
-  'Initial Stock' as field,
-  19 as units
-UNION ALL
-SELECT 'Stock Additions', 94
-UNION ALL
-SELECT 'Total Received', 113
-UNION ALL
-SELECT 'Sold', 33
-UNION ALL
-SELECT 'Allocated (including pre-tracking)', 33
-UNION ALL
-SELECT 'Available for Distribution', 47;
+  'AFTER FIX' as status,
+  i.item_id,
+  i.item_name,
+  i.initial_stock as initial,
+  i.total_added as new_added,
+  (i.initial_stock + i.total_added) as total_inventory,
+  i.total_allocated as allocated_so_far,
+  (SELECT SUM(quantity_sold) FROM sales WHERE item_id = 51) as total_sold,
+  (i.total_allocated - (SELECT SUM(quantity_sold) FROM sales WHERE item_id = 51)) as at_stalls,
+  i.current_stock as available_central
+FROM items i
+WHERE i.item_id = 51;
+
+-- Expected result:
+-- initial: 19
+-- new_added: 94
+-- total_inventory: 113
+-- allocated_so_far: 48
+-- total_sold: 37
+-- at_stalls: 11 (48 - 37 = 11) ✅
+-- available_central: 65 (113 - 48 = 65) ✅
+
+-- Frontend should show:
+-- Available to distribute: 65 ✅
+-- At stalls: 11 ✅
+-- Sold: 37 ✅
+-- Allocated so far: 48 ✅

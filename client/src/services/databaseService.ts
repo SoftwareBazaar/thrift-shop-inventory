@@ -8,6 +8,76 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 // Export interfaces for compatibility
 export type { User, Sale, Stall, Item, SaleInput };
 
+const SALES_PAGE_SIZE = 1000;
+
+export type SalesAggregates = {
+  byItem: Record<number, number>;
+  byItemStall: Record<string, number>;
+};
+
+type SalesQuantityRow = {
+  item_id: number;
+  stall_id: number | null;
+  quantity_sold: number;
+};
+
+const buildSalesAggregates = (rows: SalesQuantityRow[]): SalesAggregates => {
+  const byItem: Record<number, number> = {};
+  const byItemStall: Record<string, number> = {};
+
+  for (const row of rows) {
+    const itemId = Number(row.item_id);
+    const qty = Number(row.quantity_sold) || 0;
+    byItem[itemId] = (byItem[itemId] || 0) + qty;
+    const stallKey = `${itemId}-${row.stall_id ?? 'null'}`;
+    byItemStall[stallKey] = (byItemStall[stallKey] || 0) + qty;
+  }
+
+  return { byItem, byItemStall };
+};
+
+const fetchAllSalesQuantityRows = async (): Promise<SalesQuantityRow[]> => {
+  const rows: SalesQuantityRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await (supabase as any)
+      .from('sales')
+      .select('item_id, stall_id, quantity_sold')
+      .order('sale_id', { ascending: true })
+      .range(from, from + SALES_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const page = (data || []) as SalesQuantityRow[];
+    rows.push(...page);
+
+    if (page.length < SALES_PAGE_SIZE) break;
+    from += SALES_PAGE_SIZE;
+  }
+
+  return rows;
+};
+
+const mapSaleRow = (sale: any): Sale => {
+  const credit = Array.isArray(sale.credit_sales) ? sale.credit_sales[0] : sale.credit_sales;
+
+  return {
+    ...sale,
+    recorded_by_name: sale.users?.full_name || 'Unknown',
+    stall_name: sale.stalls?.stall_name || 'Unknown',
+    item_name: sale.items?.item_name || 'Unknown',
+    category: sale.items?.category || 'Unknown',
+    customer_name: credit?.customer_name ?? sale.customer_name,
+    customer_contact: credit?.customer_contact ?? sale.customer_contact,
+    payment_status: credit?.payment_status ?? sale.payment_status,
+    balance_due: credit?.balance_due ?? sale.balance_due,
+    amount_paid: credit?.amount_paid ?? sale.amount_paid,
+    due_date: credit?.due_date ?? sale.due_date,
+    notes: credit?.notes ?? sale.notes
+  };
+};
+
 // Real-time subscription channels
 let inventoryChannel: RealtimeChannel | null = null;
 let salesChannel: RealtimeChannel | null = null;
@@ -1212,6 +1282,21 @@ export const dbApi = {
   },
 
 
+  // Sales aggregates (all rows — avoids Supabase 1000-row default limit on inventory totals)
+  getSalesAggregates: async (): Promise<SalesAggregates> => {
+    if (!isSupabaseConfigured()) {
+      return mockApi.getSalesAggregates();
+    }
+
+    try {
+      const rows = await fetchAllSalesQuantityRows();
+      return buildSalesAggregates(rows);
+    } catch (error) {
+      console.error('Error fetching sales aggregates:', error);
+      return mockApi.getSalesAggregates();
+    }
+  },
+
   // Sales
   getSales: async () => {
     if (!isSupabaseConfigured()) {
@@ -1219,37 +1304,31 @@ export const dbApi = {
     }
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('sales')
-        .select(`
-          *,
-          users:recorded_by(full_name),
-          stalls:stall_id(stall_name),
-          items:item_id(item_name, category),
-          credit_sales:credit_sales(sale_id, customer_name, customer_contact, payment_status, balance_due, amount_paid, due_date, notes)
-        `)
-        .order('date_time', { ascending: false });
+      const allRows: any[] = [];
+      let from = 0;
 
-      if (error) throw error;
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from('sales')
+          .select(`
+            *,
+            users:recorded_by(full_name),
+            stalls:stall_id(stall_name),
+            items:item_id(item_name, category),
+            credit_sales:credit_sales(sale_id, customer_name, customer_contact, payment_status, balance_due, amount_paid, due_date, notes)
+          `)
+          .order('date_time', { ascending: false })
+          .range(from, from + SALES_PAGE_SIZE - 1);
 
-      const sales = (data || []).map((sale: any) => {
-        const credit = Array.isArray(sale.credit_sales) ? sale.credit_sales[0] : sale.credit_sales;
+        if (error) throw error;
 
-        return {
-          ...sale,
-          recorded_by_name: sale.users?.full_name || 'Unknown',
-          stall_name: sale.stalls?.stall_name || 'Unknown',
-          item_name: sale.items?.item_name || 'Unknown',
-          category: sale.items?.category || 'Unknown',
-          customer_name: credit?.customer_name ?? sale.customer_name,
-          customer_contact: credit?.customer_contact ?? sale.customer_contact,
-          payment_status: credit?.payment_status ?? sale.payment_status,
-          balance_due: credit?.balance_due ?? sale.balance_due,
-          amount_paid: credit?.amount_paid ?? sale.amount_paid,
-          due_date: credit?.due_date ?? sale.due_date,
-          notes: credit?.notes ?? sale.notes
-        };
-      });
+        const page = data || [];
+        allRows.push(...page);
+        if (page.length < SALES_PAGE_SIZE) break;
+        from += SALES_PAGE_SIZE;
+      }
+
+      const sales = allRows.map(mapSaleRow);
 
       return { sales: sales as Sale[] };
     } catch (error) {
