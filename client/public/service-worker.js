@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 3.0 - Logo and Icon Updates
-const CACHE_NAME = 'thrift-shop-v4';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v4';
+// Version: 4.0 - Optimized Logo and Icon Updates
+const CACHE_NAME = 'thrift-shop-v5';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v5';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access
