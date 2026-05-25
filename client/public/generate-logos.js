@@ -1,6 +1,8 @@
 /**
  * Generate PWA Logo Files with proper resizing
  * Creates proper 192x192 and 512x512 PNG icons for PWA installation
+ * 
+ * Note: Sharp is optional. If not available, uses pre-generated logos.
  */
 
 const fs = require('fs');
@@ -8,12 +10,22 @@ const path = require('path');
 
 async function generateLogos() {
   try {
-    const sharp = require('sharp');
+    // Try to load sharp, but don't fail if it's not available
+    let sharp;
+    try {
+      sharp = require('sharp');
+    } catch (e) {
+      console.log('⚠️  Sharp not available - skipping logo generation');
+      console.log('📌 Pre-generated logos are already in the repository');
+      return;
+    }
+
     const sourceFile = path.join(__dirname, 'sta-logo.png.png');
     
     if (!fs.existsSync(sourceFile)) {
       console.error('❌ Source logo not found:', sourceFile);
-      process.exit(1);
+      console.log('📌 Using pre-generated logos from repository');
+      return;
     }
 
     console.log('🖼️  Resizing logo to proper PWA dimensions...');
@@ -56,8 +68,16 @@ async function generateLogos() {
     
   } catch (err) {
     console.error('❌ Error generating logos:', err.message);
-    process.exit(1);
+    console.log('📌 Using pre-generated logos from repository instead');
   }
 }
 
-generateLogos();
+// Only run if this file is executed directly
+if (require.main === module) {
+  generateLogos().catch(err => {
+    console.error('Unexpected error:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = generateLogos;

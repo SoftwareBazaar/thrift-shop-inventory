@@ -42,8 +42,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "generate-logos": "node public/generate-logos.js",
-    "pwa-setup": "npm run generate-logos && echo '✅ PWA setup complete!'",
-    "prebuild": "npm run generate-logos"
+    "pwa-setup": "npm run generate-logos && echo '✅ PWA setup complete!'"
   },
   "eslintConfig": {
     "extends": [
@@ -62,5 +61,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
   }
 }
