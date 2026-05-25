@@ -40,7 +40,10 @@
     "build": "react-app-rewired build",
     "start:api": "node ../api/server.js",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "generate-logos": "node public/generate-logos.js",
+    "pwa-setup": "npm run generate-logos && echo '✅ PWA setup complete!'",
+    "prebuild": "npm run generate-logos"
   },
   "eslintConfig": {
     "extends": [
