@@ -775,7 +775,6 @@ const Inventory: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item, index) => {
                 const totalSoldForItem = getItemsSold(item.item_id, item.item_name);
-                const stallSoldForItem = getItemsSold(item.item_id, item.item_name, true);
                 const distributedLive = Math.max(0, (item.total_allocated || 0) - totalSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
                 // Total Received = initial stock + all items added (total inventory received into system)
