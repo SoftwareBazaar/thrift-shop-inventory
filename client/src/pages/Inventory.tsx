@@ -305,6 +305,14 @@ const Inventory: React.FC = () => {
         notes: ''
       });
       await fetchItems(); // Refresh items
+      
+      // Update selectedItem with the newly fetched data so UI reflects the change immediately
+      const response = await dataApi.getInventory();
+      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
+      if (updatedItem) {
+        setSelectedItem(updatedItem);
+      }
+      
       alert('Stock distributed successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || error.message || 'Failed to distribute stock. Please check available stock.');
@@ -452,6 +460,14 @@ const Inventory: React.FC = () => {
       setShowAddStockModal(false);
       setAddStockQuantity('');
       await fetchItems(); // Refresh items
+      
+      // Update selectedItem with the newly fetched data so UI reflects the change immediately
+      const response = await dataApi.getInventory();
+      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
+      if (updatedItem) {
+        setSelectedItem(updatedItem);
+      }
+      
       alert('Stock added successfully!');
     } catch (error: any) {
       console.error('Error adding stock:', error);
@@ -491,6 +507,14 @@ const Inventory: React.FC = () => {
       setWithdrawQuantity('');
       setWithdrawReason('');
       await fetchItems(); // Refresh items
+      
+      // Update selectedItem with the newly fetched data so UI reflects the change immediately
+      const response = await dataApi.getInventory();
+      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
+      if (updatedItem) {
+        setSelectedItem(updatedItem);
+      }
+      
       alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) for ${withdrawReason || 'owner use'}`);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
@@ -542,6 +566,14 @@ const Inventory: React.FC = () => {
 
       setShowEditModal(false);
       await fetchItems(); // Refresh items - this will sync to all users
+      
+      // Update selectedItem with the newly fetched data so UI reflects the change immediately
+      const response = await dataApi.getInventory();
+      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
+      if (updatedItem) {
+        setSelectedItem(updatedItem);
+      }
+      
       alert('Item updated successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to update item');
@@ -562,6 +594,10 @@ const Inventory: React.FC = () => {
     try {
       await dataApi.deleteItem(itemId);
       await fetchItems();
+      // Clear selectedItem if it was the deleted item
+      if (selectedItem?.item_id === itemId) {
+        setSelectedItem(null);
+      }
       alert('Item removed from inventory successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || error.message || 'Failed to delete item');
