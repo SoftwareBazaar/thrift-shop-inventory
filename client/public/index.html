@@ -3,8 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <!-- Favicon and App Icons -->
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="48x48 32x32 16x16" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" crossorigin="use-credentials" />
     
     <!-- Viewport and Mobile Settings -->
@@ -64,8 +66,9 @@
     
     <!-- PWA Install Prompt Helper -->
     <script>
+      // Do NOT call e.preventDefault() here: that suppresses the browser's
+      // native install prompt. Keep a reference only for optional custom UI.
       window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
         window.deferredPrompt = e;
         console.log('📱 App ready to install');
       });

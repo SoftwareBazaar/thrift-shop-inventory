@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 6.0 - Auto-update: new deployments activate and reload automatically
-const CACHE_NAME = 'thrift-shop-v6';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v6';
+// Version: 7.0 - Brand logo icon set (favicon, maskable, apple-touch-icon)
+const CACHE_NAME = 'thrift-shop-v7';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v7';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access
@@ -11,7 +11,10 @@ const STATIC_CACHE_URLS = [
   '/manifest.json',
   '/favicon.ico',
   '/logo192.png',
-  '/logo512.png'
+  '/logo512.png',
+  '/maskable192.png',
+  '/maskable512.png',
+  '/apple-touch-icon.png'
 ];
 
 // Install event - cache static assets and activate immediately
