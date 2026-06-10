@@ -227,7 +227,7 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
     (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', itemId),
     (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
-    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id').eq('item_id', itemId)
+    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', itemId)
   ]);
 
   // CRITICAL: never recompute from partial history. A failed query would read
@@ -521,7 +521,10 @@ export const dbApi = {
     try {
       const { data: withdrawals, error } = await (supabase as any)
         .from('stock_withdrawals')
-        .select('*')
+        .select(`
+          *,
+          stalls:stall_id(stall_id, stall_name)
+        `)
         .eq('item_id', itemId)
         .order('date_withdrawn', { ascending: false });
 
@@ -547,7 +550,37 @@ export const dbApi = {
 
       if (fetchError || !withdrawal) throw new Error('Stock withdrawal record not found');
 
-      const { item_id } = withdrawal;
+      const { item_id, distribution_id, stall_id, quantity_withdrawn } = withdrawal;
+
+      // Reverse stall→central transfer: put quantity back on the distribution
+      if (distribution_id != null || stall_id != null) {
+        if (distribution_id != null) {
+          const { data: dist } = await (supabase as any)
+            .from('stock_distribution')
+            .select('distribution_id, quantity_allocated')
+            .eq('distribution_id', distribution_id)
+            .maybeSingle();
+
+          if (dist) {
+            const { error: restoreError } = await (supabase as any)
+              .from('stock_distribution')
+              .update({ quantity_allocated: dist.quantity_allocated + quantity_withdrawn })
+              .eq('distribution_id', distribution_id);
+            if (restoreError) throw restoreError;
+          } else if (stall_id != null) {
+            const { error: recreateError } = await (supabase as any)
+              .from('stock_distribution')
+              .insert([{
+                item_id,
+                stall_id,
+                quantity_allocated: quantity_withdrawn,
+                distributed_by: withdrawal.withdrawn_by || 1,
+                notes: 'Restored from deleted stall withdrawal record'
+              }]);
+            if (recreateError) throw recreateError;
+          }
+        }
+      }
 
       const { error: deleteError } = await (supabase as any)
         .from('stock_withdrawals')
@@ -743,7 +776,7 @@ export const dbApi = {
             (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', item.item_id),
             (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', item.item_id),
             (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', item.item_id).is('stall_id', null),
-            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id').eq('item_id', item.item_id)
+            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', item.item_id)
           ]);
 
           // CRITICAL: if ANY history query failed, return the stored item as-is.
@@ -1264,7 +1297,9 @@ export const dbApi = {
       if (fetchError || !existingDist) throw new Error('Distribution not found');
 
       const itemId = existingDist.item_id;
+      const stallId = existingDist.stall_id;
       const currentQuantity = existingDist.quantity_allocated;
+      const withdrawnBy = getCurrentUserId();
 
       // Validate quantity
       if (quantityToWithdraw <= 0) {
@@ -1275,7 +1310,18 @@ export const dbApi = {
         throw new Error(`Cannot withdraw ${quantityToWithdraw} items. Only ${currentQuantity} items are distributed to this user.`);
       }
 
-      // 2. Update or delete the distribution based on quantity
+      // Record in unified withdrawal history (source = stall)
+      await dbApi.createWithdrawal({
+        item_id: itemId,
+        quantity_withdrawn: quantityToWithdraw,
+        reason: 'Returned to central hub',
+        withdrawn_by: withdrawnBy,
+        stall_id: stallId,
+        distribution_id: distributionId,
+        notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
+      });
+
+      // Update or delete the distribution based on quantity
       if (quantityToWithdraw === currentQuantity) {
         // Full withdrawal - delete the distribution
         const { error: deleteError } = await (supabase as any)
@@ -1696,6 +1742,8 @@ export const dbApi = {
     reason: string;
     withdrawn_by: number;
     notes?: string;
+    stall_id?: number | null;
+    distribution_id?: number | null;
   }) => {
     if (!isSupabaseConfigured()) {
       return (mockApi as any).createWithdrawal(withdrawalData);
@@ -1715,7 +1763,9 @@ export const dbApi = {
         p_quantity: quantity,
         p_reason: withdrawalData.reason || 'General withdrawal',
         p_withdrawn_by: withdrawnBy,
-        p_notes: withdrawalData.notes || null
+        p_notes: withdrawalData.notes || null,
+        p_stall_id: withdrawalData.stall_id ?? null,
+        p_distribution_id: withdrawalData.distribution_id ?? null
       });
 
       if (!rpcError) {
@@ -1748,7 +1798,9 @@ export const dbApi = {
           quantity_withdrawn: quantity,
           reason: withdrawalData.reason || 'General withdrawal',
           withdrawn_by: withdrawnBy,
-          notes: withdrawalData.notes || null
+          notes: withdrawalData.notes || null,
+          stall_id: withdrawalData.stall_id ?? null,
+          distribution_id: withdrawalData.distribution_id ?? null
         }])
         .select()
         .single();

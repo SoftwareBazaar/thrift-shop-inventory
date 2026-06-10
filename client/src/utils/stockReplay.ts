@@ -46,7 +46,12 @@ export function computeCentralStockReplay(initialStock: number, events: StockEve
 export function buildStockEventsFromHistory(input: {
   additions?: Array<{ quantity_added: number; date_added: string; addition_id?: number }>;
   distributions?: Array<{ quantity_allocated: number; date_distributed: string; distribution_id?: number }>;
-  withdrawals?: Array<{ quantity_withdrawn: number; date_withdrawn: string; withdrawal_id?: number }>;
+  withdrawals?: Array<{
+    quantity_withdrawn: number;
+    date_withdrawn: string;
+    withdrawal_id?: number;
+    stall_id?: number | null;
+  }>;
   centralSales?: Array<{ quantity_sold: number; date_time: string; sale_id?: number }>;
 }): StockEvent[] {
   const events: StockEvent[] = [];
@@ -68,6 +73,8 @@ export function buildStockEventsFromHistory(input: {
     });
   }
   for (const row of input.withdrawals || []) {
+    // Stall withdrawals are audit-only; central replay ignores them.
+    if (row.stall_id != null) continue;
     events.push({
       ts: new Date(row.date_withdrawn).getTime(),
       kind: 'withdraw',

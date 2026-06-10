@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { dataApi } from '../services/dataService';
 import UserSaleItems from '../components/UserSaleItems';
+import { formatWithdrawalSource, formatWithdrawalEffect, withdrawalSourceBadgeClass } from '../utils/withdrawalSource';
 
 interface Item {
   item_id: number;
@@ -1105,6 +1106,25 @@ const Inventory: React.FC = () => {
                                 {totalReceived} total inventory.{' '}
                                 {distributedLive + totalSoldForItem} allocated so far ({distributedLive} at stalls, {totalSoldForItem} sold), {centralStock} available in central.
                               </p>
+                              {expandedItemId === item.item_id && itemStockWithdrawals.length > 0 && (
+                                <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                                  Withdrawals recorded:{' '}
+                                  {itemStockWithdrawals
+                                    .filter(w => w.stall_id == null)
+                                    .reduce((sum, w) => sum + (w.quantity_withdrawn || 0), 0)}{' '}
+                                  from <strong>Central Hub</strong>
+                                  {itemStockWithdrawals.some(w => w.stall_id != null) && (
+                                    <>
+                                      {' · '}
+                                      {itemStockWithdrawals
+                                        .filter(w => w.stall_id != null)
+                                        .reduce((sum, w) => sum + (w.quantity_withdrawn || 0), 0)}{' '}
+                                      from <strong>stalls</strong> (see history for which stall)
+                                    </>
+                                  )}
+                                  . Only central-hub withdrawals reduce &quot;Available to distribute&quot;.
+                                </p>
+                              )}
                               <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                                 <div className="rounded border border-gray-100 bg-gray-50 p-3">
                                   <div className="text-xs uppercase text-gray-500">Initial stock</div>
@@ -1175,7 +1195,7 @@ const Inventory: React.FC = () => {
                                                   setShowWithdrawFromDistModal(true);
                                                 }}
                                                 className="bg-orange-50 text-orange-700 px-3 py-1 rounded-md hover:bg-orange-600 hover:text-white transition-all mr-2 border border-orange-200"
-                                                title="Withdraw items from this user back to central"
+                                                title="Return items from this stall back to central hub"
                                               >
                                                 Withdraw
                                               </button>
@@ -1267,8 +1287,9 @@ const Inventory: React.FC = () => {
                                     <thead className="bg-[#fff3cd]">
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Date</th>
-                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider text-center">Qty Withdrawn</th>
-                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Reason</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Withdrawn From</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider text-center">Qty</th>
+                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Reason / Effect</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-amber-900 uppercase tracking-wider">Options</th>
                                       </tr>
                                     </thead>
@@ -1279,13 +1300,19 @@ const Inventory: React.FC = () => {
                                             <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
                                               {new Date(withdrawal.date_withdrawn).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                             </td>
+                                            <td className="px-3 py-3 whitespace-nowrap">
+                                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${withdrawalSourceBadgeClass(withdrawal)}`}>
+                                                {formatWithdrawalSource(withdrawal)}
+                                              </span>
+                                            </td>
                                             <td className="px-3 py-3 whitespace-nowrap text-center">
                                               <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-black">
                                                 -{withdrawal.quantity_withdrawn}
                                               </span>
                                             </td>
-                                            <td className="px-3 py-3 whitespace-nowrap text-gray-600 text-xs">
-                                              {withdrawal.reason || '—'}
+                                            <td className="px-3 py-3 text-gray-600 text-xs">
+                                              <div className="font-medium text-gray-800">{withdrawal.reason || '—'}</div>
+                                              <div className="text-gray-500 mt-0.5">{formatWithdrawalEffect(withdrawal)}</div>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
                                               <button
@@ -1313,7 +1340,7 @@ const Inventory: React.FC = () => {
                                         ))
                                       ) : (
                                         <tr className="text-sm text-gray-500 italic">
-                                          <td colSpan={4} className="px-3 py-3 text-center bg-gray-50">
+                                          <td colSpan={5} className="px-3 py-3 text-center bg-gray-50">
                                             No stock withdrawals recorded
                                           </td>
                                         </tr>
@@ -1758,7 +1785,10 @@ const Inventory: React.FC = () => {
       {showWithdrawModal && selectedItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏠 Owner Withdrawal</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏠 Withdraw from Central Hub</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Removes stock from the <strong>central store</strong> (owner / personal use). This appears in withdrawal history as <strong>Central Hub</strong>.
+            </p>
             <form onSubmit={handleWithdrawSubmit} className="space-y-4">
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                 <p className="text-sm text-orange-800">
@@ -1834,8 +1864,11 @@ const Inventory: React.FC = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Withdraw from User - {selectedItem?.item_name}
+                Return stock from stall to central
               </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Withdraws from <strong>{withdrawFromDist.stall_name}</strong> and returns units to the central hub. Recorded in history under that stall name.
+              </p>
               <form onSubmit={handleWithdrawFromDistSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

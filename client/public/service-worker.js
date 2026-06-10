@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 10.0 - Stock replay: withdrawals no longer create deficit holes
-const CACHE_NAME = 'thrift-shop-v10';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v10';
+// Version: 11.0 - Withdrawal source tracking (central vs stall)
+const CACHE_NAME = 'thrift-shop-v11';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v11';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access
