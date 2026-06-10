@@ -14,6 +14,7 @@ interface Sale {
   sale_id: number;
   item_name: string;
   item_id?: number;
+  stall_id?: number | null;
   quantity_sold: number;
   unit_price: number;
   total_amount: number;
@@ -235,10 +236,15 @@ const AdminDashboard: React.FC = () => {
     // Note: current_stock already accounts for distributions and sales deductions
     // So we only count current_stock + unsold items at stalls
     const centralStock = Number(item.current_stock) || 0;
-    const itemSales = allSales.filter(s => s.item_id === item.item_id || s.item_name === item.item_name);
-    const totalSold = itemSales.reduce((sum, s: any) => sum + (s.quantity_sold || 0), 0);
+    // Only STALL sales come out of distributed stock; central sales are
+    // already deducted from current_stock (avoids double counting).
+    const itemStallSales = allSales.filter(s =>
+      (s.item_id === item.item_id || s.item_name === item.item_name) &&
+      s.stall_id !== null && s.stall_id !== undefined
+    );
+    const totalSoldAtStalls = itemStallSales.reduce((sum, s: any) => sum + (s.quantity_sold || 0), 0);
     // Unsold at stalls = allocated - sold at stalls
-    const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - totalSold);
+    const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - totalSoldAtStalls);
     
     // Total unsold stock = central (already in current_stock) + unsold at stalls
     const unsoldStock = centralStock + distributedLive;

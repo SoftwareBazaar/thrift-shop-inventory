@@ -675,8 +675,10 @@ const Inventory: React.FC = () => {
   };
 
   const selectedItemSold = selectedItem ? getItemsSold(selectedItem.item_id, selectedItem.item_name) : 0;
+  // Only stall sales reduce distributed stock; central sales already reduce current_stock
+  const selectedItemStallSold = selectedItem ? getItemsSold(selectedItem.item_id, selectedItem.item_name, true) : 0;
   const selectedItemDistributed = selectedItem
-    ? Math.max(0, (selectedItem.total_allocated || 0) - selectedItemSold)
+    ? Math.max(0, (selectedItem.total_allocated || 0) - selectedItemStallSold)
     : 0;
   const selectedItemAvailable = selectedItem ? Math.max(0, selectedItem.current_stock || 0) : 0;
   const selectedItemManagedTotal = selectedItemAvailable + selectedItemDistributed; // Unsold only
@@ -842,7 +844,10 @@ const Inventory: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredItems.map((item, index) => {
                 const totalSoldForItem = getItemsSold(item.item_id, item.item_name);
-                const distributedLive = Math.max(0, (item.total_allocated || 0) - totalSoldForItem);
+                // Only STALL sales come out of distributed stock; central hub
+                // sales are already deducted from current_stock.
+                const stallSoldForItem = getItemsSold(item.item_id, item.item_name, true);
+                const distributedLive = Math.max(0, (item.total_allocated || 0) - stallSoldForItem);
                 const centralStock = Math.max(0, item.current_stock || 0);
                 // Total Received = initial stock + all items added (total inventory received into system)
                 const totalReceived = (item.initial_stock || 0) + (item.total_added || 0);
@@ -1084,10 +1089,10 @@ const Inventory: React.FC = () => {
                                   Allocated So Far
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-indigo-900">
-                                  {distributedLive + totalSoldForItem}
+                                  {distributedLive + stallSoldForItem}
                                 </div>
                                 <p className="mt-1 text-xs text-indigo-700">
-                                  At Stalls + Sold
+                                  At stalls + sold at stalls
                                 </p>
                               </div>
                             </div>

@@ -939,7 +939,16 @@ export const dbApi = {
         }
 
         // Formula: Current Stock = Initial + Total Added - Total Distributed - Central Sales - Withdrawals
-        const totalDistributed = Number(existingItem.total_allocated || 0);
+        // Query the distribution history directly (cached total_allocated can be stale)
+        const { data: itemDistributions } = await (supabase as any)
+          .from('stock_distribution')
+          .select('quantity_allocated')
+          .eq('item_id', numericItemId);
+
+        const totalDistributed = (itemDistributions as any)?.reduce(
+          (sum: number, d: any) => sum + (d.quantity_allocated || 0),
+          0
+        ) || 0;
 
         // Query central sales (sales from central hub where stall_id is null)
         const { data: centralSales } = await (supabase as any)
@@ -1462,6 +1471,16 @@ export const dbApi = {
         if (creditError) throw creditError;
       }
 
+      // Central hub sales reduce "Available to distribute" immediately.
+      // Stall sales come out of distributed stock and don't touch current_stock.
+      if (stallId === null) {
+        try {
+          await recomputeItemTotals(itemId);
+        } catch (syncError) {
+          console.warn('[Create Sale] Failed to sync central stock (will self-heal on next fetch):', syncError);
+        }
+      }
+
       return { sale: data as Sale };
     } catch (error) {
       console.error('Error creating sale:', error);
@@ -1586,6 +1605,18 @@ export const dbApi = {
           .eq('sale_id', saleId);
       }
 
+      // Re-sync central stock for any item whose central-hub sales changed
+      try {
+        const affectedItemIds = new Set<number>();
+        if (existingSale.stall_id === null) affectedItemIds.add(existingSale.item_id);
+        if (stallId === null) affectedItemIds.add(itemId);
+        for (const affectedId of Array.from(affectedItemIds)) {
+          await recomputeItemTotals(affectedId);
+        }
+      } catch (syncError) {
+        console.warn('[Update Sale] Failed to sync central stock (will self-heal on next fetch):', syncError);
+      }
+
       return { sale: data as Sale };
     } catch (error) {
       console.error('Error updating sale:', error);
@@ -1601,6 +1632,13 @@ export const dbApi = {
     try {
       console.log(`[Delete Sale] Deleting sale ID: ${saleId}`);
 
+      // Look up the sale first so we know whether central stock must be restored
+      const { data: saleRow } = await (supabase as any)
+        .from('sales')
+        .select('item_id, stall_id')
+        .eq('sale_id', saleId)
+        .single();
+
       // Explicitly delete from credit_sales first if it exists
       // though CASCADE should handle it if set up in DB
       await (supabase as any)
@@ -1614,6 +1652,15 @@ export const dbApi = {
         .eq('sale_id', saleId);
 
       if (error) throw error;
+
+      // Deleting a central-hub sale puts the quantity back into "Available to distribute"
+      if (saleRow && saleRow.stall_id === null) {
+        try {
+          await recomputeItemTotals(saleRow.item_id);
+        } catch (syncError) {
+          console.warn('[Delete Sale] Failed to sync central stock (will self-heal on next fetch):', syncError);
+        }
+      }
 
       console.log(`[Delete Sale] Successfully deleted sale ID: ${saleId}`);
       return { success: true };
@@ -1634,6 +1681,12 @@ export const dbApi = {
     try {
       console.log(`[Bulk Delete Sales] Deleting sale IDs:`, saleIds);
 
+      // Track which items had central-hub sales so their stock can be restored
+      const { data: saleRows } = await (supabase as any)
+        .from('sales')
+        .select('item_id, stall_id')
+        .in('sale_id', saleIds);
+
       await (supabase as any)
         .from('credit_sales')
         .delete()
@@ -1645,6 +1698,19 @@ export const dbApi = {
         .in('sale_id', saleIds);
 
       if (error) throw error;
+
+      const centralItemIds = Array.from(new Set(
+        (saleRows || [])
+          .filter((s: any) => s.stall_id === null)
+          .map((s: any) => Number(s.item_id))
+      ));
+      for (const affectedId of centralItemIds) {
+        try {
+          await recomputeItemTotals(affectedId as number);
+        } catch (syncError) {
+          console.warn('[Bulk Delete Sales] Failed to sync central stock for item', affectedId, syncError);
+        }
+      }
 
       console.log(`[Bulk Delete Sales] Successfully deleted ${saleIds.length} sales`);
       return { success: true };

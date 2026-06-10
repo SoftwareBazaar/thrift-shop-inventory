@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 4.0 - Optimized Logo and Icon Updates
-const CACHE_NAME = 'thrift-shop-v5';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v5';
+// Version: 6.0 - Auto-update: new deployments activate and reload automatically
+const CACHE_NAME = 'thrift-shop-v6';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v6';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access
@@ -14,7 +14,7 @@ const STATIC_CACHE_URLS = [
   '/logo512.png'
 ];
 
-// Install event - cache static assets
+// Install event - cache static assets and activate immediately
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing...');
   event.waitUntil(
@@ -24,7 +24,7 @@ self.addEventListener('install', (event) => {
         return cache.addAll(STATIC_CACHE_URLS);
       })
       .then(() => {
-        console.log('[Service Worker] Skipping waiting, claiming clients...');
+        console.log('[Service Worker] Skipping waiting...');
         return self.skipWaiting();
       })
       .catch((error) => {
@@ -33,7 +33,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control of all open pages
 self.addEventListener('activate', (event) => {
   console.log('[Service Worker] Activating...');
   event.waitUntil(
@@ -53,7 +53,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - implement network-first strategy with fallback to cache
+// Fetch event - network-first for HTML/API, cache-first for hashed static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -73,7 +73,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Clone the response and cache it
           const clonedResponse = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
             cache.put(request, clonedResponse);
@@ -81,13 +80,11 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // Return cached response if network fails
           return caches.match(request).then((cachedResponse) => {
             if (cachedResponse) {
               console.log('[Service Worker] Serving from cache:', request.url);
               return cachedResponse;
             }
-            // If not in cache and offline, return offline page
             return new Response(
               'Offline - Unable to reach server. Some features may be limited.',
               { status: 503, statusText: 'Service Unavailable' }
@@ -99,6 +96,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Static assets: Cache first, fallback to network
+  // (Safe because CRA build outputs content-hashed filenames per deployment)
   if (
     request.destination === 'style' ||
     request.destination === 'script' ||
@@ -120,7 +118,6 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         return fetch(request).then((response) => {
-          // Cache successful responses
           if (response.status === 200) {
             const clonedResponse = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => {
@@ -129,7 +126,6 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         }).catch(() => {
-          // Fallback for failed static assets
           if (request.destination === 'image') {
             return new Response(
               '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="#f0f0f0" width="100" height="100"/></svg>',
@@ -143,7 +139,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML pages: Network first, cache fallback
+  // HTML pages: Network first, cache fallback (always pick up new deployments)
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
       fetch(request)
@@ -172,72 +168,26 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle messages from clients
+// Handle messages from the app
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     console.log('[Service Worker] Skip waiting message received');
     self.skipWaiting();
   }
-});
 
-console.log('[Service Worker] Service Worker script loaded successfully');
-
-// Fetch event - serve from cache when offline
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET requests and API calls (they should use IndexedDB offline)
-  if (request.method !== 'GET' || url.pathname.startsWith('/api/')) {
-    return; // Let the browser handle it normally
-  }
-
-  // For navigation requests, always return the cached index.html
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .catch(() => {
-          return caches.match(OFFLINE_URL);
-        })
+  if (event.data && event.data.type === 'CACHE_URLS') {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.addAll(event.data.urls);
+      })
     );
-    return;
   }
-
-  // For other requests, try network first, then cache
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        // Clone the response
-        const responseToCache = response.clone();
-        
-        // Cache successful responses
-        if (response.status === 200) {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-        }
-        
-        return response;
-      })
-      .catch(() => {
-        // Return from cache if offline
-        return caches.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If not in cache and offline, return offline page for navigation
-          if (request.mode === 'navigate') {
-            return caches.match(OFFLINE_URL);
-          }
-        });
-      })
-  );
 });
 
 // Background sync for offline actions
 self.addEventListener('sync', (event) => {
   console.log('[Service Worker] Background sync:', event.tag);
-  
+
   if (event.tag === 'sync-offline-data') {
     event.waitUntil(syncOfflineData());
   }
@@ -246,8 +196,8 @@ self.addEventListener('sync', (event) => {
 // Sync offline data when back online
 async function syncOfflineData() {
   try {
-    // This will be handled by the sync service in the app
-    // We just notify all clients to trigger sync
+    // Actual syncing is handled by the in-app sync service;
+    // we just notify all clients to trigger it.
     const clients = await self.clients.matchAll();
     clients.forEach((client) => {
       client.postMessage({
@@ -259,20 +209,4 @@ async function syncOfflineData() {
   }
 }
 
-// Handle messages from the app
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-  
-  if (event.data && event.data.type === 'CACHE_URLS') {
-    event.waitUntil(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.addAll(event.data.urls);
-      })
-    );
-  }
-});
-
-console.log('[Service Worker] Script loaded');
-
+console.log('[Service Worker] Service Worker script loaded successfully');

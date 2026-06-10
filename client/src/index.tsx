@@ -47,25 +47,39 @@ const startApp = async () => {
 
 startApp();
 
-// Register Service Worker for PWA offline support
+// Register Service Worker for PWA offline support with AUTO-UPDATE:
+// new deployments activate immediately and the page reloads once so every
+// device always runs the latest version without manual cache clearing.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
       .then((registration) => {
         console.log('✅ Service Worker registered:', registration.scope);
 
-        // Check for updates
+        // If an updated worker is already waiting (e.g. app reopened), activate it now
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+
+        // When a new version finishes installing, activate it immediately
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New service worker available
-                console.log('🔄 New service worker available');
-                // Optionally show update notification to user
+                console.log('🔄 New version installed, activating...');
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
               }
             });
           }
+        });
+
+        // Proactively check for new deployments: every 15 minutes and
+        // whenever the app/tab regains focus (long-lived PWA sessions).
+        const checkForUpdates = () => registration.update().catch(() => { });
+        setInterval(checkForUpdates, 15 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') checkForUpdates();
         });
       })
       .catch((error) => {
@@ -73,11 +87,13 @@ if ('serviceWorker' in navigator) {
       });
   });
 
-  // Listen for service worker updates
+  // When the new service worker takes control, reload once to run the new code
+  let hasReloadedForUpdate = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    console.log('🔄 Service worker controller changed');
-    // Optionally reload the page to use new service worker
-    // window.location.reload();
+    if (hasReloadedForUpdate) return;
+    hasReloadedForUpdate = true;
+    console.log('🔄 New version active, reloading...');
+    window.location.reload();
   });
 }
 
