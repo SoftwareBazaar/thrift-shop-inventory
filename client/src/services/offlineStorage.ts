@@ -7,7 +7,7 @@ const DB_VERSION = 3;
 interface OfflineOperation {
   id: string;
   type: 'CREATE' | 'UPDATE' | 'DELETE';
-  table: 'items' | 'sales' | 'distributions' | 'withdrawals';
+  table: 'items' | 'sales' | 'distributions' | 'withdrawals' | 'stock_additions';
   data: any;
   timestamp: number;
   synced: boolean;

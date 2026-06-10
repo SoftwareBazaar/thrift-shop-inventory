@@ -450,12 +450,10 @@ const Inventory: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Calculate new total_added (current + quantity to add)
-      const newTotalAdded = (selectedItem.total_added || 0) + quantityToAdd;
-
-      await dataApi.updateItem(selectedItem.item_id, {
-        total_added: newTotalAdded
-      });
+      // Send the exact quantity typed by the user (delta). The server records
+      // it in stock_additions and recomputes totals atomically, so stale
+      // on-screen numbers can never shrink or inflate the addition.
+      await dataApi.addStock(selectedItem.item_id, quantityToAdd);
 
       setShowAddStockModal(false);
       setAddStockQuantity('');
@@ -471,7 +469,7 @@ const Inventory: React.FC = () => {
       alert('Stock added successfully!');
     } catch (error: any) {
       console.error('Error adding stock:', error);
-      alert(error.response?.data?.message || 'Failed to add stock');
+      alert(error.response?.data?.message || error.message || 'Failed to add stock');
     } finally {
       setIsSubmitting(false);
     }

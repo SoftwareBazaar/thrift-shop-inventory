@@ -74,15 +74,17 @@ export const offlineDataApi = {
             .filter(d => d.item_id === item.item_id)
             .reduce((sum, d) => sum + d.quantity_allocated, 0);
 
-          const totalSold = sales
-            .filter(s => s.item_id === item.item_id)
+          // Only CENTRAL hub sales (stall_id null) reduce central stock;
+          // stall sales come out of the already-distributed quantity.
+          const totalCentralSold = sales
+            .filter(s => s.item_id === item.item_id && (s.stall_id === null || s.stall_id === undefined))
             .reduce((sum, s) => sum + s.quantity_sold, 0);
 
           const totalWithdrawn = offlineWithdrawals
             .filter(w => w.item_id === item.item_id)
             .reduce((sum, w) => sum + w.quantity_withdrawn, 0);
 
-          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed - totalSold - totalWithdrawn);
+          const adminStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - totalDistributed - totalCentralSold - totalWithdrawn);
 
           return {
             ...item,
@@ -119,6 +121,36 @@ export const offlineDataApi = {
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error creating item:', error);
+      throw error;
+    }
+  },
+
+  // Add stock (delta-based) - queue if offline
+  addStock: async (itemId: number, quantity: number) => {
+    try {
+      if (navigator.onLine) {
+        const result = await dataApi.addStock(itemId, quantity);
+        if (result?.item) {
+          await offlineStorage.saveItem(result.item);
+        }
+        return result;
+      } else {
+        // Offline: optimistically bump local copy and queue the DELTA so it
+        // can never be shrunk by stale totals when it syncs later.
+        console.log('[OfflineDataApi] Adding stock offline, queuing for sync');
+        const items = await offlineStorage.getItems();
+        const existingItem: any = items.find((i: any) => i.item_id === itemId) || { item_id: itemId };
+        const updatedItem = {
+          ...existingItem,
+          total_added: (existingItem.total_added || 0) + quantity,
+          current_stock: (existingItem.current_stock || 0) + quantity
+        };
+        await offlineStorage.saveItem(updatedItem);
+        await syncService.queueOperation('CREATE', 'stock_additions', { item_id: itemId, quantity });
+        return { item: updatedItem };
+      }
+    } catch (error) {
+      console.error('[OfflineDataApi] Error adding stock:', error);
       throw error;
     }
   },

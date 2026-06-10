@@ -179,6 +179,87 @@ export const setupRealtimeSubscriptions = (callbacks: {
   };
 };
 
+// Detects "function does not exist" errors so we can fall back gracefully
+// when the atomic SQL functions haven't been installed in Supabase yet.
+const isMissingFunctionError = (error: any): boolean => {
+  if (!error) return false;
+  const code = error.code || '';
+  const message = String(error.message || '');
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    /could not find the function|function .* does not exist/i.test(message)
+  );
+};
+
+// Recompute an item's denormalized totals from the history tables and persist
+// them. Single source of truth for stock math:
+//   current_stock = initial_stock + SUM(additions) - SUM(distributions)
+//                   - central sales (stall_id IS NULL) - withdrawals
+// Prefers the atomic DB-side function; falls back to client-side math.
+const recomputeItemTotals = async (itemId: number): Promise<Item> => {
+  const { data: rpcItem, error: rpcError } = await (supabase as any)
+    .rpc('recalc_item_stock', { p_item_id: itemId });
+
+  if (!rpcError && rpcItem) {
+    return (Array.isArray(rpcItem) ? rpcItem[0] : rpcItem) as Item;
+  }
+
+  if (rpcError && !isMissingFunctionError(rpcError)) {
+    console.warn('[Recompute Totals] RPC failed, falling back to client math:', rpcError);
+  }
+
+  const { data: item, error: itemError } = await (supabase as any)
+    .from('items')
+    .select('*')
+    .eq('item_id', itemId)
+    .single();
+
+  if (itemError || !item) {
+    throw new Error('Item not found.');
+  }
+
+  const [{ data: additions }, { data: distributions }, { data: centralSales }, { data: withdrawals }] = await Promise.all([
+    (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', itemId),
+    (supabase as any).from('stock_distribution').select('quantity_allocated').eq('item_id', itemId),
+    (supabase as any).from('sales').select('quantity_sold').eq('item_id', itemId).is('stall_id', null),
+    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn').eq('item_id', itemId)
+  ]);
+
+  const totalAdded = (additions || []).reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
+  const totalAllocated = (distributions || []).reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
+  const totalCentralSold = (centralSales || []).reduce((sum: number, s: any) => sum + (s.quantity_sold || 0), 0);
+  const totalWithdrawn = (withdrawals || []).reduce((sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
+
+  const currentStock = Math.max(
+    0,
+    (item.initial_stock || 0) + totalAdded - totalAllocated - totalCentralSold - totalWithdrawn
+  );
+
+  const { data: updated, error: updateError } = await (supabase as any)
+    .from('items')
+    .update({
+      total_added: totalAdded,
+      total_allocated: totalAllocated,
+      current_stock: currentStock
+    })
+    .eq('item_id', itemId)
+    .select()
+    .single();
+
+  if (updateError) throw updateError;
+  return updated as Item;
+};
+
+const getCurrentUserId = (): number => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    return currentUser.user_id || 1;
+  } catch {
+    return 1;
+  }
+};
+
 // Database API - Uses Supabase if configured, otherwise mockData
 export const dbApi = {
   // Users
@@ -398,7 +479,7 @@ export const dbApi = {
 
       if (fetchError || !addition) throw new Error('Stock addition record not found');
 
-      const { item_id, quantity_added } = addition;
+      const { item_id } = addition;
 
       const { error: deleteError } = await (supabase as any)
         .from('stock_additions')
@@ -407,24 +488,8 @@ export const dbApi = {
 
       if (deleteError) throw deleteError;
 
-      const { data: item, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('initial_stock, total_added, total_allocated')
-        .eq('item_id', item_id)
-        .single();
-
-      if (!itemError && item) {
-        const newTotalAdded = Math.max(0, (item.total_added || 0) - quantity_added);
-        const newCurrentStock = Math.max(0, (item.initial_stock || 0) + newTotalAdded - (item.total_allocated || 0));
-
-        await (supabase as any)
-          .from('items')
-          .update({
-            total_added: newTotalAdded,
-            current_stock: newCurrentStock
-          })
-          .eq('item_id', item_id);
-      }
+      // Recompute totals from history (includes central sales + withdrawals)
+      await recomputeItemTotals(item_id);
 
       return { success: true };
     } catch (error) {
@@ -467,7 +532,7 @@ export const dbApi = {
 
       if (fetchError || !withdrawal) throw new Error('Stock withdrawal record not found');
 
-      const { item_id, quantity_withdrawn } = withdrawal;
+      const { item_id } = withdrawal;
 
       const { error: deleteError } = await (supabase as any)
         .from('stock_withdrawals')
@@ -476,21 +541,8 @@ export const dbApi = {
 
       if (deleteError) throw deleteError;
 
-      // Update item's current_stock (add back the withdrawn quantity)
-      const { data: item, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('current_stock')
-        .eq('item_id', item_id)
-        .single();
-
-      if (!itemError && item) {
-        const newCurrentStock = (item.current_stock || 0) + quantity_withdrawn;
-
-        await (supabase as any)
-          .from('items')
-          .update({ current_stock: newCurrentStock })
-          .eq('item_id', item_id);
-      }
+      // Recompute totals from history (restores the withdrawn quantity)
+      await recomputeItemTotals(item_id);
 
       return { success: true };
     } catch (error) {
@@ -936,6 +988,72 @@ export const dbApi = {
     }
   },
 
+  // Add stock using the exact quantity the user typed (delta), never a
+  // recomputed cumulative total. This prevents stale on-screen data from
+  // shrinking/inflating additions when multiple people use the system.
+  addStock: async (itemId: number, quantity: number) => {
+    if (!isSupabaseConfigured()) {
+      const inventory = await mockApi.getInventory();
+      const mockItem = (inventory.items || []).find((i: any) => i.item_id === itemId);
+      return mockApi.updateItem(itemId, {
+        total_added: ((mockItem as any)?.total_added || 0) + quantity
+      } as any);
+    }
+
+    const numericItemId = typeof itemId === 'number' ? itemId : parseInt(itemId as any, 10);
+    const quantityToAdd = Number(quantity);
+
+    if (!Number.isFinite(numericItemId)) {
+      throw new Error('Invalid item reference.');
+    }
+    if (!Number.isInteger(quantityToAdd) || quantityToAdd <= 0) {
+      throw new Error('Quantity to add must be a whole number greater than zero.');
+    }
+
+    const addedBy = getCurrentUserId();
+
+    try {
+      // Preferred path: atomic, row-locked DB function
+      const { data, error } = await (supabase as any).rpc('add_stock_atomic', {
+        p_item_id: numericItemId,
+        p_quantity: quantityToAdd,
+        p_added_by: addedBy
+      });
+
+      if (!error && data) {
+        const item = (Array.isArray(data) ? data[0] : data) as Item;
+        console.log('[Add Stock] Atomic RPC success:', { itemId: numericItemId, quantityToAdd, current_stock: (item as any).current_stock });
+        return { item };
+      }
+
+      if (error && !isMissingFunctionError(error)) {
+        throw error;
+      }
+
+      // Fallback (atomic function not installed yet): insert the history row
+      // with the user's exact quantity, then recompute totals from history.
+      console.warn('[Add Stock] add_stock_atomic not installed, using fallback path');
+
+      const { error: insertError } = await (supabase as any)
+        .from('stock_additions')
+        .insert([{
+          item_id: numericItemId,
+          quantity_added: quantityToAdd,
+          added_by: addedBy
+        }]);
+
+      if (insertError) {
+        throw new Error(insertError.message || 'Failed to record added stock.');
+      }
+
+      const item = await recomputeItemTotals(numericItemId);
+      return { item };
+    } catch (error) {
+      console.error('Error adding stock:', error);
+      throw new Error((error as any)?.message || 'Failed to add stock.');
+    }
+  },
+
   distributeStock: async (distributionData: {
     item_id: number;
     distributions: Array<{ stall_id: number; quantity: number }>;
@@ -961,48 +1079,54 @@ export const dbApi = {
     }
 
     try {
-      // Get current user ID for distributed_by field
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const distributedBy = currentUser.user_id || 1; // Default to admin (1) if not found
+      const distributedBy = getCurrentUserId();
 
-      console.log('[Distribute Stock] Current user:', currentUser);
-      console.log('[Distribute Stock] distributed_by:', distributedBy);
+      const validDistributions = distributionData.distributions
+        .filter(dist => (dist.quantity || 0) > 0 && dist.stall_id);
 
-      const totalToDistribute = distributionData.distributions.reduce((sum, dist) => sum + (dist.quantity || 0), 0);
+      const totalToDistribute = validDistributions.reduce((sum, dist) => sum + (dist.quantity || 0), 0);
       if (totalToDistribute <= 0) {
         throw new Error('Distribution quantity must be greater than zero.');
       }
 
-      const { data: itemRecord, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('item_id, current_stock, total_allocated')
-        .eq('item_id', distributionData.item_id)
-        .single();
+      // Preferred path: atomic, row-locked DB function (validates stock
+      // against history inside one transaction).
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc('distribute_stock_atomic_v2', {
+        p_item_id: distributionData.item_id,
+        p_distributions: validDistributions.map(d => ({ stall_id: d.stall_id, quantity: d.quantity })),
+        p_distributed_by: distributedBy,
+        p_notes: distributionData.notes || ''
+      });
 
-      if (itemError || !itemRecord) {
-        console.error('[Distribute Stock] Failed to load item:', itemError);
-        throw new Error('Item not found.');
+      if (!rpcError) {
+        console.log('[Distribute Stock] Atomic RPC success:', rpcData);
+        return { distributions: rpcData || [] };
       }
 
-      const currentStock = Number(itemRecord.current_stock || 0);
+      if (!isMissingFunctionError(rpcError)) {
+        console.error('[Distribute Stock] Atomic RPC error:', rpcError);
+        throw new Error(rpcError.message || 'Failed to distribute stock.');
+      }
+
+      // Fallback (atomic function not installed yet): recompute available
+      // stock from history first so a stale items.current_stock can never
+      // block or over-allow a distribution.
+      console.warn('[Distribute Stock] distribute_stock_atomic_v2 not installed, using fallback path');
+
+      const freshItem = await recomputeItemTotals(distributionData.item_id);
+      const currentStock = Number((freshItem as any).current_stock || 0);
       if (currentStock < totalToDistribute) {
         throw new Error(`Insufficient stock! Available: ${currentStock}, Requested: ${totalToDistribute}`);
       }
 
-      const distributions = distributionData.distributions.map(dist => {
-        const distRecord = {
-          item_id: distributionData.item_id,
-          stall_id: dist.stall_id,
-          quantity_allocated: dist.quantity,
-          date_distributed: new Date().toISOString(),
-          distributed_by: distributedBy,
-          notes: distributionData.notes || ''
-        };
-        console.log('[Distribute Stock] Distribution record:', distRecord);
-        return distRecord;
-      });
-
-      console.log('[Distribute Stock] Inserting distributions:', distributions);
+      const distributions = validDistributions.map(dist => ({
+        item_id: distributionData.item_id,
+        stall_id: dist.stall_id,
+        quantity_allocated: dist.quantity,
+        date_distributed: new Date().toISOString(),
+        distributed_by: distributedBy,
+        notes: distributionData.notes || ''
+      }));
 
       const { data, error } = await (supabase as any)
         .from('stock_distribution')
@@ -1014,30 +1138,9 @@ export const dbApi = {
         throw error;
       }
 
+      await recomputeItemTotals(distributionData.item_id);
+
       console.log('[Distribute Stock] Success:', data);
-
-      const newCurrentStock = Math.max(0, currentStock - totalToDistribute);
-      const newTotalAllocated = Number(itemRecord.total_allocated || 0) + totalToDistribute;
-
-      const { error: updateError } = await (supabase as any)
-        .from('items')
-        .update({
-          current_stock: newCurrentStock,
-          total_allocated: newTotalAllocated
-        })
-        .eq('item_id', distributionData.item_id);
-
-      if (updateError) {
-        console.error('[Distribute Stock] Failed to update item stock:', updateError);
-        throw updateError;
-      }
-
-      console.log('[Distribute Stock] Updated item stock:', {
-        item_id: distributionData.item_id,
-        current_stock: newCurrentStock,
-        total_allocated: newTotalAllocated
-      });
-
       return { distributions: data };
     } catch (error) {
       console.error('Error distributing stock:', error);
@@ -1099,17 +1202,11 @@ export const dbApi = {
       const oldQuantity = existingDist.quantity_allocated;
       const quantityDiff = quantity - oldQuantity;
 
-      // 2. Get current item stock to ensure we have enough
-      const { data: itemRecord, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('current_stock, total_allocated')
-        .eq('item_id', itemId)
-        .single();
+      // 2. Validate against freshly recomputed stock (not a stale cached value)
+      const freshItem = await recomputeItemTotals(itemId);
 
-      if (itemError || !itemRecord) throw new Error('Item not found');
-
-      if (quantityDiff > itemRecord.current_stock) {
-        throw new Error(`Insufficient stock! Available: ${itemRecord.current_stock}, Requested additional: ${quantityDiff}`);
+      if (quantityDiff > Number((freshItem as any).current_stock || 0)) {
+        throw new Error(`Insufficient stock! Available: ${(freshItem as any).current_stock}, Requested additional: ${quantityDiff}`);
       }
 
       // 3. Update distribution
@@ -1126,19 +1223,8 @@ export const dbApi = {
 
       if (updateDistError) throw updateDistError;
 
-      // 4. Sync item stock
-      const newCurrentStock = Math.max(0, itemRecord.current_stock - quantityDiff);
-      const newTotalAllocated = (itemRecord.total_allocated || 0) + quantityDiff;
-
-      const { error: updateItemError } = await (supabase as any)
-        .from('items')
-        .update({
-          current_stock: newCurrentStock,
-          total_allocated: newTotalAllocated
-        })
-        .eq('item_id', itemId);
-
-      if (updateItemError) throw updateItemError;
+      // 4. Recompute item totals from history
+      await recomputeItemTotals(itemId);
 
       return { distribution: data };
     } catch (error) {
@@ -1163,7 +1249,6 @@ export const dbApi = {
       if (fetchError || !existingDist) throw new Error('Distribution not found');
 
       const itemId = existingDist.item_id;
-      const quantity = existingDist.quantity_allocated;
 
       // 2. Delete the distribution
       const { error: deleteError } = await (supabase as any)
@@ -1173,25 +1258,8 @@ export const dbApi = {
 
       if (deleteError) throw deleteError;
 
-      // 3. Return stock to item
-      const { data: itemRecord, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('current_stock, total_allocated')
-        .eq('item_id', itemId)
-        .single();
-
-      if (!itemError && itemRecord) {
-        const newCurrentStock = (itemRecord.current_stock || 0) + quantity;
-        const newTotalAllocated = Math.max(0, (itemRecord.total_allocated || 0) - quantity);
-
-        await (supabase as any)
-          .from('items')
-          .update({
-            current_stock: newCurrentStock,
-            total_allocated: newTotalAllocated
-          })
-          .eq('item_id', itemId);
-      }
+      // 3. Recompute item totals from history (returns stock to central hub)
+      await recomputeItemTotals(itemId);
 
       return { success: true };
     } catch (error) {
@@ -1248,27 +1316,9 @@ export const dbApi = {
         if (updateError) throw updateError;
       }
 
-      // 3. Return withdrawn stock to central inventory
-      const { data: itemRecord, error: itemError } = await (supabase as any)
-        .from('items')
-        .select('current_stock, total_allocated')
-        .eq('item_id', itemId)
-        .single();
-
-      if (!itemError && itemRecord) {
-        const newCurrentStock = (itemRecord.current_stock || 0) + quantityToWithdraw;
-        const newTotalAllocated = Math.max(0, (itemRecord.total_allocated || 0) - quantityToWithdraw);
-
-        await (supabase as any)
-          .from('items')
-          .update({
-            current_stock: newCurrentStock,
-            total_allocated: newTotalAllocated
-          })
-          .eq('item_id', itemId);
-
-        console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${newCurrentStock}`);
-      }
+      // 3. Recompute item totals from history (returns stock to central hub)
+      const freshItem = await recomputeItemTotals(itemId);
+      console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${(freshItem as any).current_stock}`);
 
       return {
         success: true,
@@ -1616,28 +1666,70 @@ export const dbApi = {
     }
 
     try {
-      // Call backend API instead of Supabase directly
-      // This ensures stock is updated synchronously
-      const response = await fetch('/api/inventory/withdrawals', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          itemId: withdrawalData.item_id,
-          quantityWithdrawn: withdrawalData.quantity_withdrawn,
-          reason: withdrawalData.reason,
-          notes: withdrawalData.notes
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create withdrawal');
+      const quantity = Number(withdrawalData.quantity_withdrawn);
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new Error('Withdrawal quantity must be a whole number greater than zero.');
       }
 
-      const result = await response.json();
-      return { withdrawal: result.data };
+      const withdrawnBy = withdrawalData.withdrawn_by || getCurrentUserId();
+
+      // Preferred path: atomic, row-locked DB function
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc('withdraw_stock_atomic', {
+        p_item_id: withdrawalData.item_id,
+        p_quantity: quantity,
+        p_reason: withdrawalData.reason || 'General withdrawal',
+        p_withdrawn_by: withdrawnBy,
+        p_notes: withdrawalData.notes || null
+      });
+
+      if (!rpcError) {
+        console.log('[Create Withdrawal] Atomic RPC success:', rpcData);
+        return {
+          withdrawal: {
+            item_id: withdrawalData.item_id,
+            quantity_withdrawn: quantity,
+            reason: withdrawalData.reason,
+            withdrawn_by: withdrawnBy,
+            notes: withdrawalData.notes || null,
+            date_withdrawn: new Date().toISOString()
+          }
+        };
+      }
+
+      if (!isMissingFunctionError(rpcError)) {
+        console.error('[Create Withdrawal] Atomic RPC error:', rpcError);
+        throw new Error(rpcError.message || 'Failed to create withdrawal');
+      }
+
+      // Fallback (atomic function not installed yet): validate against
+      // freshly recomputed stock, insert the history row, recompute totals.
+      console.warn('[Create Withdrawal] withdraw_stock_atomic not installed, using fallback path');
+
+      const freshItem = await recomputeItemTotals(withdrawalData.item_id);
+      const available = Number((freshItem as any).current_stock || 0);
+      if (available < quantity) {
+        throw new Error(`Insufficient stock. Available: ${available}, Requested: ${quantity}`);
+      }
+
+      const { data: inserted, error: insertError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .insert([{
+          item_id: withdrawalData.item_id,
+          quantity_withdrawn: quantity,
+          reason: withdrawalData.reason || 'General withdrawal',
+          withdrawn_by: withdrawnBy,
+          notes: withdrawalData.notes || null
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(insertError.message || 'Failed to create withdrawal');
+      }
+
+      await recomputeItemTotals(withdrawalData.item_id);
+
+      return { withdrawal: inserted };
     } catch (error) {
       console.error('Error creating withdrawal:', error);
       throw error;

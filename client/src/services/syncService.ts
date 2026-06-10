@@ -142,6 +142,8 @@ class SyncService {
           await dbApi.createItem(operation.data);
         } else if (operation.table === 'withdrawals') {
           await dbApi.createWithdrawal(operation.data);
+        } else if (operation.table === 'stock_additions') {
+          await dbApi.addStock(operation.data.item_id, operation.data.quantity);
         }
         break;
 
@@ -184,7 +186,7 @@ class SyncService {
   // Queue an operation for offline sync
   async queueOperation(
     type: 'CREATE' | 'UPDATE' | 'DELETE',
-    table: 'items' | 'sales' | 'distributions' | 'withdrawals',
+    table: 'items' | 'sales' | 'distributions' | 'withdrawals' | 'stock_additions',
     data: any
   ): Promise<void> {
     const operation = {
