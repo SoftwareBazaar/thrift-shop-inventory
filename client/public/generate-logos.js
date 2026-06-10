@@ -1,9 +1,13 @@
 /**
  * Generate the full PWA icon set from the brand logo (sta-logo.png.png):
- *   - logo192.png / logo512.png        regular app icons (purpose: any)
- *   - maskable192.png / maskable512.png Android adaptive icons (safe-zone padded)
- *   - apple-touch-icon.png             iOS home-screen icon (180x180, opaque)
- *   - favicon-16/32/48.png + favicon.ico (real ICO container)
+ *   - icon-192.png / icon-512.png               regular app icons (purpose: any)
+ *   - icon-maskable-192.png / icon-maskable-512.png  Android adaptive icons
+ *   - apple-touch-icon.png                      iOS home-screen icon (180x180)
+ *   - favicon-16/32/48.png + favicon.ico        browser tab icons (real ICO)
+ *
+ * Every icon is flattened onto an opaque white background. Transparent icons
+ * render as BLACK squares in the Windows taskbar/jumplist, so no icon may
+ * contain an alpha channel.
  *
  * Run with: npm run generate-logos
  * Note: Sharp is optional. If not available, the pre-generated icons in the
@@ -13,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+const WHITE = { r: 255, g: 255, b: 255 };
 
 /** Build a valid .ico file from PNG buffers (PNG-compressed ICO entries). */
 function buildIco(entries) {
@@ -60,61 +64,51 @@ async function generateLogos() {
     return;
   }
 
-  try {
-    console.log('🖼️  Generating PWA icon set from brand logo...');
+  /**
+   * Render the logo at `scale` of a size x size canvas, fully opaque white
+   * background (alpha channel removed).
+   */
+  const renderIcon = async (size, scale = 1) => {
+    const inner = Math.round(size * scale);
+    const pad = Math.round((size - inner) / 2);
+    const logo = await sharp(sourceFile)
+      .resize(inner, inner, { fit: 'contain', background: { ...WHITE, alpha: 1 } })
+      .flatten({ background: WHITE })
+      .png()
+      .toBuffer();
+    return sharp({
+      create: { width: size, height: size, channels: 3, background: WHITE }
+    })
+      .composite([{ input: logo, top: pad, left: pad }])
+      .flatten({ background: WHITE })
+      .png({ quality: 80, compressionLevel: 9, palette: true })
+      .toBuffer();
+  };
 
-    // Regular icons (purpose: any) - logo fills the canvas, white background
+  try {
+    console.log('🖼️  Generating PWA icon set from brand logo (opaque)...');
+
+    // Regular icons (purpose: any)
     for (const size of [192, 512]) {
-      await sharp(sourceFile)
-        .resize(size, size, { fit: 'contain', background: WHITE })
-        .png({ quality: 80, compressionLevel: 9, palette: true })
-        .toFile(path.join(__dirname, `logo${size}.png`));
-      console.log(`✅ logo${size}.png`);
+      fs.writeFileSync(path.join(__dirname, `icon-${size}.png`), await renderIcon(size, 0.94));
+      console.log(`✅ icon-${size}.png`);
     }
 
     // Maskable icons - Android crops to a circle keeping the inner 80%,
     // so render the logo at ~62% of the canvas with white padding.
     for (const size of [192, 512]) {
-      const inner = Math.round(size * 0.62);
-      const pad = Math.round((size - inner) / 2);
-      const logo = await sharp(sourceFile)
-        .resize(inner, inner, { fit: 'contain', background: WHITE })
-        .png()
-        .toBuffer();
-      await sharp({
-        create: { width: size, height: size, channels: 4, background: WHITE }
-      })
-        .composite([{ input: logo, top: pad, left: pad }])
-        .png({ quality: 80, compressionLevel: 9, palette: true })
-        .toFile(path.join(__dirname, `maskable${size}.png`));
-      console.log(`✅ maskable${size}.png`);
+      fs.writeFileSync(path.join(__dirname, `icon-maskable-${size}.png`), await renderIcon(size, 0.62));
+      console.log(`✅ icon-maskable-${size}.png`);
     }
 
-    // iOS home-screen icon - MUST be fully opaque (iOS shows transparency as black)
-    {
-      const inner = Math.round(180 * 0.84);
-      const pad = Math.round((180 - inner) / 2);
-      const logo = await sharp(sourceFile)
-        .resize(inner, inner, { fit: 'contain', background: WHITE })
-        .flatten({ background: WHITE })
-        .png()
-        .toBuffer();
-      await sharp({
-        create: { width: 180, height: 180, channels: 3, background: WHITE }
-      })
-        .composite([{ input: logo, top: pad, left: pad }])
-        .png({ quality: 80, compressionLevel: 9, palette: true })
-        .toFile(path.join(__dirname, 'apple-touch-icon.png'));
-      console.log('✅ apple-touch-icon.png (180x180, opaque)');
-    }
+    // iOS home-screen icon
+    fs.writeFileSync(path.join(__dirname, 'apple-touch-icon.png'), await renderIcon(180, 0.84));
+    console.log('✅ apple-touch-icon.png (180x180, opaque)');
 
     // Favicons - small PNGs plus a real .ico container
     const icoEntries = [];
     for (const size of [16, 32, 48]) {
-      const buffer = await sharp(sourceFile)
-        .resize(size, size, { fit: 'contain', background: WHITE })
-        .png({ quality: 80, compressionLevel: 9, palette: true })
-        .toBuffer();
+      const buffer = await renderIcon(size, 1);
       fs.writeFileSync(path.join(__dirname, `favicon-${size}.png`), buffer);
       icoEntries.push({ size, buffer });
       console.log(`✅ favicon-${size}.png`);

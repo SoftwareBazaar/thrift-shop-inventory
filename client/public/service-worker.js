@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 7.0 - Brand logo icon set (favicon, maskable, apple-touch-icon)
-const CACHE_NAME = 'thrift-shop-v7';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v7';
+// Version: 8.0 - Opaque brand icons (transparent icons render black on Windows)
+const CACHE_NAME = 'thrift-shop-v8';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v8';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access
@@ -10,10 +10,10 @@ const STATIC_CACHE_URLS = [
   '/index.html',
   '/manifest.json',
   '/favicon.ico',
-  '/logo192.png',
-  '/logo512.png',
-  '/maskable192.png',
-  '/maskable512.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
   '/apple-touch-icon.png'
 ];
 
