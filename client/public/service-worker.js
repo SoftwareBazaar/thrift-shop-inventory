@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 8.0 - Opaque brand icons (transparent icons render black on Windows)
-const CACHE_NAME = 'thrift-shop-v8';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v8';
+// Version: 9.0 - Fix stock-totals write storm (never sync from partial history reads)
+const CACHE_NAME = 'thrift-shop-v9';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v9';
 const OFFLINE_URL = '/index.html';
 
 // Files to cache for offline access

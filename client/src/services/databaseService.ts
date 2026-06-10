@@ -219,12 +219,23 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     throw new Error('Item not found.');
   }
 
-  const [{ data: additions }, { data: distributions }, { data: centralSales }, { data: withdrawals }] = await Promise.all([
+  const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
     (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', itemId),
     (supabase as any).from('stock_distribution').select('quantity_allocated').eq('item_id', itemId),
     (supabase as any).from('sales').select('quantity_sold').eq('item_id', itemId).is('stall_id', null),
     (supabase as any).from('stock_withdrawals').select('quantity_withdrawn').eq('item_id', itemId)
   ]);
+
+  // CRITICAL: never recompute from partial history. A failed query would read
+  // as an empty list (sum 0) and corrupt the items table with wrong totals.
+  if (additionsRes.error || distributionsRes.error || centralSalesRes.error || withdrawalsRes.error) {
+    throw new Error('Failed to load full stock history; refusing to recompute totals from partial data.');
+  }
+
+  const additions = additionsRes.data;
+  const distributions = distributionsRes.data;
+  const centralSales = centralSalesRes.data;
+  const withdrawals = withdrawalsRes.data;
 
   const totalAdded = (additions || []).reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
   const totalAllocated = (distributions || []).reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
@@ -724,51 +735,32 @@ export const dbApi = {
           const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
           const existingCurrentStock = item.current_stock != null ? Number(item.current_stock) : 0;
 
-          // Sum stock additions
-          const { data: stockAdditions } = await (supabase as any)
-            .from('stock_additions')
-            .select('quantity_added')
-            .eq('item_id', item.item_id);
+          const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
+            (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', item.item_id),
+            (supabase as any).from('stock_distribution').select('quantity_allocated').eq('item_id', item.item_id),
+            (supabase as any).from('sales').select('quantity_sold').eq('item_id', item.item_id).is('stall_id', null),
+            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn').eq('item_id', item.item_id)
+          ]);
 
-          const totalAdded = (stockAdditions as any)?.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0) || 0;
-
-          // Sum distribution quantities
-          const { data: itemDistributions, error: distError } = await (supabase as any)
-            .from('stock_distribution')
-            .select('quantity_allocated')
-            .eq('item_id', item.item_id);
-
-          if (distError) {
-            console.warn('[Admin Stock Calc] Failed to fetch distributions for item', item.item_id, distError);
+          // CRITICAL: if ANY history query failed, return the stored item as-is.
+          // A failed query reads as an empty list (sum 0); recomputing or
+          // "syncing" from partial data would write garbage totals to the DB.
+          if (additionsRes.error || distributionsRes.error || centralSalesRes.error || withdrawalsRes.error) {
+            console.warn(`[Admin Stock Calc] History query failed for ${item.item_name} - using stored totals, skipping sync`);
+            return item;
           }
 
-          const totalDistributed = (itemDistributions as any)?.reduce(
-            (sum: number, distribution: any) => sum + (distribution.quantity_allocated || 0),
-            0
-          ) || 0;
+          const totalAdded = (additionsRes.data || []).reduce(
+            (sum: number, a: any) => sum + (a.quantity_added || 0), 0);
 
-          // Sum sales quantities (for this item specifically from central hub, where stall_id is null)
-          const { data: centralSales } = await (supabase as any)
-            .from('sales')
-            .select('quantity_sold')
-            .eq('item_id', item.item_id)
-            .is('stall_id', null);
+          const totalDistributed = (distributionsRes.data || []).reduce(
+            (sum: number, distribution: any) => sum + (distribution.quantity_allocated || 0), 0);
 
-          const totalCentralSold = (centralSales as any)?.reduce(
-            (sum: number, sale: any) => sum + (sale.quantity_sold || 0),
-            0
-          ) || 0;
+          const totalCentralSold = (centralSalesRes.data || []).reduce(
+            (sum: number, sale: any) => sum + (sale.quantity_sold || 0), 0);
 
-          // Sum withdrawal quantities (withdrawals ARE deducted from stock)
-          const { data: withdrawals } = await (supabase as any)
-            .from('stock_withdrawals')
-            .select('quantity_withdrawn')
-            .eq('item_id', item.item_id);
-
-          const totalWithdrawn = (withdrawals as any)?.reduce(
-            (sum: number, w: any) => sum + (w.quantity_withdrawn || 0),
-            0
-          ) || 0;
+          const totalWithdrawn = (withdrawalsRes.data || []).reduce(
+            (sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
 
           // Formula: Correct Received = Initial + Sum of additions
           const totalReceived = initialStock + totalAdded;
