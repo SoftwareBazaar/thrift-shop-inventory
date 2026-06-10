@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
 import { syncOfflineUserProfile } from '../utils/offlineCredentials';
 import { derivePasswordHash } from '../utils/passwordUtils';
+import { buildStockEventsFromHistory, computeCentralStockReplay } from '../utils/stockReplay';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -194,9 +195,12 @@ const isMissingFunctionError = (error: any): boolean => {
 
 // Recompute an item's denormalized totals from the history tables and persist
 // them. Single source of truth for stock math:
-//   current_stock = initial_stock + SUM(additions) - SUM(distributions)
-//                   - central sales (stall_id IS NULL) - withdrawals
-// Prefers the atomic DB-side function; falls back to client-side math.
+//   total_added     = SUM(stock_additions)
+//   total_allocated = SUM(stock_distribution)
+//   current_stock   = chronological replay with floor-at-zero on deductions
+//                     (historical over-withdrawals stay in history but do not
+//                     create a deficit that absorbs future additions)
+// Prefers the atomic DB-side function; falls back to client-side replay.
 const recomputeItemTotals = async (itemId: number): Promise<Item> => {
   const { data: rpcItem, error: rpcError } = await (supabase as any)
     .rpc('recalc_item_stock', { p_item_id: itemId });
@@ -220,10 +224,10 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
   }
 
   const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
-    (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', itemId),
-    (supabase as any).from('stock_distribution').select('quantity_allocated').eq('item_id', itemId),
-    (supabase as any).from('sales').select('quantity_sold').eq('item_id', itemId).is('stall_id', null),
-    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn').eq('item_id', itemId)
+    (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
+    (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', itemId),
+    (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
+    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id').eq('item_id', itemId)
   ]);
 
   // CRITICAL: never recompute from partial history. A failed query would read
@@ -232,20 +236,20 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     throw new Error('Failed to load full stock history; refusing to recompute totals from partial data.');
   }
 
-  const additions = additionsRes.data;
-  const distributions = distributionsRes.data;
-  const centralSales = centralSalesRes.data;
-  const withdrawals = withdrawalsRes.data;
+  const additions = additionsRes.data || [];
+  const distributions = distributionsRes.data || [];
+  const centralSales = centralSalesRes.data || [];
+  const withdrawals = withdrawalsRes.data || [];
 
-  const totalAdded = (additions || []).reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
-  const totalAllocated = (distributions || []).reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
-  const totalCentralSold = (centralSales || []).reduce((sum: number, s: any) => sum + (s.quantity_sold || 0), 0);
-  const totalWithdrawn = (withdrawals || []).reduce((sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
-
-  const currentStock = Math.max(
-    0,
-    (item.initial_stock || 0) + totalAdded - totalAllocated - totalCentralSold - totalWithdrawn
-  );
+  const totalAdded = additions.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
+  const totalAllocated = distributions.reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
+  const events = buildStockEventsFromHistory({
+    additions,
+    distributions,
+    withdrawals,
+    centralSales
+  });
+  const currentStock = computeCentralStockReplay(item.initial_stock || 0, events);
 
   const { data: updated, error: updateError } = await (supabase as any)
     .from('items')
@@ -736,10 +740,10 @@ export const dbApi = {
           const existingCurrentStock = item.current_stock != null ? Number(item.current_stock) : 0;
 
           const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
-            (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', item.item_id),
-            (supabase as any).from('stock_distribution').select('quantity_allocated').eq('item_id', item.item_id),
-            (supabase as any).from('sales').select('quantity_sold').eq('item_id', item.item_id).is('stall_id', null),
-            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn').eq('item_id', item.item_id)
+            (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', item.item_id),
+            (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', item.item_id),
+            (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', item.item_id).is('stall_id', null),
+            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id').eq('item_id', item.item_id)
           ]);
 
           // CRITICAL: if ANY history query failed, return the stored item as-is.
@@ -750,23 +754,31 @@ export const dbApi = {
             return item;
           }
 
-          const totalAdded = (additionsRes.data || []).reduce(
+          const additions = additionsRes.data || [];
+          const distributions = distributionsRes.data || [];
+          const centralSales = centralSalesRes.data || [];
+          const withdrawals = withdrawalsRes.data || [];
+
+          const totalAdded = additions.reduce(
             (sum: number, a: any) => sum + (a.quantity_added || 0), 0);
 
-          const totalDistributed = (distributionsRes.data || []).reduce(
+          const totalDistributed = distributions.reduce(
             (sum: number, distribution: any) => sum + (distribution.quantity_allocated || 0), 0);
 
-          const totalCentralSold = (centralSalesRes.data || []).reduce(
+          const totalCentralSold = centralSales.reduce(
             (sum: number, sale: any) => sum + (sale.quantity_sold || 0), 0);
 
-          const totalWithdrawn = (withdrawalsRes.data || []).reduce(
+          const totalWithdrawn = withdrawals.reduce(
             (sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
 
-          // Formula: Correct Received = Initial + Sum of additions
           const totalReceived = initialStock + totalAdded;
 
-          // Admin Stock (Available in central hub) = Total Received - Total Distributed - Total Hub Sales - Total Withdrawn
-          const adminStock = Math.max(0, totalReceived - totalDistributed - totalCentralSold - totalWithdrawn);
+          const adminStock = computeCentralStockReplay(initialStock, buildStockEventsFromHistory({
+            additions,
+            distributions,
+            withdrawals,
+            centralSales
+          }));
 
           // Update the items table to match reality if it got out of sync
           if (existingCurrentStock !== adminStock || item.total_added !== totalAdded || item.total_allocated !== totalDistributed) {
@@ -901,12 +913,18 @@ export const dbApi = {
       }
 
       if (itemData.initial_stock !== undefined || itemData.total_added !== undefined) {
-        const initialStock = itemData.initial_stock !== undefined ? Number(itemData.initial_stock) : Number(existingItem.initial_stock || 0);
+        if (itemData.initial_stock !== undefined) {
+          const initialStock = Number(itemData.initial_stock);
+          if (!Number.isFinite(initialStock) || initialStock < 0) {
+            throw new Error('Initial stock must be zero or greater.');
+          }
+          updateData.initial_stock = initialStock;
+        }
+
         const currentTotalAdded = Number(existingItem.total_added || 0);
-        let newTotalAdded = currentTotalAdded;
 
         if (itemData.total_added !== undefined) {
-          newTotalAdded = Number(itemData.total_added);
+          const newTotalAdded = Number(itemData.total_added);
           if (!Number.isFinite(newTotalAdded)) {
             throw new Error('Invalid total added value.');
           }
@@ -927,62 +945,22 @@ export const dbApi = {
               throw new Error(insertError.message || 'Failed to record added stock.');
             }
           }
-          updateData.total_added = newTotalAdded;
         }
-
-        // Formula: Current Stock = Initial + Total Added - Total Distributed - Central Sales - Withdrawals
-        // Query the distribution history directly (cached total_allocated can be stale)
-        const { data: itemDistributions } = await (supabase as any)
-          .from('stock_distribution')
-          .select('quantity_allocated')
-          .eq('item_id', numericItemId);
-
-        const totalDistributed = (itemDistributions as any)?.reduce(
-          (sum: number, d: any) => sum + (d.quantity_allocated || 0),
-          0
-        ) || 0;
-
-        // Query central sales (sales from central hub where stall_id is null)
-        const { data: centralSales } = await (supabase as any)
-          .from('sales')
-          .select('quantity_sold')
-          .eq('item_id', numericItemId)
-          .is('stall_id', null);
-
-        const totalCentralSold = (centralSales as any)?.reduce(
-          (sum: number, sale: any) => sum + (sale.quantity_sold || 0),
-          0
-        ) || 0;
-
-        // Query withdrawals (these ARE deducted from available stock)
-        const { data: withdrawals } = await (supabase as any)
-          .from('stock_withdrawals')
-          .select('quantity_withdrawn')
-          .eq('item_id', numericItemId);
-
-        const totalWithdrawn = (withdrawals as any)?.reduce(
-          (sum: number, w: any) => sum + (w.quantity_withdrawn || 0),
-          0
-        ) || 0;
-
-        // Complete formula: withdrawals reduce available stock
-        const newCurrentStock = Math.max(0, initialStock + newTotalAdded - totalDistributed - totalCentralSold - totalWithdrawn);
-        updateData.current_stock = newCurrentStock;
       }
 
       if (Object.keys(updateData).length === 0) {
         return { item: existingItem as Item };
       }
 
-      const { data, error } = await (supabase as any)
+      const { error: updateError } = await (supabase as any)
         .from('items')
         .update(updateData)
-        .eq('item_id', numericItemId)
-        .select()
-        .single();
+        .eq('item_id', numericItemId);
 
-      if (error) throw error;
-      return { item: data as Item };
+      if (updateError) throw updateError;
+
+      const item = await recomputeItemTotals(numericItemId);
+      return { item };
     } catch (error) {
       console.error('Error updating item:', error);
       throw new Error((error as any)?.message || 'Failed to update item.');
@@ -1762,12 +1740,6 @@ export const dbApi = {
       // Fallback (atomic function not installed yet): validate against
       // freshly recomputed stock, insert the history row, recompute totals.
       console.warn('[Create Withdrawal] withdraw_stock_atomic not installed, using fallback path');
-
-      const freshItem = await recomputeItemTotals(withdrawalData.item_id);
-      const available = Number((freshItem as any).current_stock || 0);
-      if (available < quantity) {
-        throw new Error(`Insufficient stock. Available: ${available}, Requested: ${quantity}`);
-      }
 
       const { data: inserted, error: insertError } = await (supabase as any)
         .from('stock_withdrawals')

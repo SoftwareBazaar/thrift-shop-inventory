@@ -485,11 +485,6 @@ const Inventory: React.FC = () => {
       return;
     }
 
-    if (quantityToWithdraw > selectedItem.current_stock) {
-      alert(`Cannot withdraw ${quantityToWithdraw} items. Only ${selectedItem.current_stock} available in stock.`);
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       // Use the new withdrawal API instead of createSale
@@ -1784,7 +1779,6 @@ const Inventory: React.FC = () => {
                   onChange={(e) => setWithdrawQuantity(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                   min="1"
-                  max={selectedItem.current_stock}
                   required
                   placeholder="Enter quantity"
                 />
