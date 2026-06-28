@@ -171,8 +171,24 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Sales happen from stalls, NOT from central stock
-    // Do NOT update items.current_stock here
+    // Deduct from central stock to keep inventory in sync
+    const { data: currentItem, error: fetchStockError } = await supabase
+      .from('items')
+      .select('current_stock')
+      .eq('item_id', item_id)
+      .single();
+
+    if (!fetchStockError && currentItem) {
+      const newStock = Math.max(0, (currentItem.current_stock || 0) - quantity_sold);
+      const { error: stockUpdateError } = await supabase
+        .from('items')
+        .update({ current_stock: newStock })
+        .eq('item_id', item_id);
+
+      if (stockUpdateError) {
+        console.error('Stock deduction error (non-fatal):', stockUpdateError.message);
+      }
+    }
 
     res.status(201).json({
       message: 'Sale recorded successfully',
