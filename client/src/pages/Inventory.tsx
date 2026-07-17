@@ -85,6 +85,15 @@ const Inventory: React.FC = () => {
   const [withdrawFromDist, setWithdrawFromDist] = useState<any>(null);
   const [withdrawFromDistQty, setWithdrawFromDistQty] = useState('');
 
+  // Undo toast after a successful "withdraw from distribution"
+  const [undoToast, setUndoToast] = useState<{
+    withdrawalId: number;
+    qty: number;
+    stallName: string;
+    itemId: number;
+  } | null>(null);
+  const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchAllStallAllocations = useCallback(async (itemList: any[]) => {
     if (user?.role !== 'admin' || itemList.length === 0) return;
     try {
@@ -424,17 +433,45 @@ const Inventory: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await dataApi.withdrawFromDistribution(withdrawFromDist.distribution_id, quantityToWithdraw);
+      const result = await dataApi.withdrawFromDistribution(withdrawFromDist.distribution_id, quantityToWithdraw);
+      const capturedItemId = withdrawFromDist.item_id ?? expandedItemId;
+      const capturedStallName = withdrawFromDist.stall_name;
       setShowWithdrawFromDistModal(false);
       setWithdrawFromDist(null);
       setWithdrawFromDistQty('');
-      await fetchItems(); // Refresh inventory
-      if (expandedItemId) await fetchItemDistributions(expandedItemId); // Refresh distribution list
-      alert(`✅ Successfully withdrew ${quantityToWithdraw} item(s) from ${withdrawFromDist.stall_name}. Items returned to central hub.`);
+      await fetchItems();
+      if (expandedItemId) await fetchItemDistributions(expandedItemId);
+
+      // Show undo toast if we have a withdrawal_id to reverse
+      if (result?.withdrawalId) {
+        // Clear any existing timer
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setUndoToast({
+          withdrawalId: result.withdrawalId,
+          qty: quantityToWithdraw,
+          stallName: capturedStallName,
+          itemId: capturedItemId,
+        });
+        // Auto-dismiss after 10 seconds
+        undoTimerRef.current = setTimeout(() => setUndoToast(null), 10000);
+      }
     } catch (error: any) {
       alert(error.message || 'Failed to withdraw from distribution');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUndoWithdrawal = async () => {
+    if (!undoToast) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+    try {
+      await dataApi.deleteStockWithdrawal(undoToast.withdrawalId);
+      await fetchItems();
+      if (expandedItemId) await fetchItemDistributions(expandedItemId);
+    } catch (error: any) {
+      alert(error.message || 'Failed to undo withdrawal');
     }
   };
 
@@ -1945,6 +1982,31 @@ const Inventory: React.FC = () => {
           </div>
         )
       }
+
+      {/* Undo toast — appears after a successful withdrawal from distribution */}
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl animate-fade-in">
+          <span className="text-sm">
+            ✅ Withdrew <strong>{undoToast.qty}</strong> item(s) from <strong>{undoToast.stallName}</strong>. Returned to central hub.
+          </span>
+          <button
+            onClick={handleUndoWithdrawal}
+            className="bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          >
+            ↩ Undo
+          </button>
+          <button
+            onClick={() => {
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              setUndoToast(null);
+            }}
+            className="text-gray-400 hover:text-white text-lg leading-none"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 };

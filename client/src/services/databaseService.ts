@@ -1337,7 +1337,7 @@ export const dbApi = {
       // Record in unified withdrawal history AFTER the distribution row is
       // handled. For a full withdrawal the distribution no longer exists, so
       // pass distribution_id as null to avoid a dangling FK reference.
-      await dbApi.createWithdrawal({
+      const withdrawalResult = await dbApi.createWithdrawal({
         item_id: itemId,
         quantity_withdrawn: quantityToWithdraw,
         reason: 'Returned to central hub',
@@ -1354,7 +1354,9 @@ export const dbApi = {
       return {
         success: true,
         withdrawnQuantity: quantityToWithdraw,
-        remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw
+        remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw,
+        withdrawalId: withdrawalResult?.withdrawal?.withdrawal_id ?? null,
+        stallName: existingDist.stall_name ?? stallId,
       };
     } catch (error) {
       console.error('Error withdrawing from distribution:', error);
@@ -1776,8 +1778,11 @@ export const dbApi = {
 
       if (!rpcError) {
         console.log('[Create Withdrawal] Atomic RPC success:', rpcData);
+        // RPC returns an array; the first row contains the withdrawal_id
+        const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
         return {
           withdrawal: {
+            withdrawal_id: rpcRow?.withdrawal_id ?? null,
             item_id: withdrawalData.item_id,
             quantity_withdrawn: quantity,
             reason: withdrawalData.reason,
