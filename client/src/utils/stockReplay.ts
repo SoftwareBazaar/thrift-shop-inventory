@@ -73,7 +73,10 @@ export function buildStockEventsFromHistory(input: {
     });
   }
   for (const row of input.withdrawals || []) {
-    // Stall withdrawals are audit-only; central replay ignores them.
+    // Stall returns (stall_id IS NOT NULL) are audit-only in the central replay.
+    // Their effect on central stock comes from the distribution row being
+    // reduced or deleted — NOT from adding the qty back here.
+    // Only central-hub withdrawals (stall_id IS NULL) reduce central stock.
     if (row.stall_id != null) continue;
     events.push({
       ts: new Date(row.date_withdrawn).getTime(),
