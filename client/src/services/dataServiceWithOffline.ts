@@ -343,7 +343,9 @@ export const offlineDataApi = {
     try {
       if (navigator.onLine) {
         const result = await dataApi.createWithdrawal(withdrawalData);
-        if (result && result.withdrawal) {
+        // Only cache locally if we have a valid withdrawal_id — IndexedDB
+        // requires it as the keyPath and will throw if it's null/undefined.
+        if (result && result.withdrawal && result.withdrawal.withdrawal_id != null) {
           await offlineStorage.saveWithdrawal(result.withdrawal);
         }
         return result;
