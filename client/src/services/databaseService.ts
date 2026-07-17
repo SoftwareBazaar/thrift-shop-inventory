@@ -1310,20 +1310,13 @@ export const dbApi = {
         throw new Error(`Cannot withdraw ${quantityToWithdraw} items. Only ${currentQuantity} items are distributed to this user.`);
       }
 
-      // Record in unified withdrawal history (source = stall)
-      await dbApi.createWithdrawal({
-        item_id: itemId,
-        quantity_withdrawn: quantityToWithdraw,
-        reason: 'Returned to central hub',
-        withdrawn_by: withdrawnBy,
-        stall_id: stallId,
-        distribution_id: distributionId,
-        notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
-      });
+      // Update or delete the distribution FIRST (before inserting withdrawal)
+      // so the FK constraint (stock_withdrawals_distribution_id_fkey) isn't violated
+      // on a full withdrawal where the distribution row gets deleted.
+      const isFullWithdrawal = quantityToWithdraw === currentQuantity;
 
-      // Update or delete the distribution based on quantity
-      if (quantityToWithdraw === currentQuantity) {
-        // Full withdrawal - delete the distribution
+      if (isFullWithdrawal) {
+        // Full withdrawal - delete the distribution row first
         const { error: deleteError } = await (supabase as any)
           .from('stock_distribution')
           .delete()
@@ -1331,7 +1324,7 @@ export const dbApi = {
 
         if (deleteError) throw deleteError;
       } else {
-        // Partial withdrawal - update the distribution
+        // Partial withdrawal - reduce the allocated quantity
         const newQuantity = currentQuantity - quantityToWithdraw;
         const { error: updateError } = await (supabase as any)
           .from('stock_distribution')
@@ -1340,6 +1333,19 @@ export const dbApi = {
 
         if (updateError) throw updateError;
       }
+
+      // Record in unified withdrawal history AFTER the distribution row is
+      // handled. For a full withdrawal the distribution no longer exists, so
+      // pass distribution_id as null to avoid a dangling FK reference.
+      await dbApi.createWithdrawal({
+        item_id: itemId,
+        quantity_withdrawn: quantityToWithdraw,
+        reason: 'Returned to central hub',
+        withdrawn_by: withdrawnBy,
+        stall_id: stallId,
+        distribution_id: isFullWithdrawal ? null : distributionId,
+        notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
+      });
 
       // 3. Recompute item totals from history (returns stock to central hub)
       const freshItem = await recomputeItemTotals(itemId);
