@@ -189,7 +189,8 @@ const isMissingFunctionError = (error: any): boolean => {
   return (
     code === 'PGRST202' ||
     code === '42883' ||
-    /could not find the function|function .* does not exist/i.test(message)
+    code === '42725' || // ambiguous function (wrong number of args)
+    /could not find the function|function .* does not exist|wrong number of arguments/i.test(message)
   );
 };
 

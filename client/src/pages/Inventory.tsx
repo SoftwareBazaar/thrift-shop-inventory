@@ -546,10 +546,10 @@ const Inventory: React.FC = () => {
         setSelectedItem(updatedItem);
       }
       
-      alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) for ${withdrawReason || 'owner use'}`);
+      alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from central hub.`);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
-      alert(error.response?.data?.message || '❌ Failed to withdraw stock');
+      alert(error.message || 'Failed to withdraw stock. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
