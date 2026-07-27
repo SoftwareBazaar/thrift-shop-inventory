@@ -47,12 +47,24 @@ const Reports: React.FC = () => {
           itemsSoldMap[s.item_id] = (itemsSoldMap[s.item_id] || 0) + (s.quantity_sold || s.quantity || 0);
         });
 
+        // Build stall-sales map per item (same logic as Dashboard)
+        const stallSalesMap: any = {};
+        allSales.forEach((s: any) => {
+          if (s.stall_id != null) {
+            stallSalesMap[s.item_id] = (stallSalesMap[s.item_id] || 0) + (s.quantity_sold || s.quantity || 0);
+          }
+        });
+
         const categories: any = {};
         items.forEach((item: any) => {
           const cat = item.category || 'Other';
-          const soldCount = itemsSoldMap[item.item_id] || 0;
-          const unsoldStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - soldCount);
-          categories[cat] = (categories[cat] || 0) + (unsoldStock * (item.buying_price || 0));
+          // Mirror Dashboard formula:
+          // central stock (current_stock) + unsold distributed stock
+          const centralStock = Math.max(0, Number(item.current_stock) || 0);
+          const stallSold = stallSalesMap[item.item_id] || 0;
+          const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - stallSold);
+          const unsoldStock = centralStock + distributedLive;
+          categories[cat] = (categories[cat] || 0) + (unsoldStock * (Number(item.buying_price) || 0));
         });
         setInventoryStats(
           Object.entries(categories)
@@ -200,12 +212,19 @@ const Reports: React.FC = () => {
         const items = invResponse.items || [];
         const salesResponse = await dataApi.getSales();
         const allSales = salesResponse.sales || [];
+        const stallSalesMap: any = {};
+        allSales.forEach((s: any) => {
+          if (s.stall_id != null) {
+            stallSalesMap[s.item_id] = (stallSalesMap[s.item_id] || 0) + (s.quantity_sold || s.quantity || 0);
+          }
+        });
         csvContent = 'Item ID,Item Name,Category,Unsold Stock,Buying Price,Selling Price,Stock Value\n';
         items.forEach((item: any) => {
-          const itemSales = allSales.filter((s: any) => s.item_id === item.item_id || s.item_name === item.item_name) || [];
-          const soldCount = itemSales.reduce((sum: number, s: any) => sum + (s.quantity_sold || s.quantity || 0), 0);
-          const unsoldStock = Math.max(0, (item.initial_stock || 0) + (item.total_added || 0) - soldCount);
-          const val = unsoldStock * (item.buying_price || 0);
+          const centralStock = Math.max(0, Number(item.current_stock) || 0);
+          const stallSold = stallSalesMap[item.item_id] || 0;
+          const distributedLive = Math.max(0, (Number(item.total_allocated) || 0) - stallSold);
+          const unsoldStock = centralStock + distributedLive;
+          const val = unsoldStock * (Number(item.buying_price) || 0);
           csvContent += `${item.item_id},"${item.item_name}","${item.category}",${unsoldStock},${item.buying_price},${item.unit_price},${val.toFixed(2)}\n`;
         });
       } else if (reportType === 'sales') {
