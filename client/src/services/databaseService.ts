@@ -1338,15 +1338,26 @@ export const dbApi = {
       // Record in unified withdrawal history AFTER the distribution row is
       // handled. For a full withdrawal the distribution no longer exists, so
       // pass distribution_id as null to avoid a dangling FK reference.
-      const withdrawalResult = await dbApi.createWithdrawal({
-        item_id: itemId,
-        quantity_withdrawn: quantityToWithdraw,
-        reason: 'Returned to central hub',
-        withdrawn_by: withdrawnBy,
-        stall_id: stallId,
-        distribution_id: isFullWithdrawal ? null : distributionId,
-        notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
-      });
+      // NOTE: Insert directly — do NOT go through createWithdrawal/withdraw_stock_atomic
+      // because that RPC subtracts from current_stock. For a stall→central return,
+      // recomputeItemTotals (below) will correctly add the stock back to central.
+      const { data: insertedWithdrawal, error: withdrawalInsertError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .insert([{
+          item_id: itemId,
+          quantity_withdrawn: quantityToWithdraw,
+          reason: 'Returned to central hub',
+          withdrawn_by: withdrawnBy,
+          stall_id: stallId,
+          distribution_id: isFullWithdrawal ? null : distributionId,
+          notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
+        }])
+        .select()
+        .single();
+
+      if (withdrawalInsertError) throw withdrawalInsertError;
+
+      const withdrawalId = insertedWithdrawal?.withdrawal_id ?? null;
 
       // 3. Recompute item totals from history (returns stock to central hub)
       const freshItem = await recomputeItemTotals(itemId);
@@ -1356,7 +1367,7 @@ export const dbApi = {
         success: true,
         withdrawnQuantity: quantityToWithdraw,
         remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw,
-        withdrawalId: withdrawalResult?.withdrawal?.withdrawal_id ?? null,
+        withdrawalId: withdrawalId,
         stallName: existingDist.stall_name ?? stallId,
       };
     } catch (error) {
