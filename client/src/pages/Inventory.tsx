@@ -539,20 +539,23 @@ const Inventory: React.FC = () => {
         return;
       }
     } else {
-      // Stall withdrawal — look up the distribution row
-      const dist = withdrawItemDistributions.find(
-        (d) => String(d.distribution_id) === withdrawSource
+      // Stall withdrawal — look up the aggregated stall entry
+      const stallBatches = withdrawItemDistributions.filter(
+        (d) => String(d.stall_id) === withdrawSource
       );
-      if (!dist) {
+      const totalAvailable = stallBatches.reduce((sum, d) => sum + (d.quantity_allocated || 0), 0);
+      const stallName = stallBatches[0]?.stall_name ?? `Stall #${withdrawSource}`;
+
+      if (!stallBatches.length) {
         alert('Selected stall distribution not found. Please refresh and try again.');
         return;
       }
-      if (dist.quantity_allocated <= 0) {
-        alert(`No stock left at ${dist.stall_name}. There is nothing to withdraw.`);
+      if (totalAvailable <= 0) {
+        alert(`No stock left at ${stallName}. There is nothing to withdraw.`);
         return;
       }
-      if (quantityToWithdraw > dist.quantity_allocated) {
-        alert(`Insufficient stock at ${dist.stall_name}. Available: ${dist.quantity_allocated}`);
+      if (quantityToWithdraw > totalAvailable) {
+        alert(`Insufficient stock at ${stallName}. Available: ${totalAvailable}`);
         return;
       }
     }
@@ -570,12 +573,20 @@ const Inventory: React.FC = () => {
         });
         alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from central hub.`);
       } else {
-        // Stall withdrawal — return stock from that stall to central hub
-        const dist = withdrawItemDistributions.find(
-          (d) => String(d.distribution_id) === withdrawSource
-        );
-        await dataApi.withdrawFromDistribution(Number(withdrawSource), quantityToWithdraw);
-        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from ${dist?.stall_name ?? 'stall'} back to central hub.`);
+        // Stall withdrawal — drain distribution batches oldest-first until qty is satisfied
+        const stallBatches = withdrawItemDistributions
+          .filter((d) => String(d.stall_id) === withdrawSource)
+          .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
+        const stallName = stallBatches[0]?.stall_name ?? `Stall #${withdrawSource}`;
+
+        let remaining = quantityToWithdraw;
+        for (const batch of stallBatches) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, batch.quantity_allocated);
+          await dataApi.withdrawFromDistribution(batch.distribution_id, take);
+          remaining -= take;
+        }
+        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from ${stallName} back to central hub.`);
       }
 
       setShowWithdrawModal(false);
@@ -1862,12 +1873,30 @@ const Inventory: React.FC = () => {
 
       {/* Owner Withdrawal Modal */}
       {showWithdrawModal && selectedItem && (() => {
-        const selectedDist = withdrawSource !== 'central'
-          ? withdrawItemDistributions.find((d) => String(d.distribution_id) === withdrawSource)
+        // Aggregate distribution batches by stall — one entry per stall with total qty
+        const stallOptionsMap = new Map<number, { stall_id: number; stall_name: string; total: number }>();
+        withdrawItemDistributions.forEach((d) => {
+          const sid = Number(d.stall_id);
+          if (!sid) return;
+          const existing = stallOptionsMap.get(sid);
+          if (existing) {
+            existing.total += d.quantity_allocated || 0;
+          } else {
+            stallOptionsMap.set(sid, {
+              stall_id: sid,
+              stall_name: d.stall_name || `Stall #${sid}`,
+              total: d.quantity_allocated || 0,
+            });
+          }
+        });
+        const stallOptions = Array.from(stallOptionsMap.values());
+
+        const selectedStall = withdrawSource !== 'central'
+          ? stallOptions.find((s) => String(s.stall_id) === withdrawSource)
           : null;
         const availableQty = withdrawSource === 'central'
           ? (selectedItem.current_stock ?? 0)
-          : (selectedDist?.quantity_allocated ?? 0);
+          : (selectedStall?.total ?? 0);
         const isInsufficient = availableQty <= 0;
 
         return (
@@ -1885,7 +1914,7 @@ const Inventory: React.FC = () => {
                     <strong>Item:</strong> {selectedItem.item_name}
                   </p>
                   <p className="text-sm text-orange-800">
-                    <strong>Available ({withdrawSource === 'central' ? 'Central Hub' : (selectedDist?.stall_name ?? 'Stall')}):</strong>{' '}
+                    <strong>Available ({withdrawSource === 'central' ? 'Central Hub' : (selectedStall?.stall_name ?? 'Stall')}):</strong>{' '}
                     <span className={isInsufficient ? 'text-red-600 font-bold' : 'font-bold'}>
                       {availableQty}
                     </span>
@@ -1908,9 +1937,9 @@ const Inventory: React.FC = () => {
                     <option value="central">
                       🏠 Central Hub — {selectedItem.current_stock ?? 0} available
                     </option>
-                    {withdrawItemDistributions.map((dist) => (
-                      <option key={dist.distribution_id} value={String(dist.distribution_id)}>
-                        🏪 {dist.stall_name} — {dist.quantity_allocated} available
+                    {stallOptions.map((s) => (
+                      <option key={s.stall_id} value={String(s.stall_id)}>
+                        🏪 {s.stall_name} — {s.total} available
                       </option>
                     ))}
                   </select>
