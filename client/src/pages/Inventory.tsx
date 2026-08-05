@@ -64,6 +64,10 @@ const Inventory: React.FC = () => {
   const [addStockQuantity, setAddStockQuantity] = useState('');
   const [withdrawQuantity, setWithdrawQuantity] = useState('');
   const [withdrawReason, setWithdrawReason] = useState('');
+  // 'central' or a stall distribution_id (number as string)
+  const [withdrawSource, setWithdrawSource] = useState<'central' | string>('central');
+  // distributions for the item currently being withdrawn from (populated when modal opens)
+  const [withdrawItemDistributions, setWithdrawItemDistributions] = useState<any[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   const [itemDistributions, setItemDistributions] = useState<any[]>([]);
   const [showEditDistModal, setShowEditDistModal] = useState(false);
@@ -523,30 +527,72 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    // --- Validate available stock per source ---
+    if (withdrawSource === 'central') {
+      const available = selectedItem.current_stock ?? 0;
+      if (available <= 0) {
+        alert('No stock available in Central Hub. There is nothing to withdraw.');
+        return;
+      }
+      if (quantityToWithdraw > available) {
+        alert(`Insufficient stock in Central Hub. Available: ${available}`);
+        return;
+      }
+    } else {
+      // Stall withdrawal — look up the distribution row
+      const dist = withdrawItemDistributions.find(
+        (d) => String(d.distribution_id) === withdrawSource
+      );
+      if (!dist) {
+        alert('Selected stall distribution not found. Please refresh and try again.');
+        return;
+      }
+      if (dist.quantity_allocated <= 0) {
+        alert(`No stock left at ${dist.stall_name}. There is nothing to withdraw.`);
+        return;
+      }
+      if (quantityToWithdraw > dist.quantity_allocated) {
+        alert(`Insufficient stock at ${dist.stall_name}. Available: ${dist.quantity_allocated}`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      // Use the new withdrawal API instead of createSale
-      await dataApi.createWithdrawal({
-        item_id: selectedItem.item_id,
-        quantity_withdrawn: quantityToWithdraw,
-        reason: withdrawReason || 'General withdrawal',
-        withdrawn_by: user.user_id,
-        notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
-      });
+      if (withdrawSource === 'central') {
+        // Central Hub withdrawal
+        await dataApi.createWithdrawal({
+          item_id: selectedItem.item_id,
+          quantity_withdrawn: quantityToWithdraw,
+          reason: withdrawReason || 'General withdrawal',
+          withdrawn_by: user.user_id,
+          notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
+        });
+        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from central hub.`);
+      } else {
+        // Stall withdrawal — return stock from that stall to central hub
+        const dist = withdrawItemDistributions.find(
+          (d) => String(d.distribution_id) === withdrawSource
+        );
+        await dataApi.withdrawFromDistribution(Number(withdrawSource), quantityToWithdraw);
+        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from ${dist?.stall_name ?? 'stall'} back to central hub.`);
+      }
 
       setShowWithdrawModal(false);
       setWithdrawQuantity('');
       setWithdrawReason('');
-      await fetchItems(); // Refresh items
-      
-      // Update selectedItem with the newly fetched data so UI reflects the change immediately
+      setWithdrawSource('central');
+      setWithdrawItemDistributions([]);
+      await fetchItems();
+
+      // Update selectedItem immediately so UI reflects the change
       const response = await dataApi.getInventory();
       const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
       if (updatedItem) {
         setSelectedItem(updatedItem);
       }
-      
-      alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from central hub.`);
+      // Refresh distribution list if item is currently expanded
+      if (expandedItemId) await fetchItemDistributions(expandedItemId);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
       alert(error.message || 'Failed to withdraw stock. Please try again.');
@@ -1034,11 +1080,19 @@ const Inventory: React.FC = () => {
                               Add Stock
                             </button>
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
                                 setSelectedItem(item);
                                 setWithdrawQuantity('');
                                 setWithdrawReason('');
+                                setWithdrawSource('central');
+                                // Pre-load distributions so the dropdown is ready
+                                try {
+                                  const res = await dataApi.getDistributions(item.item_id);
+                                  setWithdrawItemDistributions(res.distributions || []);
+                                } catch {
+                                  setWithdrawItemDistributions([]);
+                                }
                                 setShowWithdrawModal(true);
                               }}
                               className="text-orange-600 hover:text-orange-900"
@@ -1223,18 +1277,6 @@ const Inventory: React.FC = () => {
                                                 className="bg-blue-50 text-blue-700 px-3 py-1 rounded-md hover:bg-blue-600 hover:text-white transition-all mr-2 border border-blue-200"
                                               >
                                                 Edit
-                                              </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setWithdrawFromDist(dist);
-                                                  setWithdrawFromDistQty('');
-                                                  setShowWithdrawFromDistModal(true);
-                                                }}
-                                                className="bg-orange-50 text-orange-700 px-3 py-1 rounded-md hover:bg-orange-600 hover:text-white transition-all mr-2 border border-orange-200"
-                                                title="Return items from this stall back to central hub"
-                                              >
-                                                Withdraw
                                               </button>
                                               <button
                                                 onClick={(e) => {
@@ -1819,81 +1861,136 @@ const Inventory: React.FC = () => {
       }
 
       {/* Owner Withdrawal Modal */}
-      {showWithdrawModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏠 Withdraw from Central Hub</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Removes stock from the <strong>central store</strong> (owner / personal use). This appears in withdrawal history as <strong>Central Hub</strong>.
-            </p>
-            <form onSubmit={handleWithdrawSubmit} className="space-y-4">
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="text-sm text-orange-800">
-                  <strong>Item:</strong> {selectedItem.item_name}
-                </p>
-                <p className="text-sm text-orange-800">
-                  <strong>Available Stock:</strong> {selectedItem.current_stock}
-                </p>
-              </div>
+      {showWithdrawModal && selectedItem && (() => {
+        const selectedDist = withdrawSource !== 'central'
+          ? withdrawItemDistributions.find((d) => String(d.distribution_id) === withdrawSource)
+          : null;
+        const availableQty = withdrawSource === 'central'
+          ? (selectedItem.current_stock ?? 0)
+          : (selectedDist?.quantity_allocated ?? 0);
+        const isInsufficient = availableQty <= 0;
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quantity to Withdraw *
-                </label>
-                <input
-                  type="number"
-                  value={withdrawQuantity}
-                  onChange={(e) => setWithdrawQuantity(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  min="1"
-                  required
-                  placeholder="Enter quantity"
-                />
-              </div>
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">📦 Stock Withdrawal</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Choose where to withdraw stock from, then enter the quantity.
+              </p>
+              <form onSubmit={handleWithdrawSubmit} className="space-y-4">
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={withdrawReason}
-                  onChange={(e) => setWithdrawReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="E.g., Personal use, Gift, etc."
-                />
-              </div>
+                {/* Item info */}
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <p className="text-sm text-orange-800">
+                    <strong>Item:</strong> {selectedItem.item_name}
+                  </p>
+                  <p className="text-sm text-orange-800">
+                    <strong>Available ({withdrawSource === 'central' ? 'Central Hub' : (selectedDist?.stall_name ?? 'Stall')}):</strong>{' '}
+                    <span className={isInsufficient ? 'text-red-600 font-bold' : 'font-bold'}>
+                      {availableQty}
+                    </span>
+                  </p>
+                </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <p className="text-xs text-yellow-800">
-                  ⚠️ This will permanently reduce the available stock by the specified quantity.
-                </p>
-              </div>
+                {/* Source dropdown */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Withdraw From *
+                  </label>
+                  <select
+                    value={withdrawSource}
+                    onChange={(e) => {
+                      setWithdrawSource(e.target.value);
+                      setWithdrawQuantity('');
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="central">
+                      🏠 Central Hub — {selectedItem.current_stock ?? 0} available
+                    </option>
+                    {withdrawItemDistributions.map((dist) => (
+                      <option key={dist.distribution_id} value={String(dist.distribution_id)}>
+                        🏪 {dist.stall_name} — {dist.quantity_allocated} available
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowWithdrawModal(false);
-                    setWithdrawQuantity('');
-                    setWithdrawReason('');
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Processing...' : 'Confirm Withdrawal'}
-                </button>
-              </div>
-            </form>
+                {/* Insufficient stock warning */}
+                {isInsufficient && (
+                  <div className="bg-red-50 border border-red-300 rounded-lg p-3">
+                    <p className="text-sm text-red-700 font-medium">
+                      ⛔ No stock available at this location. Select a different source or add stock first.
+                    </p>
+                  </div>
+                )}
+
+                {/* Quantity */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity to Withdraw *
+                  </label>
+                  <input
+                    type="number"
+                    value={withdrawQuantity}
+                    onChange={(e) => setWithdrawQuantity(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    min="1"
+                    max={availableQty}
+                    required
+                    disabled={isInsufficient}
+                    placeholder={isInsufficient ? 'No stock available' : 'Enter quantity'}
+                  />
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={withdrawReason}
+                    onChange={(e) => setWithdrawReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="E.g., Personal use, Gift, etc."
+                    disabled={isInsufficient}
+                  />
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-xs text-yellow-800">
+                    ⚠️ This will permanently reduce the available stock by the specified quantity.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWithdrawModal(false);
+                      setWithdrawQuantity('');
+                      setWithdrawReason('');
+                      setWithdrawSource('central');
+                      setWithdrawItemDistributions([]);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isInsufficient}
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Processing...' : 'Confirm Withdrawal'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Withdraw from Distribution Modal */}
       {
