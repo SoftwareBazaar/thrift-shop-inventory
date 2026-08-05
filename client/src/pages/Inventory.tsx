@@ -596,6 +596,8 @@ const Inventory: React.FC = () => {
       setWithdrawReason('');
       setWithdrawSource('central');
       setWithdrawItemDistributions([]);
+      // Small delay to let Supabase propagate the write before re-fetching
+      await new Promise(resolve => setTimeout(resolve, 600));
       await fetchItems();
 
       // Update selectedItem immediately so UI reflects the change

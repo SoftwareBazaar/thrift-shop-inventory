@@ -462,23 +462,8 @@ export const offlineDataApi = {
     try {
       if (navigator.onLine) {
         const result = await dataApi.withdrawFromDistribution(distributionId, quantityToWithdraw);
-
-        // Refresh cached data after withdrawal
-        const inventory = await dataApi.getInventory();
-        if (inventory.items) {
-          for (const item of inventory.items) {
-            await offlineStorage.saveItem(item);
-          }
-        }
-
-        const distributions = await dataApi.getDistributions();
-        if (distributions.distributions) {
-          // Clear and refresh distributions
-          for (const dist of distributions.distributions) {
-            await offlineStorage.saveDistribution(dist);
-          }
-        }
-
+        // Don't pre-fetch inventory here — the component calls fetchItems() after
+        // the modal closes, which will get the fresh value from Supabase.
         return result;
       } else {
         // Offline: queue for sync
