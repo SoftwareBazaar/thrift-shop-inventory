@@ -1288,7 +1288,7 @@ export const dbApi = {
     }
 
     try {
-      // 1. Get the existing distribution
+      // 1. Fetch the distribution row
       const { data: existingDist, error: fetchError } = await (supabase as any)
         .from('stock_distribution')
         .select('*')
@@ -1299,108 +1299,97 @@ export const dbApi = {
 
       const itemId = existingDist.item_id;
       const stallId = existingDist.stall_id;
-      const currentQuantity = existingDist.quantity_allocated;
+      const currentQty = existingDist.quantity_allocated;
       const withdrawnBy = getCurrentUserId();
 
-      // Validate quantity
-      if (quantityToWithdraw <= 0) {
-        throw new Error('Withdrawal quantity must be greater than 0');
-      }
+      if (quantityToWithdraw <= 0) throw new Error('Withdrawal quantity must be greater than 0');
+      // Clamp to what's available in this batch
+      const actualWithdraw = Math.min(quantityToWithdraw, currentQty);
+      const newQty = currentQty - actualWithdraw;
 
-      if (quantityToWithdraw > currentQuantity) {
-        throw new Error(`Cannot withdraw ${quantityToWithdraw} items. Only ${currentQuantity} items are distributed to this user.`);
-      }
+      console.log(`[WFD] dist=${distributionId} item=${itemId} stall=${stallId} currentQty=${currentQty} withdraw=${actualWithdraw} newQty=${newQty}`);
 
-      // Update or delete the distribution FIRST (before inserting withdrawal)
-      // so the FK constraint (stock_withdrawals_distribution_id_fkey) isn't violated
-      // on a full withdrawal where the distribution row gets deleted.
-      const isFullWithdrawal = quantityToWithdraw === currentQuantity;
-
-      if (isFullWithdrawal) {
-        // Full withdrawal - delete the distribution row first
+      // 2. Reduce or delete the distribution row
+      if (newQty <= 0) {
         const { error: deleteError } = await (supabase as any)
           .from('stock_distribution')
           .delete()
           .eq('distribution_id', distributionId);
-
-        if (deleteError) throw deleteError;
+        if (deleteError) throw new Error(`Delete distribution failed: ${deleteError.message}`);
+        console.log(`[WFD] Deleted distribution row ${distributionId}`);
       } else {
-        // Partial withdrawal - reduce the allocated quantity
-        const newQuantity = currentQuantity - quantityToWithdraw;
         const { error: updateError } = await (supabase as any)
           .from('stock_distribution')
-          .update({ quantity_allocated: newQuantity })
+          .update({ quantity_allocated: newQty })
           .eq('distribution_id', distributionId);
-
-        if (updateError) throw updateError;
+        if (updateError) throw new Error(`Update distribution failed: ${updateError.message}`);
+        console.log(`[WFD] Updated distribution row ${distributionId} qty ${currentQty} -> ${newQty}`);
       }
 
-      // Record in unified withdrawal history AFTER the distribution row is
-      // handled. For a full withdrawal the distribution no longer exists, so
-      // pass distribution_id as null to avoid a dangling FK reference.
-      // NOTE: Insert directly — do NOT go through createWithdrawal/withdraw_stock_atomic
-      // because that RPC subtracts from current_stock. For a stall→central return,
-      // recomputeItemTotals (below) will correctly add the stock back to central.
+      // 3. Record withdrawal history (direct insert — bypass withdraw_stock_atomic
+      //    which would subtract from current_stock instead of returning to central)
       const { data: insertedWithdrawal, error: withdrawalInsertError } = await (supabase as any)
         .from('stock_withdrawals')
         .insert([{
           item_id: itemId,
-          quantity_withdrawn: quantityToWithdraw,
+          quantity_withdrawn: actualWithdraw,
           reason: 'Returned to central hub',
           withdrawn_by: withdrawnBy,
           stall_id: stallId,
-          distribution_id: isFullWithdrawal ? null : distributionId,
-          notes: `↩️ Returned from stall to central hub (${quantityToWithdraw} units).`
+          distribution_id: newQty <= 0 ? null : distributionId,
+          notes: `↩️ Returned ${actualWithdraw} units from stall to central hub.`
         }])
         .select()
         .single();
 
-      if (withdrawalInsertError) throw withdrawalInsertError;
+      if (withdrawalInsertError) throw new Error(`Insert withdrawal failed: ${withdrawalInsertError.message}`);
+      console.log(`[WFD] Inserted withdrawal record id=${insertedWithdrawal?.withdrawal_id}`);
 
-      const withdrawalId = insertedWithdrawal?.withdrawal_id ?? null;
-
-      // Recompute item totals using client-side replay (bypass the RPC which may
-      // subtract stall withdrawal qty from central stock instead of ignoring it).
-      const { data: freshItemRaw, error: itemFetchError } = await (supabase as any)
-        .from('items').select('*').eq('item_id', itemId).single();
-      if (itemFetchError || !freshItemRaw) throw new Error('Item not found after withdrawal');
-
+      // 4. Recompute central stock from scratch using client-side replay
+      //    (avoids any Supabase RPC that may incorrectly handle stall returns)
       const [addRes, distRes, cSalesRes, wdRes] = await Promise.all([
-        (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
-        (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', itemId),
-        (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
-        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', itemId)
+        (supabase as any).from('stock_additions').select('quantity_added,date_added,addition_id').eq('item_id', itemId),
+        (supabase as any).from('stock_distribution').select('quantity_allocated,date_distributed,distribution_id').eq('item_id', itemId),
+        (supabase as any).from('sales').select('quantity_sold,date_time,sale_id').eq('item_id', itemId).is('stall_id', null),
+        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn,date_withdrawn,withdrawal_id,stall_id').eq('item_id', itemId)
       ]);
+
       if (addRes.error || distRes.error || cSalesRes.error || wdRes.error) {
         throw new Error('Failed to load stock history for recompute');
       }
+
       const totalAdded = (addRes.data || []).reduce((s: number, a: any) => s + (a.quantity_added || 0), 0);
       const totalAllocated = (distRes.data || []).reduce((s: number, d: any) => s + (d.quantity_allocated || 0), 0);
+
       const replayEvents = buildStockEventsFromHistory({
         additions: addRes.data || [],
         distributions: distRes.data || [],
         withdrawals: wdRes.data || [],
         centralSales: cSalesRes.data || []
       });
-      const newCentralStock = computeCentralStockReplay(freshItemRaw.initial_stock || 0, replayEvents);
 
-      const { error: updateError } = await (supabase as any)
+      const { data: itemRow } = await (supabase as any).from('items').select('initial_stock').eq('item_id', itemId).single();
+      const newCentralStock = computeCentralStockReplay(itemRow?.initial_stock || 0, replayEvents);
+
+      console.log(`[WFD] Recomputed: totalAdded=${totalAdded} totalAllocated=${totalAllocated} newCentralStock=${newCentralStock}`);
+
+      const { error: updateItemError } = await (supabase as any)
         .from('items')
         .update({ total_added: totalAdded, total_allocated: totalAllocated, current_stock: newCentralStock })
         .eq('item_id', itemId);
-      if (updateError) throw updateError;
 
-      console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${newCentralStock}`);
+      if (updateItemError) throw new Error(`Update item stock failed: ${updateItemError.message}`);
+      console.log(`[WFD] items.current_stock updated to ${newCentralStock} for item ${itemId}`);
 
       return {
         success: true,
-        withdrawnQuantity: quantityToWithdraw,
-        remainingDistribution: quantityToWithdraw === currentQuantity ? 0 : currentQuantity - quantityToWithdraw,
-        withdrawalId: withdrawalId,
+        withdrawnQuantity: actualWithdraw,
+        remainingDistribution: newQty,
+        withdrawalId: insertedWithdrawal?.withdrawal_id ?? null,
         stallName: existingDist.stall_name ?? stallId,
       };
     } catch (error) {
-      console.error('Error withdrawing from distribution:', error);
+      console.error('[WFD] Error:', error);
       throw error;
     }
   },
