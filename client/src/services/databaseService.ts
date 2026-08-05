@@ -1390,7 +1390,6 @@ export const dbApi = {
         .eq('item_id', itemId);
       if (updateError) throw updateError;
 
-      const freshItem = { ...freshItemRaw, total_added: totalAdded, total_allocated: totalAllocated, current_stock: newCentralStock };
       console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${newCentralStock}`);
 
       return {
