@@ -539,11 +539,13 @@ const Inventory: React.FC = () => {
         return;
       }
     } else {
-      // Stall withdrawal — look up the aggregated stall entry
+      // Stall withdrawal — compute remaining using allocated - sold (same formula as table)
+      const stallSold = salesAggregates.byItemStall[`${selectedItem.item_id}-${withdrawSource}`] ?? 0;
       const stallBatches = withdrawItemDistributions.filter(
         (d) => String(d.stall_id) === withdrawSource
       );
-      const totalAvailable = stallBatches.reduce((sum, d) => sum + (d.quantity_allocated || 0), 0);
+      const totalAllocated = stallBatches.reduce((sum, d) => sum + (d.quantity_allocated || 0), 0);
+      const totalAvailable = Math.max(0, totalAllocated - stallSold);
       const stallName = stallBatches[0]?.stall_name ?? `Stall #${withdrawSource}`;
 
       if (!stallBatches.length) {
@@ -1873,23 +1875,37 @@ const Inventory: React.FC = () => {
 
       {/* Owner Withdrawal Modal */}
       {showWithdrawModal && selectedItem && (() => {
-        // Aggregate distribution batches by stall — one entry per stall with total qty
-        const stallOptionsMap = new Map<number, { stall_id: number; stall_name: string; total: number }>();
-        withdrawItemDistributions.forEach((d) => {
-          const sid = Number(d.stall_id);
+        // Compute per-stall remaining using the same formula as the inventory table:
+        //   remaining = allocated_to_stall - stall_sold, reconciled to distributedLive
+        const stallSoldForSelected = getItemsSold(selectedItem.item_id, selectedItem.item_name, true);
+        const distributedLiveSelected = Math.max(0, (selectedItem.total_allocated || 0) - stallSoldForSelected);
+
+        const allocs = stallAllocMap.get(selectedItem.item_id) || [];
+        const byStallId = new Map<number, number>();
+        allocs.forEach((a: { stall_id?: number; quantity_allocated: number }) => {
+          const sid = Number(a.stall_id);
           if (!sid) return;
-          const existing = stallOptionsMap.get(sid);
-          if (existing) {
-            existing.total += d.quantity_allocated || 0;
-          } else {
-            stallOptionsMap.set(sid, {
-              stall_id: sid,
-              stall_name: d.stall_name || `Stall #${sid}`,
-              total: d.quantity_allocated || 0,
-            });
-          }
+          byStallId.set(sid, (byStallId.get(sid) || 0) + (a.quantity_allocated || 0));
         });
-        const stallOptions = Array.from(stallOptionsMap.values());
+
+        const rawStallEntries = stalls
+          .filter(s => byStallId.has(s.stall_id))
+          .map(s => ({
+            stall_id: s.stall_id,
+            name: s.stall_name,
+            rawRemaining: Math.max(0, (byStallId.get(s.stall_id) || 0) - getStallSold(selectedItem.item_id, s.stall_id))
+          }));
+
+        const reconciled = reconcileStallRemainings(
+          rawStallEntries.map(e => ({ name: e.name, rawRemaining: e.rawRemaining })),
+          distributedLiveSelected
+        );
+
+        const stallOptions = rawStallEntries.map((e, i) => ({
+          stall_id: e.stall_id,
+          stall_name: e.name,
+          total: reconciled[i]?.remaining ?? 0
+        }));
 
         const selectedStall = withdrawSource !== 'central'
           ? stallOptions.find((s) => String(s.stall_id) === withdrawSource)
