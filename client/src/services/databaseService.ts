@@ -1359,9 +1359,39 @@ export const dbApi = {
 
       const withdrawalId = insertedWithdrawal?.withdrawal_id ?? null;
 
-      // 3. Recompute item totals from history (returns stock to central hub)
-      const freshItem = await recomputeItemTotals(itemId);
-      console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${(freshItem as any).current_stock}`);
+      // Recompute item totals using client-side replay (bypass the RPC which may
+      // subtract stall withdrawal qty from central stock instead of ignoring it).
+      const { data: freshItemRaw, error: itemFetchError } = await (supabase as any)
+        .from('items').select('*').eq('item_id', itemId).single();
+      if (itemFetchError || !freshItemRaw) throw new Error('Item not found after withdrawal');
+
+      const [addRes, distRes, cSalesRes, wdRes] = await Promise.all([
+        (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
+        (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', itemId),
+        (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
+        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', itemId)
+      ]);
+      if (addRes.error || distRes.error || cSalesRes.error || wdRes.error) {
+        throw new Error('Failed to load stock history for recompute');
+      }
+      const totalAdded = (addRes.data || []).reduce((s: number, a: any) => s + (a.quantity_added || 0), 0);
+      const totalAllocated = (distRes.data || []).reduce((s: number, d: any) => s + (d.quantity_allocated || 0), 0);
+      const replayEvents = buildStockEventsFromHistory({
+        additions: addRes.data || [],
+        distributions: distRes.data || [],
+        withdrawals: wdRes.data || [],
+        centralSales: cSalesRes.data || []
+      });
+      const newCentralStock = computeCentralStockReplay(freshItemRaw.initial_stock || 0, replayEvents);
+
+      const { error: updateError } = await (supabase as any)
+        .from('items')
+        .update({ total_added: totalAdded, total_allocated: totalAllocated, current_stock: newCentralStock })
+        .eq('item_id', itemId);
+      if (updateError) throw updateError;
+
+      const freshItem = { ...freshItemRaw, total_added: totalAdded, total_allocated: totalAllocated, current_stock: newCentralStock };
+      console.log(`[Withdraw from Distribution] Returned ${quantityToWithdraw} items to central. New central stock: ${newCentralStock}`);
 
       return {
         success: true,
