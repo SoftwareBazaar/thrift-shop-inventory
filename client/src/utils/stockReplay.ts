@@ -114,13 +114,18 @@ export function summarizeStallReturnLedger(
 ): { stallReturned: number; extraAllocatedAfterStallReturns: number } {
   const stallReturns = (withdrawals || []).filter((w) => w.stall_id != null);
   const stallReturned = stallReturns.reduce((sum, w) => sum + (Number(w.quantity_withdrawn) || 0), 0);
-  const lastReturnTs = stallReturns.reduce((max, w) => {
-    const ts = w.date_withdrawn ? new Date(w.date_withdrawn).getTime() : 0;
-    return Number.isFinite(ts) ? Math.max(max, ts) : max;
+  const firstReturnTs = stallReturns.reduce((min, w) => {
+    const ts = w.date_withdrawn ? new Date(w.date_withdrawn).getTime() : NaN;
+    if (!Number.isFinite(ts)) return min;
+    return min === 0 ? ts : Math.min(min, ts);
   }, 0);
-  const extraAllocatedAfterStallReturns = lastReturnTs
+  // Count new distributions after the *first* stall return, not the latest.
+  // Using the latest return ignored redistributes that happened in between,
+  // so a later withdraw would add onto the pre-redistribute total (5+1=6
+  // instead of 3+1=4).
+  const extraAllocatedAfterStallReturns = firstReturnTs
     ? (distributions || [])
-        .filter((d) => d.date_distributed && new Date(d.date_distributed).getTime() > lastReturnTs)
+        .filter((d) => d.date_distributed && new Date(d.date_distributed).getTime() > firstReturnTs)
         .reduce((sum, d) => sum + (Number(d.quantity_allocated) || 0), 0)
     : 0;
   return { stallReturned, extraAllocatedAfterStallReturns };
