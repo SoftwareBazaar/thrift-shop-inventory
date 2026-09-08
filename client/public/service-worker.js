@@ -1,8 +1,22 @@
 // Service Worker for Offline Support and Caching
-// Version: 11.0 - Withdrawal source tracking (central vs stall)
-const CACHE_NAME = 'thrift-shop-v11';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v11';
+// Version: 12.0 - Network-first for all Supabase API reads
+const CACHE_NAME = 'thrift-shop-v12';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v12';
 const OFFLINE_URL = '/index.html';
+
+function isSupabaseRequest(url) {
+  return url.hostname.endsWith('supabase.co');
+}
+
+async function clearSupabaseRuntimeCache() {
+  const cache = await caches.open(RUNTIME_CACHE);
+  const keys = await cache.keys();
+  await Promise.all(
+    keys
+      .filter((req) => req.url.includes('supabase.co'))
+      .map((req) => cache.delete(req))
+  );
+}
 
 // Files to cache for offline access
 const STATIC_CACHE_URLS = [
@@ -60,6 +74,39 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Supabase REST/Auth/RPC: never serve a cached GET after a write.
+  // Mutations pass through; we then drop any cached supabase.co entries.
+  if (isSupabaseRequest(url)) {
+    if (request.method !== 'GET') {
+      event.waitUntil(
+        (async () => {
+          try {
+            await clearSupabaseRuntimeCache();
+          } catch (error) {
+            console.error('[Service Worker] Failed to clear Supabase cache:', error);
+          }
+        })()
+      );
+      return;
+    }
+
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).catch(() => {
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            console.log('[Service Worker] Supabase offline fallback:', request.url);
+            return cachedResponse;
+          }
+          return new Response(
+            JSON.stringify({ message: 'Offline - Unable to reach database.' }),
+            { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'application/json' } }
+          );
+        });
+      })
+    );
+    return;
+  }
 
   // Skip non-GET requests
   if (request.method !== 'GET') {
@@ -184,6 +231,10 @@ self.addEventListener('message', (event) => {
         return cache.addAll(event.data.urls);
       })
     );
+  }
+
+  if (event.data && event.data.type === 'CLEAR_SUPABASE_CACHE') {
+    event.waitUntil(clearSupabaseRuntimeCache());
   }
 });
 

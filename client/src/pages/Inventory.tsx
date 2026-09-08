@@ -98,7 +98,7 @@ const Inventory: React.FC = () => {
   } | null>(null);
   const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchAllStallAllocations = useCallback(async (itemList: any[]) => {
+  const fetchAllStallAllocations = useCallback(async (itemList: any[], options?: { merge?: boolean }) => {
     if (user?.role !== 'admin' || itemList.length === 0) return;
     try {
       const results = await Promise.all(
@@ -108,17 +108,21 @@ const Inventory: React.FC = () => {
             .catch(() => ({ item_id: item.item_id, distributions: [] }))
         )
       );
-      const map = new Map<number, { stall_name: string; quantity_allocated: number }[]>();
-      results.forEach(({ item_id, distributions }) => {
-        map.set(item_id, distributions);
+      setStallAllocMap(prev => {
+        const map = options?.merge
+          ? new Map(prev)
+          : new Map<number, { stall_name: string; quantity_allocated: number }[]>();
+        results.forEach(({ item_id, distributions }) => {
+          map.set(item_id, distributions);
+        });
+        return map;
       });
-      setStallAllocMap(map);
     } catch (error) {
       console.error('Error fetching stall allocations:', error);
     }
   }, [user?.role]);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (options?: { skipStallAllocations?: boolean }) => {
     try {
       // For non-admin users, pass their stall_id to get only distributed stock
       const stallId = user?.role !== 'admin' && user?.stall_id ? user.stall_id : undefined;
@@ -131,12 +135,13 @@ const Inventory: React.FC = () => {
         a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
       );
       setItems(sortedItems);
-      // Refresh stall allocations whenever items are fetched (admin only)
-      if (user?.role === 'admin') {
+      if (user?.role === 'admin' && !options?.skipStallAllocations) {
         fetchAllStallAllocations(sortedItems);
       }
+      return sortedItems;
     } catch (error) {
       console.error('Error fetching items:', error);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -225,6 +230,49 @@ const Inventory: React.FC = () => {
       setIsRefreshingWithdrawals(false);
     }
   }, []);
+
+  const notifyServiceWorkerToClearSupabaseCache = () => {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_SUPABASE_CACHE' });
+    }
+  };
+
+  const refreshAfterMutation = useCallback(async (affectedItemId?: number) => {
+    notifyServiceWorkerToClearSupabaseCache();
+    const sortedItems = await fetchItems({ skipStallAllocations: true });
+    if (user?.role === 'admin') {
+      if (affectedItemId != null) {
+        await fetchAllStallAllocations([{ item_id: affectedItemId }], { merge: true });
+        fetchAllStallAllocations(sortedItems);
+      } else {
+        await fetchAllStallAllocations(sortedItems);
+      }
+    }
+    if (affectedItemId != null) {
+      const updatedItem = sortedItems.find((item: any) => item.item_id === affectedItemId);
+      if (updatedItem) {
+        setSelectedItem(updatedItem);
+      }
+    }
+    if (expandedItemId) {
+      await fetchItemDistributions(expandedItemId);
+      if (user?.role === 'admin') {
+        await Promise.all([
+          fetchItemStockAdditions(expandedItemId),
+          fetchItemStockWithdrawals(expandedItemId),
+        ]);
+      }
+    }
+    return sortedItems;
+  }, [
+    fetchItems,
+    fetchAllStallAllocations,
+    fetchItemDistributions,
+    fetchItemStockAdditions,
+    fetchItemStockWithdrawals,
+    expandedItemId,
+    user?.role,
+  ]);
 
   const toggleExpand = (itemId: number) => {
     setExpandedItemId(prev => prev === itemId ? null : itemId);
@@ -318,15 +366,7 @@ const Inventory: React.FC = () => {
         distributions: [],
         notes: ''
       });
-      await fetchItems(); // Refresh items
-      
-      // Update selectedItem with the newly fetched data so UI reflects the change immediately
-      const response = await dataApi.getInventory();
-      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
-      if (updatedItem) {
-        setSelectedItem(updatedItem);
-      }
-      
+      await refreshAfterMutation(selectedItem.item_id);
       alert('Stock distributed successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || error.message || 'Failed to distribute stock. Please check available stock.');
@@ -380,8 +420,7 @@ const Inventory: React.FC = () => {
       await dataApi.updateDistribution(editingDist.distribution_id, quantity, stallId);
       setShowEditDistModal(false);
       setEditingDist(null);
-      await fetchItems(); // Refresh inventory
-      if (expandedItemId) await fetchItemDistributions(expandedItemId); // Refresh distribution list
+      await refreshAfterMutation(editingDist.item_id ?? expandedItemId ?? undefined);
       alert('Distribution updated successfully!');
     } catch (error: any) {
       alert(error.message || 'Failed to update distribution');
@@ -397,8 +436,7 @@ const Inventory: React.FC = () => {
 
     try {
       await dataApi.deleteDistribution(dist.distribution_id);
-      fetchItems(); // Refresh inventory
-      if (expandedItemId) fetchItemDistributions(expandedItemId); // Refresh distribution list
+      await refreshAfterMutation(dist.item_id ?? expandedItemId ?? undefined);
       alert('Distribution deleted and stock returned to hub.');
     } catch (error: any) {
       alert(error.message || 'Failed to delete distribution');
@@ -412,8 +450,7 @@ const Inventory: React.FC = () => {
 
     try {
       await dataApi.deleteStockAddition(addition.addition_id);
-      fetchItems(); // Refresh inventory
-      if (expandedItemId) fetchItemStockAdditions(expandedItemId); // Refresh list
+      await refreshAfterMutation(addition.item_id ?? expandedItemId ?? undefined);
       alert('Stock addition deleted successfully.');
     } catch (error: any) {
       alert(error.message || 'Failed to delete stock addition');
@@ -443,8 +480,7 @@ const Inventory: React.FC = () => {
       setShowWithdrawFromDistModal(false);
       setWithdrawFromDist(null);
       setWithdrawFromDistQty('');
-      await fetchItems();
-      if (expandedItemId) await fetchItemDistributions(expandedItemId);
+      await refreshAfterMutation(capturedItemId ?? undefined);
 
       // Show undo toast if we have a withdrawal_id to reverse
       if (result?.withdrawalId) {
@@ -472,8 +508,7 @@ const Inventory: React.FC = () => {
     setUndoToast(null);
     try {
       await dataApi.deleteStockWithdrawal(undoToast.withdrawalId);
-      await fetchItems();
-      if (expandedItemId) await fetchItemDistributions(expandedItemId);
+      await refreshAfterMutation(undoToast.itemId);
     } catch (error: any) {
       alert(error.message || 'Failed to undo withdrawal');
     }
@@ -499,15 +534,7 @@ const Inventory: React.FC = () => {
 
       setShowAddStockModal(false);
       setAddStockQuantity('');
-      await fetchItems(); // Refresh items
-      
-      // Update selectedItem with the newly fetched data so UI reflects the change immediately
-      const response = await dataApi.getInventory();
-      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
-      if (updatedItem) {
-        setSelectedItem(updatedItem);
-      }
-      
+      await refreshAfterMutation(selectedItem.item_id);
       alert('Stock added successfully!');
     } catch (error: any) {
       console.error('Error adding stock:', error);
@@ -564,22 +591,26 @@ const Inventory: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      if (withdrawSource === 'central') {
+      const itemId = selectedItem.item_id;
+      const itemName = selectedItem.item_name;
+      const sourceAtSubmit = withdrawSource;
+      let successMessage = '';
+      if (sourceAtSubmit === 'central') {
         // Central Hub withdrawal
         await dataApi.createWithdrawal({
-          item_id: selectedItem.item_id,
+          item_id: itemId,
           quantity_withdrawn: quantityToWithdraw,
           reason: withdrawReason || 'General withdrawal',
           withdrawn_by: user.user_id,
           notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
         });
-        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from central hub.`);
+        successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from central hub.`;
       } else {
         // Stall withdrawal — drain distribution batches oldest-first until qty is satisfied
         const stallBatches = withdrawItemDistributions
-          .filter((d) => String(d.stall_id) === withdrawSource)
+          .filter((d) => String(d.stall_id) === sourceAtSubmit)
           .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
-        const stallName = stallBatches[0]?.stall_name ?? `Stall #${withdrawSource}`;
+        const stallName = stallBatches[0]?.stall_name ?? `Stall #${sourceAtSubmit}`;
 
         let remaining = quantityToWithdraw;
         for (const batch of stallBatches) {
@@ -588,26 +619,57 @@ const Inventory: React.FC = () => {
           await dataApi.withdrawFromDistribution(batch.distribution_id, take);
           remaining -= take;
         }
-        alert(`✅ Successfully withdrew ${quantityToWithdraw} ${selectedItem.item_name}(s) from ${stallName} back to central hub.`);
+        successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from ${stallName} back to central hub.`;
       }
+
+      alert(successMessage);
 
       setShowWithdrawModal(false);
       setWithdrawQuantity('');
       setWithdrawReason('');
       setWithdrawSource('central');
       setWithdrawItemDistributions([]);
-      // Small delay to let Supabase propagate the write before re-fetching
-      await new Promise(resolve => setTimeout(resolve, 600));
-      await fetchItems();
 
-      // Update selectedItem immediately so UI reflects the change
-      const response = await dataApi.getInventory();
-      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
-      if (updatedItem) {
-        setSelectedItem(updatedItem);
+      if (sourceAtSubmit !== 'central') {
+        const stallId = Number(sourceAtSubmit);
+        setItems((prev) =>
+          prev.map((item) =>
+            item.item_id === itemId
+              ? {
+                  ...item,
+                  current_stock: (item.current_stock || 0) + quantityToWithdraw,
+                  total_allocated: Math.max(0, (item.total_allocated || 0) - quantityToWithdraw)
+                }
+              : item
+          )
+        );
+        setSelectedItem((prev) =>
+          prev && prev.item_id === itemId
+            ? {
+                ...prev,
+                current_stock: (prev.current_stock || 0) + quantityToWithdraw,
+                total_allocated: Math.max(0, (prev.total_allocated || 0) - quantityToWithdraw)
+              }
+            : prev
+        );
+        setStallAllocMap((prev) => {
+          const next = new Map(prev);
+          const allocs = [...(next.get(itemId) || [])];
+          let left = quantityToWithdraw;
+          next.set(
+            itemId,
+            allocs.map((a: any) => {
+              if (left <= 0 || Number(a.stall_id) !== stallId) return a;
+              const take = Math.min(left, a.quantity_allocated || 0);
+              left -= take;
+              return { ...a, quantity_allocated: (a.quantity_allocated || 0) - take };
+            })
+          );
+          return next;
+        });
       }
-      // Refresh distribution list if item is currently expanded
-      if (expandedItemId) await fetchItemDistributions(expandedItemId);
+
+      await refreshAfterMutation(itemId);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
       alert(error.message || 'Failed to withdraw stock. Please try again.');
@@ -657,15 +719,7 @@ const Inventory: React.FC = () => {
       });
 
       setShowEditModal(false);
-      await fetchItems(); // Refresh items - this will sync to all users
-      
-      // Update selectedItem with the newly fetched data so UI reflects the change immediately
-      const response = await dataApi.getInventory();
-      const updatedItem = response.items.find((item: Item) => item.item_id === selectedItem.item_id);
-      if (updatedItem) {
-        setSelectedItem(updatedItem);
-      }
-      
+      await refreshAfterMutation(selectedItem.item_id);
       alert('Item updated successfully!');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to update item');
@@ -1415,8 +1469,7 @@ const Inventory: React.FC = () => {
                                                   if (window.confirm(`Delete withdrawal of ${withdrawal.quantity_withdrawn} units?`)) {
                                                     dataApi.deleteStockWithdrawal(withdrawal.withdrawal_id)
                                                       .then(() => {
-                                                        fetchItems();
-                                                        if (expandedItemId) fetchItemStockWithdrawals(expandedItemId);
+                                                        refreshAfterMutation(withdrawal.item_id ?? expandedItemId ?? undefined);
                                                         alert('Withdrawal deleted successfully.');
                                                       })
                                                       .catch((error) => {

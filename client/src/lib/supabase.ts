@@ -11,6 +11,10 @@ console.log('[Supabase Config] REACT_APP_SUPABASE_URL value:', supabaseUrl ? `${
 console.log('[Supabase Config] REACT_APP_SUPABASE_ANON_KEY exists:', !!supabaseAnonKey);
 console.log('[Supabase Config] REACT_APP_SUPABASE_ANON_KEY length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
 
+// Bypass HTTP/service-worker caches so stock mutations are visible on the next read.
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: 'no-store' });
+
 // Create Supabase client (or dummy if credentials missing)
 let supabase: ReturnType<typeof createClient>;
 
@@ -20,6 +24,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // Create a dummy client to prevent runtime errors
   // Use 'as any' to bypass TypeScript type checking since this won't be used
   supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', {
+    global: { fetch: noStoreFetch },
     realtime: {
       params: {
         eventsPerSecond: 10,
@@ -31,6 +36,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.log('📡 Project URL:', supabaseUrl);
   // Create real Supabase client
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { fetch: noStoreFetch },
     realtime: {
       params: {
         eventsPerSecond: 10,

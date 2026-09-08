@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
 import { syncOfflineUserProfile } from '../utils/offlineCredentials';
 import { derivePasswordHash } from '../utils/passwordUtils';
-import { buildStockEventsFromHistory, computeCentralStockReplay } from '../utils/stockReplay';
+import { computeCentralAvailable, summarizeStallReturnLedger } from '../utils/stockReplay';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -244,13 +244,20 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
 
   const totalAdded = additions.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
   const totalAllocated = distributions.reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
-  const events = buildStockEventsFromHistory({
-    additions,
-    distributions,
-    withdrawals,
-    centralSales
+  const totalCentralSold = centralSales.reduce((sum: number, s: any) => sum + (s.quantity_sold || 0), 0);
+  const centralWithdrawn = withdrawals
+    .filter((w: any) => w.stall_id == null)
+    .reduce((sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
+  const stallLedger = summarizeStallReturnLedger(distributions, withdrawals);
+  const currentStock = computeCentralAvailable({
+    initialStock: item.initial_stock || 0,
+    added: totalAdded,
+    allocated: totalAllocated,
+    centralSold: totalCentralSold,
+    centralWithdrawn,
+    stallReturned: stallLedger.stallReturned,
+    extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
   });
-  const currentStock = computeCentralStockReplay(item.initial_stock || 0, events);
 
   const { data: updated, error: updateError } = await (supabase as any)
     .from('items')
@@ -802,34 +809,25 @@ export const dbApi = {
           const totalCentralSold = centralSales.reduce(
             (sum: number, sale: any) => sum + (sale.quantity_sold || 0), 0);
 
-          const totalWithdrawn = withdrawals.reduce(
-            (sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
-
+          const centralWithdrawn = withdrawals
+            .filter((w: any) => w.stall_id == null)
+            .reduce((sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
+          const stallLedger = summarizeStallReturnLedger(distributions, withdrawals);
           const totalReceived = initialStock + totalAdded;
 
-          const adminStock = computeCentralStockReplay(initialStock, buildStockEventsFromHistory({
-            additions,
-            distributions,
-            withdrawals,
-            centralSales
-          }));
+          const displayedStock = computeCentralAvailable({
+            initialStock,
+            added: totalAdded,
+            allocated: totalDistributed,
+            centralSold: totalCentralSold,
+            centralWithdrawn,
+            stallReturned: stallLedger.stallReturned,
+            extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
+          });
 
-          // Update the items table to match reality if it got out of sync
-          if (existingCurrentStock !== adminStock || item.total_added !== totalAdded || item.total_allocated !== totalDistributed) {
-            console.log(`[Admin Stock Sync] Syncing totals for ${item.item_name}: Stock: ${adminStock}, Added: ${totalAdded}, Allocated: ${totalDistributed}`);
-            try {
-              await (supabase as any)
-                .from('items')
-                .update({
-                  current_stock: adminStock,
-                  total_added: totalAdded,
-                  total_allocated: totalDistributed
-                })
-                .eq('item_id', item.item_id);
-            } catch (updateError) {
-              console.warn(`[Admin Stock Sync] Failed for ${item.item_name}:`, updateError);
-            }
-          }
+          // Do not write replay/current_stock back to items here. A DB trigger
+          // or later poll would floor deficit items at 0 and the hub credit
+          // would vanish after a few seconds.
 
           console.log(`[Admin Stock Calc] ${item.item_name} breakdown:
             Initial: ${initialStock}
@@ -838,13 +836,15 @@ export const dbApi = {
             ---
             Distributed: ${totalDistributed}
             Hub Sales: ${totalCentralSold}
-            Withdrawn: ${totalWithdrawn}
+            Central withdrawn: ${centralWithdrawn}
+            Stall returned: ${stallLedger.stallReturned}
+            Dist after returns: ${stallLedger.extraAllocatedAfterStallReturns}
             ---
-            Result Central Stock: ${adminStock}`);
+            Result Central Stock: ${displayedStock} (stored ${existingCurrentStock})`);
 
           return {
             ...item,
-            current_stock: adminStock,
+            current_stock: displayedStock,
             initial_stock: initialStock,
             total_added: totalAdded,
             total_allocated: totalDistributed
@@ -1116,20 +1116,59 @@ export const dbApi = {
         return { distributions: rpcData || [] };
       }
 
-      if (!isMissingFunctionError(rpcError)) {
+      const insufficientOnServer = /insufficient|available|over-alloc|not enough/i.test(rpcError.message || '');
+      if (!isMissingFunctionError(rpcError) && !insufficientOnServer) {
         console.error('[Distribute Stock] Atomic RPC error:', rpcError);
         throw new Error(rpcError.message || 'Failed to distribute stock.');
       }
 
-      // Fallback (atomic function not installed yet): recompute available
-      // stock from history first so a stale items.current_stock can never
-      // block or over-allow a distribution.
-      console.warn('[Distribute Stock] distribute_stock_atomic_v2 not installed, using fallback path');
+      // Fallback: server replay can report 0 hub stock on over-allocated items
+      // even when stall→hub returns are sitting in the UI as available.
+      console.warn('[Distribute Stock] Using client availability path:', rpcError.message);
 
-      const freshItem = await recomputeItemTotals(distributionData.item_id);
-      const currentStock = Number((freshItem as any).current_stock || 0);
-      if (currentStock < totalToDistribute) {
-        throw new Error(`Insufficient stock! Available: ${currentStock}, Requested: ${totalToDistribute}`);
+      const { data: itemRow, error: itemErr } = await (supabase as any)
+        .from('items')
+        .select('initial_stock')
+        .eq('item_id', distributionData.item_id)
+        .single();
+      if (itemErr || !itemRow) throw new Error('Item not found.');
+
+      const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
+        (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', distributionData.item_id),
+        (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed').eq('item_id', distributionData.item_id),
+        (supabase as any).from('sales').select('quantity_sold').eq('item_id', distributionData.item_id).is('stall_id', null),
+        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, stall_id').eq('item_id', distributionData.item_id)
+      ]);
+      if (additionsRes.error || distributionsRes.error || centralSalesRes.error || withdrawalsRes.error) {
+        throw new Error('Failed to load stock history for distribution.');
+      }
+
+      const added = (additionsRes.data || []).reduce((s: number, a: any) => s + (a.quantity_added || 0), 0);
+      const allocated = (distributionsRes.data || []).reduce((s: number, d: any) => s + (d.quantity_allocated || 0), 0);
+      const centralSold = (centralSalesRes.data || []).reduce((s: number, a: any) => s + (a.quantity_sold || 0), 0);
+      const centralWithdrawn = (withdrawalsRes.data || [])
+        .filter((w: any) => w.stall_id == null)
+        .reduce((s: number, w: any) => s + (w.quantity_withdrawn || 0), 0);
+      const stallLedger = summarizeStallReturnLedger(distributionsRes.data || [], withdrawalsRes.data || []);
+      const available = computeCentralAvailable({
+        initialStock: itemRow.initial_stock || 0,
+        added,
+        allocated,
+        centralSold,
+        centralWithdrawn,
+        stallReturned: stallLedger.stallReturned,
+        extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
+      });
+      if (available < totalToDistribute) {
+        throw new Error(`Insufficient stock! Available: ${available}, Requested: ${totalToDistribute}`);
+      }
+
+      const { error: creditError } = await (supabase as any)
+        .from('items')
+        .update({ current_stock: available })
+        .eq('item_id', distributionData.item_id);
+      if (creditError) {
+        console.warn('[Distribute Stock] Could not stage hub stock before insert:', creditError);
       }
 
       const distributions = validDistributions.map(dist => ({
@@ -1290,10 +1329,27 @@ export const dbApi = {
     try {
       const withdrawnBy = getCurrentUserId();
 
+      const { data: distBefore } = await (supabase as any)
+        .from('stock_distribution')
+        .select('item_id, stall_id')
+        .eq('distribution_id', distributionId)
+        .maybeSingle();
+
+      const itemId = distBefore?.item_id;
+      let stockBefore = 0;
+      if (itemId) {
+        const { data: itemBefore } = await (supabase as any)
+          .from('items')
+          .select('current_stock')
+          .eq('item_id', itemId)
+          .single();
+        stockBefore = Number(itemBefore?.current_stock) || 0;
+      }
+
       // Call the server-side RPC which atomically:
       // 1. Reduces/deletes the distribution row
       // 2. Inserts the withdrawal history record
-      // 3. Recomputes central stock via compute_central_stock_replay
+      // 3. Recomputes central stock via compute_central_stock_replay (may stay 0)
       const { data, error } = await (supabase as any).rpc('withdraw_from_stall', {
         p_distribution_id: distributionId,
         p_quantity: quantityToWithdraw,
@@ -1304,11 +1360,34 @@ export const dbApi = {
 
       console.log('[WFD] RPC result:', data);
 
+      const resolvedItemId = itemId ?? data?.item_id;
+      if (resolvedItemId) {
+        const { data: itemAfter } = await (supabase as any)
+          .from('items')
+          .select('current_stock')
+          .eq('item_id', resolvedItemId)
+          .single();
+        const stockAfter = Number(itemAfter?.current_stock) || 0;
+        if (stockAfter <= stockBefore) {
+          const credited = stockBefore + quantityToWithdraw;
+          const { error: creditError } = await (supabase as any)
+            .from('items')
+            .update({ current_stock: credited })
+            .eq('item_id', resolvedItemId);
+          if (creditError) {
+            console.warn('[WFD] Failed to credit central stock:', creditError);
+          } else {
+            console.log(`[WFD] Credited stall return: item ${resolvedItemId} ${stockBefore} -> ${credited}`);
+          }
+        }
+      }
+
       return {
         success: true,
         withdrawnQuantity: quantityToWithdraw,
         withdrawalId: data?.withdrawal_id ?? null,
         stallName: data?.stall_name ?? null,
+        itemId: resolvedItemId,
         newCentralStock: data?.new_central_stock ?? null
       };
     } catch (error) {

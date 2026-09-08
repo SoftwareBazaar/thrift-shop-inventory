@@ -96,3 +96,54 @@ export function buildStockEventsFromHistory(input: {
 
   return events;
 }
+
+/**
+ * Hub stock for the admin UI.
+ * When history is consistent, this is the usual identity:
+ *   received − currently allocated − central sales − central withdrawals
+ * Stall→hub returns are already reflected as a smaller allocation, so they
+ * must not be added again.
+ *
+ * When that identity is negative (legacy over-allocation), replay stays
+ * floored at 0 and stall returns would vanish. In that case show the
+ * stall-return total so units brought back to the hub remain visible.
+ */
+export function summarizeStallReturnLedger(
+  distributions: Array<{ quantity_allocated?: number; date_distributed?: string }>,
+  withdrawals: Array<{ stall_id?: number | null; quantity_withdrawn?: number; date_withdrawn?: string }>
+): { stallReturned: number; extraAllocatedAfterStallReturns: number } {
+  const stallReturns = (withdrawals || []).filter((w) => w.stall_id != null);
+  const stallReturned = stallReturns.reduce((sum, w) => sum + (Number(w.quantity_withdrawn) || 0), 0);
+  const lastReturnTs = stallReturns.reduce((max, w) => {
+    const ts = w.date_withdrawn ? new Date(w.date_withdrawn).getTime() : 0;
+    return Number.isFinite(ts) ? Math.max(max, ts) : max;
+  }, 0);
+  const extraAllocatedAfterStallReturns = lastReturnTs
+    ? (distributions || [])
+        .filter((d) => d.date_distributed && new Date(d.date_distributed).getTime() > lastReturnTs)
+        .reduce((sum, d) => sum + (Number(d.quantity_allocated) || 0), 0)
+    : 0;
+  return { stallReturned, extraAllocatedAfterStallReturns };
+}
+
+export function computeCentralAvailable(input: {
+  initialStock: number;
+  added: number;
+  allocated: number;
+  centralSold: number;
+  centralWithdrawn: number;
+  stallReturned: number;
+  extraAllocatedAfterStallReturns?: number;
+}): number {
+  const algebraic =
+    (Number(input.initialStock) || 0) +
+    (Number(input.added) || 0) -
+    (Number(input.allocated) || 0) -
+    (Number(input.centralSold) || 0) -
+    (Number(input.centralWithdrawn) || 0);
+  if (algebraic >= 0) return algebraic;
+  return Math.max(
+    0,
+    (Number(input.stallReturned) || 0) - (Number(input.extraAllocatedAfterStallReturns) || 0)
+  );
+}
