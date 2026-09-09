@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 12.0 - Network-first for all Supabase API reads
-const CACHE_NAME = 'thrift-shop-v12';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v12';
+// Version: 13.0 - UI refresh-before-alert; clear stale app shells
+const CACHE_NAME = 'thrift-shop-v13';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v13';
 const OFFLINE_URL = '/index.html';
 
 function isSupabaseRequest(url) {

@@ -605,6 +605,25 @@ const Inventory: React.FC = () => {
           notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
         });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from central hub.`;
+
+        setItems((prev) =>
+          prev.map((item) =>
+            item.item_id === itemId
+              ? {
+                  ...item,
+                  current_stock: Math.max(0, (item.current_stock || 0) - quantityToWithdraw)
+                }
+              : item
+          )
+        );
+        setSelectedItem((prev) =>
+          prev && prev.item_id === itemId
+            ? {
+                ...prev,
+                current_stock: Math.max(0, (prev.current_stock || 0) - quantityToWithdraw)
+              }
+            : prev
+        );
       } else {
         // Stall withdrawal — one history row even if multiple distribution batches
         const stallBatches = withdrawItemDistributions
@@ -612,7 +631,7 @@ const Inventory: React.FC = () => {
           .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
         const stallName = stallBatches[0]?.stall_name ?? `Stall #${sourceAtSubmit}`;
 
-        await dataApi.withdrawFromStall({
+        const withdrawResult = await dataApi.withdrawFromStall({
           item_id: itemId,
           stall_id: Number(sourceAtSubmit),
           quantity: quantityToWithdraw,
@@ -620,24 +639,19 @@ const Inventory: React.FC = () => {
           notes: 'Moved from stall back to central hub'
         });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from ${stallName} back to central hub.`;
-      }
 
-      alert(successMessage);
-
-      setShowWithdrawModal(false);
-      setWithdrawQuantity('');
-      setWithdrawReason('');
-      setWithdrawSource('central');
-      setWithdrawItemDistributions([]);
-
-      if (sourceAtSubmit !== 'central') {
         const stallId = Number(sourceAtSubmit);
+        const hubAfter =
+          withdrawResult?.newCentralStock != null
+            ? Number(withdrawResult.newCentralStock)
+            : (selectedItem.current_stock || 0) + quantityToWithdraw;
+
         setItems((prev) =>
           prev.map((item) =>
             item.item_id === itemId
               ? {
                   ...item,
-                  current_stock: (item.current_stock || 0) + quantityToWithdraw,
+                  current_stock: hubAfter,
                   total_allocated: Math.max(0, (item.total_allocated || 0) - quantityToWithdraw)
                 }
               : item
@@ -647,7 +661,7 @@ const Inventory: React.FC = () => {
           prev && prev.item_id === itemId
             ? {
                 ...prev,
-                current_stock: (prev.current_stock || 0) + quantityToWithdraw,
+                current_stock: hubAfter,
                 total_allocated: Math.max(0, (prev.total_allocated || 0) - quantityToWithdraw)
               }
             : prev
@@ -669,7 +683,15 @@ const Inventory: React.FC = () => {
         });
       }
 
+      setShowWithdrawModal(false);
+      setWithdrawQuantity('');
+      setWithdrawReason('');
+      setWithdrawSource('central');
+      setWithdrawItemDistributions([]);
+
+      // Refresh first so the table already shows the new hub before the alert.
       await refreshAfterMutation(itemId);
+      alert(successMessage);
     } catch (error: any) {
       console.error('Error withdrawing stock:', error);
       alert(error.message || 'Failed to withdraw stock. Please try again.');
