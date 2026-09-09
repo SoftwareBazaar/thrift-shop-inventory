@@ -484,6 +484,24 @@ export const offlineDataApi = {
       console.error('[OfflineDataApi] Error withdrawing from distribution:', error);
       throw error;
     }
+  },
+
+  withdrawFromStall: async (params: {
+    item_id: number;
+    stall_id: number;
+    quantity: number;
+    reason?: string;
+    notes?: string;
+  }) => {
+    try {
+      if (navigator.onLine) {
+        return await (dataApi as any).withdrawFromStall(params);
+      }
+      throw new Error('Stall withdrawal requires an internet connection.');
+    } catch (error) {
+      console.error('[OfflineDataApi] Error withdrawing from stall:', error);
+      throw error;
+    }
   }
 };
 

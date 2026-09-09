@@ -606,19 +606,19 @@ const Inventory: React.FC = () => {
         });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from central hub.`;
       } else {
-        // Stall withdrawal — drain distribution batches oldest-first until qty is satisfied
+        // Stall withdrawal — one history row even if multiple distribution batches
         const stallBatches = withdrawItemDistributions
           .filter((d) => String(d.stall_id) === sourceAtSubmit)
           .sort((a, b) => new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime());
         const stallName = stallBatches[0]?.stall_name ?? `Stall #${sourceAtSubmit}`;
 
-        let remaining = quantityToWithdraw;
-        for (const batch of stallBatches) {
-          if (remaining <= 0) break;
-          const take = Math.min(remaining, batch.quantity_allocated);
-          await dataApi.withdrawFromDistribution(batch.distribution_id, take);
-          remaining -= take;
-        }
+        await dataApi.withdrawFromStall({
+          item_id: itemId,
+          stall_id: Number(sourceAtSubmit),
+          quantity: quantityToWithdraw,
+          reason: withdrawReason || 'Returned to central hub',
+          notes: 'Moved from stall back to central hub'
+        });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from ${stallName} back to central hub.`;
       }
 

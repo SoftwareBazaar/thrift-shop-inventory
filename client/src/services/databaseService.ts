@@ -201,19 +201,10 @@ const isMissingFunctionError = (error: any): boolean => {
 //   current_stock   = chronological replay with floor-at-zero on deductions
 //                     (historical over-withdrawals stay in history but do not
 //                     create a deficit that absorbs future additions)
-// Prefers the atomic DB-side function; falls back to client-side replay.
+// Recompute item totals from full history.
+// Always uses client-side hub math (including FIFO stall→hub returns) so
+// over-allocated items do not stay stuck at current_stock = 0.
 const recomputeItemTotals = async (itemId: number): Promise<Item> => {
-  const { data: rpcItem, error: rpcError } = await (supabase as any)
-    .rpc('recalc_item_stock', { p_item_id: itemId });
-
-  if (!rpcError && rpcItem) {
-    return (Array.isArray(rpcItem) ? rpcItem[0] : rpcItem) as Item;
-  }
-
-  if (rpcError && !isMissingFunctionError(rpcError)) {
-    console.warn('[Recompute Totals] RPC failed, falling back to client math:', rpcError);
-  }
-
   const { data: item, error: itemError } = await (supabase as any)
     .from('items')
     .select('*')
@@ -256,7 +247,8 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     centralSold: totalCentralSold,
     centralWithdrawn,
     stallReturned: stallLedger.stallReturned,
-    extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
+    extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
+    netStallReturnsAtHub: stallLedger.netAtHub
   });
 
   const { data: updated, error: updateError } = await (supabase as any)
@@ -822,7 +814,8 @@ export const dbApi = {
             centralSold: totalCentralSold,
             centralWithdrawn,
             stallReturned: stallLedger.stallReturned,
-            extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
+            extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
+            netStallReturnsAtHub: stallLedger.netAtHub
           });
 
           // Do not write replay/current_stock back to items here. A DB trigger
@@ -838,7 +831,7 @@ export const dbApi = {
             Hub Sales: ${totalCentralSold}
             Central withdrawn: ${centralWithdrawn}
             Stall returned: ${stallLedger.stallReturned}
-            Dist after returns: ${stallLedger.extraAllocatedAfterStallReturns}
+            Stall returns at hub (FIFO): ${stallLedger.netAtHub}
             ---
             Result Central Stock: ${displayedStock} (stored ${existingCurrentStock})`);
 
@@ -1157,7 +1150,8 @@ export const dbApi = {
         centralSold,
         centralWithdrawn,
         stallReturned: stallLedger.stallReturned,
-        extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns
+        extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
+        netStallReturnsAtHub: stallLedger.netAtHub
       });
       if (available < totalToDistribute) {
         throw new Error(`Insufficient stock! Available: ${available}, Requested: ${totalToDistribute}`);
@@ -1392,6 +1386,118 @@ export const dbApi = {
       };
     } catch (error) {
       console.error('[WFD] Error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Stall → central return for a quantity that may span multiple distribution
+   * batches. Drains batches oldest-first via the existing RPC, then merges
+   * the audit trail into ONE withdrawal history row (so typing 22 does not
+   * appear as -12 / -3 / -7).
+   */
+  withdrawFromStall: async (params: {
+    item_id: number;
+    stall_id: number;
+    quantity: number;
+    reason?: string;
+    notes?: string;
+  }) => {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Stall withdrawal requires Supabase.');
+    }
+
+    const quantity = Number(params.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Withdrawal quantity must be a whole number greater than zero.');
+    }
+
+    try {
+      const itemId = params.item_id;
+      const stallId = params.stall_id;
+
+      const { data: batches, error: batchError } = await (supabase as any)
+        .from('stock_distribution')
+        .select('distribution_id, quantity_allocated, date_distributed, stalls:stall_id(stall_name)')
+        .eq('item_id', itemId)
+        .eq('stall_id', stallId)
+        .order('date_distributed', { ascending: true });
+
+      if (batchError) throw batchError;
+
+      const sorted = (batches || []).sort(
+        (a: any, b: any) =>
+          new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime()
+      );
+      const available = sorted.reduce(
+        (sum: number, b: any) => sum + (Number(b.quantity_allocated) || 0),
+        0
+      );
+      if (available < quantity) {
+        throw new Error(`Insufficient stock at stall. Available in distribution rows: ${available}`);
+      }
+
+      let remaining = quantity;
+      const withdrawalIds: number[] = [];
+      let stallName = `Stall #${stallId}`;
+
+      for (const batch of sorted) {
+        if (remaining <= 0) break;
+        const batchQty = Number(batch.quantity_allocated) || 0;
+        if (batchQty <= 0) continue;
+        const take = Math.min(remaining, batchQty);
+        const result = await dbApi.withdrawFromDistribution(batch.distribution_id, take);
+        if (result?.withdrawalId) withdrawalIds.push(result.withdrawalId);
+        if (result?.stallName) stallName = result.stallName;
+        else if (batch.stalls?.stall_name) stallName = batch.stalls.stall_name;
+        remaining -= take;
+      }
+
+      // Collapse multi-batch audit rows into a single history entry.
+      let primaryWithdrawalId = withdrawalIds[0] ?? null;
+      if (withdrawalIds.length > 1) {
+        const extras = withdrawalIds.slice(1);
+        const { error: mergeError } = await (supabase as any)
+          .from('stock_withdrawals')
+          .update({
+            quantity_withdrawn: quantity,
+            reason: params.reason || 'Returned to central hub',
+            notes: params.notes || 'Moved from stall back to central hub'
+          })
+          .eq('withdrawal_id', primaryWithdrawalId);
+        if (mergeError) {
+          console.warn('[WithdrawFromStall] Could not merge primary withdrawal row:', mergeError);
+        } else {
+          const { error: deleteExtrasError } = await (supabase as any)
+            .from('stock_withdrawals')
+            .delete()
+            .in('withdrawal_id', extras);
+          if (deleteExtrasError) {
+            console.warn('[WithdrawFromStall] Could not remove split withdrawal rows:', deleteExtrasError);
+          }
+        }
+      } else if (primaryWithdrawalId && (params.reason || params.notes)) {
+        await (supabase as any)
+          .from('stock_withdrawals')
+          .update({
+            reason: params.reason || 'Returned to central hub',
+            notes: params.notes || 'Moved from stall back to central hub'
+          })
+          .eq('withdrawal_id', primaryWithdrawalId);
+      }
+
+      const recomputed = await recomputeItemTotals(itemId);
+
+      return {
+        success: true,
+        withdrawnQuantity: quantity,
+        withdrawalId: primaryWithdrawalId,
+        stallName,
+        itemId,
+        newCentralStock: Number((recomputed as any)?.current_stock) || 0
+      };
+    } catch (error) {
+      console.error('[WithdrawFromStall] Error:', error);
       throw error;
     }
   },

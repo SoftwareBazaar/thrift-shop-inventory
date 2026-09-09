@@ -98,47 +98,98 @@ export function buildStockEventsFromHistory(input: {
 }
 
 /**
- * Hub stock for the admin UI.
- * When history is consistent, this is the usual identity:
- *   received − currently allocated − central sales − central withdrawals
- * Stall→hub returns are already reflected as a smaller allocation, so they
- * must not be added again.
- *
- * When that identity is negative (legacy over-allocation), replay stays
- * floored at 0 and stall returns would vanish. In that case show the
- * stall-return total so units brought back to the hub remain visible.
+ * Units sitting at the hub that came from stall→hub returns and have not
+ * yet been sent back out. Later distributions only consume this pool when
+ * it is > 0; distributions funded by new additions are ignored.
  */
-export function summarizeStallReturnLedger(
-  distributions: Array<{ quantity_allocated?: number; date_distributed?: string }>,
-  withdrawals: Array<{ stall_id?: number | null; quantity_withdrawn?: number; date_withdrawn?: string }>
-): { stallReturned: number; extraAllocatedAfterStallReturns: number } {
-  const stallReturns = (withdrawals || []).filter((w) => w.stall_id != null);
-  const stallReturned = stallReturns.reduce((sum, w) => sum + (Number(w.quantity_withdrawn) || 0), 0);
-  const firstReturnTs = stallReturns.reduce((min, w) => {
+export function netStallReturnsAtHub(
+  distributions: Array<{ quantity_allocated?: number; date_distributed?: string; distribution_id?: number }>,
+  withdrawals: Array<{
+    stall_id?: number | null;
+    quantity_withdrawn?: number;
+    date_withdrawn?: string;
+    withdrawal_id?: number;
+  }>
+): number {
+  type LedgerEvent = { ts: number; kind: 'return' | 'dist'; qty: number; sortId: number };
+  const events: LedgerEvent[] = [];
+
+  for (const w of withdrawals || []) {
+    if (w.stall_id == null) continue;
     const ts = w.date_withdrawn ? new Date(w.date_withdrawn).getTime() : NaN;
-    if (!Number.isFinite(ts)) return min;
-    return min === 0 ? ts : Math.min(min, ts);
-  }, 0);
-  // Count new distributions after the *first* stall return, not the latest.
-  // Using the latest return ignored redistributes that happened in between,
-  // so a later withdraw would add onto the pre-redistribute total (5+1=6
-  // instead of 3+1=4).
-  const extraAllocatedAfterStallReturns = firstReturnTs
-    ? (distributions || [])
-        .filter((d) => d.date_distributed && new Date(d.date_distributed).getTime() > firstReturnTs)
-        .reduce((sum, d) => sum + (Number(d.quantity_allocated) || 0), 0)
-    : 0;
-  return { stallReturned, extraAllocatedAfterStallReturns };
+    if (!Number.isFinite(ts)) continue;
+    events.push({
+      ts,
+      kind: 'return',
+      qty: Number(w.quantity_withdrawn) || 0,
+      sortId: Number(w.withdrawal_id) || 0
+    });
+  }
+  for (const d of distributions || []) {
+    const ts = d.date_distributed ? new Date(d.date_distributed).getTime() : NaN;
+    if (!Number.isFinite(ts)) continue;
+    events.push({
+      ts,
+      kind: 'dist',
+      qty: Number(d.quantity_allocated) || 0,
+      sortId: Number(d.distribution_id) || 0
+    });
+  }
+
+  events.sort((a, b) => {
+    if (a.ts !== b.ts) return a.ts - b.ts;
+    // Apply returns before same-second redistributes so a withdraw+redistribute
+    // pair in one action still nets correctly.
+    if (a.kind !== b.kind) return a.kind === 'return' ? -1 : 1;
+    return a.sortId - b.sortId;
+  });
+
+  let atHub = 0;
+  for (const e of events) {
+    if (e.kind === 'return') {
+      atHub += e.qty;
+    } else if (atHub > 0) {
+      atHub -= Math.min(atHub, e.qty);
+    }
+  }
+  return Math.max(0, atHub);
 }
 
+export function summarizeStallReturnLedger(
+  distributions: Array<{ quantity_allocated?: number; date_distributed?: string; distribution_id?: number }>,
+  withdrawals: Array<{
+    stall_id?: number | null;
+    quantity_withdrawn?: number;
+    date_withdrawn?: string;
+    withdrawal_id?: number;
+  }>
+): { stallReturned: number; extraAllocatedAfterStallReturns: number; netAtHub: number } {
+  const stallReturns = (withdrawals || []).filter((w) => w.stall_id != null);
+  const stallReturned = stallReturns.reduce((sum, w) => sum + (Number(w.quantity_withdrawn) || 0), 0);
+  const netAtHub = netStallReturnsAtHub(distributions, withdrawals);
+  return {
+    stallReturned,
+    extraAllocatedAfterStallReturns: Math.max(0, stallReturned - netAtHub),
+    netAtHub
+  };
+}
+
+/**
+ * Hub stock for the admin UI.
+ * When history is consistent:
+ *   received − currently allocated − central sales − central withdrawals
+ * When that identity is negative (legacy over-allocation), show only the
+ * stall-return units that have not yet been redistributed (FIFO).
+ */
 export function computeCentralAvailable(input: {
   initialStock: number;
   added: number;
   allocated: number;
   centralSold: number;
   centralWithdrawn: number;
-  stallReturned: number;
+  stallReturned?: number;
   extraAllocatedAfterStallReturns?: number;
+  netStallReturnsAtHub?: number;
 }): number {
   const algebraic =
     (Number(input.initialStock) || 0) +
@@ -147,6 +198,9 @@ export function computeCentralAvailable(input: {
     (Number(input.centralSold) || 0) -
     (Number(input.centralWithdrawn) || 0);
   if (algebraic >= 0) return algebraic;
+  if (input.netStallReturnsAtHub != null) {
+    return Math.max(0, Number(input.netStallReturnsAtHub) || 0);
+  }
   return Math.max(
     0,
     (Number(input.stallReturned) || 0) - (Number(input.extraAllocatedAfterStallReturns) || 0)
