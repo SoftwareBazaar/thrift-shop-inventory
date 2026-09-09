@@ -176,10 +176,16 @@ export function summarizeStallReturnLedger(
 
 /**
  * Hub stock for the admin UI.
- * When history is consistent:
- *   received − currently allocated − central sales − central withdrawals
- * When that identity is negative (legacy over-allocation), show only the
- * stall-return units that have not yet been redistributed (FIFO).
+ *
+ * algebraic = received − allocated − central sales − central withdrawals
+ *   (stall→hub returns already raise this by shrinking allocated)
+ *
+ * netStallReturnsAtHub = FIFO pool of returns not yet redistributed
+ *
+ * Use max(algebraic, fifo) so:
+ * - healthy surplus stays visible
+ * - deficit holes do not swallow returns
+ * - alg==0 after filling a hole still shows returns sitting at the hub
  */
 export function computeCentralAvailable(input: {
   initialStock: number;
@@ -197,12 +203,14 @@ export function computeCentralAvailable(input: {
     (Number(input.allocated) || 0) -
     (Number(input.centralSold) || 0) -
     (Number(input.centralWithdrawn) || 0);
-  if (algebraic >= 0) return algebraic;
-  if (input.netStallReturnsAtHub != null) {
-    return Math.max(0, Number(input.netStallReturnsAtHub) || 0);
-  }
-  return Math.max(
-    0,
-    (Number(input.stallReturned) || 0) - (Number(input.extraAllocatedAfterStallReturns) || 0)
-  );
+
+  const fifo =
+    input.netStallReturnsAtHub != null
+      ? Math.max(0, Number(input.netStallReturnsAtHub) || 0)
+      : Math.max(
+          0,
+          (Number(input.stallReturned) || 0) - (Number(input.extraAllocatedAfterStallReturns) || 0)
+        );
+
+  return Math.max(0, algebraic, fifo);
 }
