@@ -40,6 +40,7 @@
     "build": "react-app-rewired build",
     "start:api": "node ../api/server.js",
     "test": "react-scripts test",
+    "stock:check": "node scripts/stock-health-check.js",
     "eject": "react-scripts eject",
     "generate-logos": "node public/generate-logos.js",
     "pwa-setup": "npm run generate-logos && echo '✅ PWA setup complete!'"
