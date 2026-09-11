@@ -84,44 +84,27 @@ let inventoryChannel: RealtimeChannel | null = null;
 let salesChannel: RealtimeChannel | null = null;
 let usersChannel: RealtimeChannel | null = null;
 
-// Callbacks for real-time updates
-const updateCallbacks: {
-  inventory?: (items: Item[]) => void;
-  sales?: (sales: Sale[]) => void;
-  users?: (users: User[]) => void;
-} = {};
-
-// Setup real-time subscriptions
-export const setupRealtimeSubscriptions = (callbacks: {
-  inventory?: (items: Item[]) => void;
-  sales?: (sales: Sale[]) => void;
-  users?: (users: User[]) => void;
-}) => {
+// Setup real-time subscriptions.
+//
+// These only announce that something changed. Each page reloads its own data
+// through the normal paginated API in response. Fetching here as well meant an
+// unpaginated read of the whole sales table on every single sale — which
+// Supabase silently truncates at 1000 rows — and every listener discarded the
+// result anyway.
+export const setupRealtimeSubscriptions = () => {
   if (!isSupabaseConfigured()) {
     console.log('📝 Supabase not configured, using polling instead');
     return () => { }; // Return cleanup function
   }
-
-  updateCallbacks.inventory = callbacks.inventory;
-  updateCallbacks.sales = callbacks.sales;
-  updateCallbacks.users = callbacks.users;
 
   // Subscribe to inventory changes
   inventoryChannel = (supabase as any)
     .channel('inventory-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'items' },
-      async () => {
+      () => {
         console.log('📡 Real-time: Inventory changed');
-        // Fire window event for components to listen
         window.dispatchEvent(new Event('inventory-updated'));
-        if (callbacks.inventory) {
-          const { data } = await (supabase as any)
-            .from('items')
-            .select('*')
-            .order('date_added', { ascending: false });
-          if (data) callbacks.inventory(data as Item[]);
-        }
       }
     )
     .subscribe();
@@ -131,23 +114,9 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .channel('sales-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'sales' },
-      async () => {
+      () => {
         console.log('📡 Real-time: Sales changed');
-        // Fire window event for components to listen
         window.dispatchEvent(new Event('sales-updated'));
-        if (callbacks.sales) {
-          const { data } = await (supabase as any)
-            .from('sales')
-            .select('*, users:recorded_by(full_name)')
-            .order('date_time', { ascending: false });
-          if (data) {
-            const sales = data.map((sale: any) => ({
-              ...sale,
-              recorded_by_name: sale.users?.full_name || 'Unknown'
-            }));
-            callbacks.sales(sales as Sale[]);
-          }
-        }
       }
     )
     .subscribe();
@@ -157,17 +126,9 @@ export const setupRealtimeSubscriptions = (callbacks: {
     .channel('users-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'users' },
-      async () => {
+      () => {
         console.log('📡 Real-time: Users changed');
-        // Fire window event for components to listen
         window.dispatchEvent(new Event('users-updated'));
-        if (callbacks.users) {
-          const { data } = await (supabase as any)
-            .from('users')
-            .select('*')
-            .order('created_date', { ascending: false });
-          if (data) callbacks.users(data as User[]);
-        }
       }
     )
     .subscribe();
@@ -1264,27 +1225,31 @@ export const dbApi = {
     }
 
     try {
-      let query = (supabase as any)
-        .from('stock_distribution')
-        .select(`
+      // Paged by primary key, then sorted for display, so the list stays
+      // complete once this table grows past Supabase's 1000-row response cap.
+      const { data, error } = await fetchAllRows(
+        'stock_distribution',
+        `
           *,
           stalls:stall_id(stall_name),
           users:distributed_by(full_name)
-        `);
-
-      if (itemId) {
-        query = query.eq('item_id', itemId);
-      }
-
-      const { data, error } = await query.order('date_distributed', { ascending: false });
+        `,
+        'distribution_id',
+        (query: any) => (itemId ? query.eq('item_id', itemId) : query)
+      );
 
       if (error) throw error;
 
-      const distributions = (data || []).map((dist: any) => ({
-        ...dist,
-        stall_name: dist.stalls?.stall_name || 'Unknown',
-        distributed_by_name: dist.users?.full_name || 'Unknown'
-      }));
+      const distributions = (data || [])
+        .map((dist: any) => ({
+          ...dist,
+          stall_name: dist.stalls?.stall_name || 'Unknown',
+          distributed_by_name: dist.users?.full_name || 'Unknown'
+        }))
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.date_distributed).getTime() - new Date(a.date_distributed).getTime()
+        );
 
       return { distributions };
     } catch (error) {

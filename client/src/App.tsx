@@ -24,20 +24,7 @@ function App() {
     if (isSupabaseConfigured()) {
       console.log('🔄 Setting up real-time subscriptions...');
       
-      const cleanup = setupRealtime({
-        inventory: (items) => {
-          // Dispatch event for inventory updates
-          window.dispatchEvent(new CustomEvent('inventory-updated', { detail: items }));
-        },
-        sales: (sales) => {
-          // Dispatch event for sales updates
-          window.dispatchEvent(new CustomEvent('sales-updated', { detail: sales }));
-        },
-        users: (users) => {
-          // Dispatch event for users updates
-          window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
-        }
-      });
+      const cleanup = setupRealtime();
 
       return () => {
         console.log('🛑 Cleaning up real-time subscriptions...');

@@ -45,6 +45,55 @@ const supabase = createClient(url, key);
 
 const sum = (rows, field) => rows.reduce((total, row) => total + (Number(row[field]) || 0), 0);
 
+const PAGE_SIZE = 1000;
+
+// Supabase truncates a single response at 1000 rows without reporting an error.
+// Read every table twice: once in one shot, once paged, and compare both against
+// the true row count. A gap means some screen is silently showing partial data.
+async function auditTruncation() {
+  const tables = [
+    ['items', 'item_id'],
+    ['stock_additions', 'addition_id'],
+    ['stock_distribution', 'distribution_id'],
+    ['stock_withdrawals', 'withdrawal_id'],
+    ['sales', 'sale_id']
+  ];
+
+  const findings = [];
+  for (const [table, pk] of tables) {
+    const { count, error: countError } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true });
+    if (countError) throw new Error(`${table}: ${countError.message}`);
+
+    const { data: oneShot } = await supabase.from(table).select(pk);
+
+    const paged = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from(table)
+        .select(pk)
+        .order(pk, { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(`${table}: ${error.message}`);
+      const page = data || [];
+      paged.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+
+    const unique = new Set(paged.map((row) => row[pk])).size;
+    findings.push({
+      table,
+      actual: count,
+      oneShot: (oneShot || []).length,
+      paged: paged.length,
+      unique,
+      ok: paged.length === count && unique === count
+    });
+  }
+  return findings;
+}
+
 async function loadHistory(itemId) {
   const [additions, distributions, centralSales, withdrawals] = await Promise.all([
     supabase.from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
@@ -130,8 +179,16 @@ function auditItem(item, history) {
     );
   }
 
+  const truncation = await auditTruncation();
+  console.log('\nDATA COMPLETENESS (Supabase caps one response at 1000 rows)');
+  for (const t of truncation) {
+    const capped = t.oneShot < t.actual ? `  [a single request returns only ${t.oneShot}]` : '';
+    console.log(`  ${pad(t.table, 20)} ${t.paged}/${t.actual} rows read${capped}${t.ok ? '' : '   <-- INCOMPLETE'}`);
+  }
+
   const broken = results.filter((r) => r.failures.length);
   const drifted = results.filter((r) => r.drift !== 0);
+  const incomplete = truncation.filter((t) => !t.ok);
 
   console.log(`\nItems checked: ${results.length}`);
   console.log(`Items with returns sitting at the hub: ${results.filter((r) => r.netAtHub > 0).length}`);
@@ -144,15 +201,19 @@ function auditItem(item, history) {
     }
   }
 
-  if (broken.length) {
+  if (broken.length || incomplete.length) {
     console.log('\nPROBLEMS FOUND:');
     for (const r of broken) {
       for (const failure of r.failures) console.log(`  ${r.name}: ${failure}`);
     }
+    for (const t of incomplete) {
+      console.log(`  ${t.table}: read ${t.paged} of ${t.actual} rows (${t.unique} unique) - data is incomplete`);
+    }
     process.exit(1);
   }
 
-  console.log('\nAll checks passed. Every item reports a valid hub figure and credits new stock in full.');
+  console.log('\nAll checks passed. Every item reports a valid hub figure, credits new');
+  console.log('stock in full, and every table was read complete with no truncation.');
 })().catch((err) => {
   console.error('\nHealth check could not complete:', err.message);
   process.exit(1);
