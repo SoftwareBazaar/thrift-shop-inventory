@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
 import { syncOfflineUserProfile } from '../utils/offlineCredentials';
 import { derivePasswordHash } from '../utils/passwordUtils';
-import { computeCentralAvailable, summarizeStallReturnLedger } from '../utils/stockReplay';
+import { computeHubStock, summarizeStallReturnLedger } from '../utils/stockReplay';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Export interfaces for compatibility
@@ -217,9 +217,9 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
 
   const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
     (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
-    (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', itemId),
+    (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id, stall_id').eq('item_id', itemId),
     (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
-    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', itemId)
+    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id').eq('item_id', itemId)
   ]);
 
   // CRITICAL: never recompute from partial history. A failed query would read
@@ -235,20 +235,12 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
 
   const totalAdded = additions.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
   const totalAllocated = distributions.reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
-  const totalCentralSold = centralSales.reduce((sum: number, s: any) => sum + (s.quantity_sold || 0), 0);
-  const centralWithdrawn = withdrawals
-    .filter((w: any) => w.stall_id == null)
-    .reduce((sum: number, w: any) => sum + (w.quantity_withdrawn || 0), 0);
-  const stallLedger = summarizeStallReturnLedger(distributions, withdrawals);
-  const currentStock = computeCentralAvailable({
+  const currentStock = computeHubStock({
     initialStock: item.initial_stock || 0,
-    added: totalAdded,
-    allocated: totalAllocated,
-    centralSold: totalCentralSold,
-    centralWithdrawn,
-    stallReturned: stallLedger.stallReturned,
-    extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
-    netStallReturnsAtHub: stallLedger.netAtHub
+    additions,
+    distributions,
+    withdrawals,
+    centralSales
   });
 
   const { data: updated, error: updateError } = await (supabase as any)
@@ -774,9 +766,9 @@ export const dbApi = {
 
           const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
             (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', item.item_id),
-            (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id').eq('item_id', item.item_id),
+            (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id, stall_id').eq('item_id', item.item_id),
             (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', item.item_id).is('stall_id', null),
-            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id').eq('item_id', item.item_id)
+            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id').eq('item_id', item.item_id)
           ]);
 
           // CRITICAL: if ANY history query failed, return the stored item as-is.
@@ -807,15 +799,12 @@ export const dbApi = {
           const stallLedger = summarizeStallReturnLedger(distributions, withdrawals);
           const totalReceived = initialStock + totalAdded;
 
-          const displayedStock = computeCentralAvailable({
+          const displayedStock = computeHubStock({
             initialStock,
-            added: totalAdded,
-            allocated: totalDistributed,
-            centralSold: totalCentralSold,
-            centralWithdrawn,
-            stallReturned: stallLedger.stallReturned,
-            extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
-            netStallReturnsAtHub: stallLedger.netAtHub
+            additions,
+            distributions,
+            withdrawals,
+            centralSales
           });
 
           // Do not write replay/current_stock back to items here. A DB trigger
@@ -1127,31 +1116,21 @@ export const dbApi = {
       if (itemErr || !itemRow) throw new Error('Item not found.');
 
       const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
-        (supabase as any).from('stock_additions').select('quantity_added').eq('item_id', distributionData.item_id),
-        (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed').eq('item_id', distributionData.item_id),
-        (supabase as any).from('sales').select('quantity_sold').eq('item_id', distributionData.item_id).is('stall_id', null),
-        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, stall_id').eq('item_id', distributionData.item_id)
+        (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', distributionData.item_id),
+        (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id, stall_id').eq('item_id', distributionData.item_id),
+        (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', distributionData.item_id).is('stall_id', null),
+        (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id').eq('item_id', distributionData.item_id)
       ]);
       if (additionsRes.error || distributionsRes.error || centralSalesRes.error || withdrawalsRes.error) {
         throw new Error('Failed to load stock history for distribution.');
       }
 
-      const added = (additionsRes.data || []).reduce((s: number, a: any) => s + (a.quantity_added || 0), 0);
-      const allocated = (distributionsRes.data || []).reduce((s: number, d: any) => s + (d.quantity_allocated || 0), 0);
-      const centralSold = (centralSalesRes.data || []).reduce((s: number, a: any) => s + (a.quantity_sold || 0), 0);
-      const centralWithdrawn = (withdrawalsRes.data || [])
-        .filter((w: any) => w.stall_id == null)
-        .reduce((s: number, w: any) => s + (w.quantity_withdrawn || 0), 0);
-      const stallLedger = summarizeStallReturnLedger(distributionsRes.data || [], withdrawalsRes.data || []);
-      const available = computeCentralAvailable({
+      const available = computeHubStock({
         initialStock: itemRow.initial_stock || 0,
-        added,
-        allocated,
-        centralSold,
-        centralWithdrawn,
-        stallReturned: stallLedger.stallReturned,
-        extraAllocatedAfterStallReturns: stallLedger.extraAllocatedAfterStallReturns,
-        netStallReturnsAtHub: stallLedger.netAtHub
+        additions: additionsRes.data || [],
+        distributions: distributionsRes.data || [],
+        withdrawals: withdrawalsRes.data || [],
+        centralSales: centralSalesRes.data || []
       });
       if (available < totalToDistribute) {
         throw new Error(`Insufficient stock! Available: ${available}, Requested: ${totalToDistribute}`);

@@ -851,13 +851,14 @@ const Inventory: React.FC = () => {
     ? Math.max(0, (selectedItem.total_allocated || 0) - selectedItemStallSold)
     : 0;
   const selectedItemAvailable = selectedItem ? Math.max(0, selectedItem.current_stock || 0) : 0;
-  const selectedItemManagedTotal = selectedItemAvailable + selectedItemDistributed; // Unsold only
-  const selectedItemTotalInventory = selectedItem
-    ? selectedItemAvailable + selectedItemDistributed + selectedItemSold
+  // Matches the "Total received" figure on the expanded item row so the modal
+  // and the row never show two different totals for the same item.
+  const selectedItemReceived = selectedItem
+    ? (selectedItem.initial_stock || 0) + (selectedItem.total_added || 0)
     : 0;
   const quantityToAddPreview = addStockQuantity ? parseInt(addStockQuantity, 10) || 0 : 0;
   const previewAvailableAfterAdd = selectedItemAvailable + quantityToAddPreview;
-  const previewTotalInventory = selectedItemManagedTotal + quantityToAddPreview; // Use managedTotal instead of totalInventory
+  const previewTotalReceived = selectedItemReceived + quantityToAddPreview;
   const totalQuantityPendingDistribution = distributionData.distributions.reduce(
     (sum, dist) => sum + (parseInt(dist.quantity) || 0),
     0
@@ -1576,7 +1577,7 @@ const Inventory: React.FC = () => {
                         Available to distribute: {selectedItemAvailable}
                       </label>
                       <p className="text-xs text-gray-500">
-                        Total inventory: {selectedItemTotalInventory} | At stalls (unsold): {selectedItemDistributed} | Sold: {selectedItemSold}
+                        Total received: {selectedItemReceived} | At stalls (unsold): {selectedItemDistributed} | Sold: {selectedItemSold}
                       </p>
                     </div>
                     <div className="text-xs text-gray-600">
@@ -1741,8 +1742,8 @@ const Inventory: React.FC = () => {
                     <span className="font-semibold">{previewAvailableAfterAdd}</span>
                   </div>
                   <div className="mt-1 flex justify-between">
-                    <span>Total inventory in system</span>
-                    <span className="font-semibold">{previewTotalInventory}</span>
+                    <span>Total received after this addition</span>
+                    <span className="font-semibold">{previewTotalReceived}</span>
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
                     Currently at stalls (unsold): {selectedItemDistributed}. Sold so far: {selectedItemSold}.
