@@ -258,6 +258,43 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
   return updated as Item;
 };
 
+// Supabase caps a single response at 1000 rows, so anything that could exceed
+// that must be paged. Pages are ordered by primary key; without a stable order
+// rows could repeat or be skipped between pages and the stock figures would be
+// silently wrong.
+const SUPABASE_PAGE_SIZE = 1000;
+
+const fetchAllRows = async (
+  table: string,
+  columns: string,
+  orderBy: string,
+  applyFilters: (query: any) => any
+): Promise<{ data: any[] | null; error: any }> => {
+  const rows: any[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await applyFilters((supabase as any).from(table).select(columns))
+      .order(orderBy, { ascending: true })
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (error) return { data: null, error };
+
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) return { data: rows, error: null };
+  }
+};
+
+const groupByItemId = (rows: any[]): Map<number, any[]> => {
+  const grouped = new Map<number, any[]>();
+  for (const row of rows) {
+    const key = Number(row.item_id);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(row);
+    else grouped.set(key, [row]);
+  }
+  return grouped;
+};
+
 const getCurrentUserId = (): number => {
   try {
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -617,17 +654,21 @@ export const dbApi = {
       if (numericStallId) {
         // Get items distributed to this stall
         console.log(`[Get Inventory] Querying distributions for stall ${numericStallId}...`);
-        const { data: distributions, error: distError } = await (supabase as any)
-          .from('stock_distribution')
-          .select('item_id, quantity_allocated')
-          .eq('stall_id', numericStallId);
+        const { data: distributions, error: distError } = await fetchAllRows(
+          'stock_distribution',
+          'item_id, quantity_allocated',
+          'distribution_id',
+          (q: any) => q.eq('stall_id', numericStallId)
+        );
 
         if (distError) {
           console.error(`[Get Inventory] Error fetching distributions for stall ${numericStallId}:`, distError);
           // Don't throw, maybe fallback to offline or return empty
         }
 
-        const itemIds = (distributions as any)?.map((d: any) => d.item_id).filter((id: any) => id != null) || [];
+        const itemIds = Array.from(
+          new Set((distributions || []).map((d: any) => d.item_id).filter((id: any) => id != null))
+        );
         console.log(`[Get Inventory] Stall ${numericStallId} - Found ${itemIds.length} distributions, item_ids:`, itemIds);
 
         if (itemIds.length > 0) {
@@ -650,17 +691,73 @@ export const dbApi = {
 
       // Calculate current stock based on distributions and sales
       console.log(`[Get Inventory] Processing ${data?.length || 0} items, stallId: ${numericStallId}`);
-      const items = await Promise.all((data || []).map(async (item: any) => {
+
+      const itemRows: any[] = data || [];
+      const itemIds = itemRows.map((item: any) => item.item_id).filter((id: any) => id != null);
+
+      if (itemIds.length === 0) {
+        return { items: [] };
+      }
+
+      // Load history for every item up front. Querying per item cost four round
+      // trips per row (145 requests for 36 items) before the page could render;
+      // this stays a fixed handful however large the catalogue grows.
+      const isAdminView = numericStallId === undefined;
+      const empty = Promise.resolve({ data: [] as any[], error: null });
+
+      const [additionsRes, distributionsRes, salesRes, withdrawalsRes] = await Promise.all([
+        isAdminView
+          ? fetchAllRows(
+              'stock_additions',
+              'item_id, quantity_added, date_added, addition_id',
+              'addition_id',
+              (q: any) => q.in('item_id', itemIds)
+            )
+          : empty,
+        fetchAllRows(
+          'stock_distribution',
+          'item_id, stall_id, quantity_allocated, date_distributed, distribution_id',
+          'distribution_id',
+          (q: any) => {
+            const scoped = q.in('item_id', itemIds);
+            return isAdminView ? scoped : scoped.eq('stall_id', numericStallId);
+          }
+        ),
+        fetchAllRows(
+          'sales',
+          'item_id, stall_id, quantity_sold, date_time, sale_id',
+          'sale_id',
+          (q: any) => {
+            const scoped = q.in('item_id', itemIds);
+            return isAdminView ? scoped.is('stall_id', null) : scoped.eq('stall_id', numericStallId);
+          }
+        ),
+        isAdminView
+          ? fetchAllRows(
+              'stock_withdrawals',
+              'item_id, stall_id, distribution_id, quantity_withdrawn, date_withdrawn, withdrawal_id',
+              'withdrawal_id',
+              (q: any) => q.in('item_id', itemIds)
+            )
+          : empty
+      ]);
+
+      const historyError =
+        additionsRes.error || distributionsRes.error || salesRes.error || withdrawalsRes.error;
+      if (historyError) {
+        console.warn('[Get Inventory] History query failed - falling back to stored totals:', historyError);
+      }
+
+      const additionsByItem = groupByItemId(additionsRes.data || []);
+      const distributionsByItem = groupByItemId(distributionsRes.data || []);
+      const salesByItem = groupByItemId(salesRes.data || []);
+      const withdrawalsByItem = groupByItemId(withdrawalsRes.data || []);
+
+      const items = itemRows.map((item: any) => {
         if (numericStallId !== undefined) {
           console.log(`[Get Inventory] Processing item ${item.item_id} (${item.item_name}) for stall ${numericStallId}`);
           // For specific stall: calculate distributed - sold for that stall
-          // Get all distributions sorted by date
-          const { data: distributions } = await (supabase as any)
-            .from('stock_distribution')
-            .select('quantity_allocated, date_distributed')
-            .eq('item_id', item.item_id)
-            .eq('stall_id', numericStallId)
-            .order('date_distributed', { ascending: true });
+          const distributions = distributionsByItem.get(item.item_id) || [];
 
           const sortedDistributions = (distributions || []).sort((a: any, b: any) =>
             new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime()
@@ -669,11 +766,7 @@ export const dbApi = {
           const totalDistributed = sortedDistributions.reduce((sum: number, d: any) => sum + d.quantity_allocated, 0);
 
           // Get all sales for this item at this stall
-          const { data: sales } = await (supabase as any)
-            .from('sales')
-            .select('quantity_sold, date_time')
-            .eq('item_id', item.item_id)
-            .eq('stall_id', numericStallId);
+          const sales = salesByItem.get(item.item_id) || [];
 
           const totalSold = (sales || []).reduce((sum: number, s: any) => sum + s.quantity_sold, 0) || 0;
 
@@ -764,25 +857,17 @@ export const dbApi = {
           const initialStock = item.initial_stock != null ? Number(item.initial_stock) : 0;
           const existingCurrentStock = item.current_stock != null ? Number(item.current_stock) : 0;
 
-          const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
-            (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', item.item_id),
-            (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id, stall_id').eq('item_id', item.item_id),
-            (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', item.item_id).is('stall_id', null),
-            (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id').eq('item_id', item.item_id)
-          ]);
-
-          // CRITICAL: if ANY history query failed, return the stored item as-is.
-          // A failed query reads as an empty list (sum 0); recomputing or
-          // "syncing" from partial data would write garbage totals to the DB.
-          if (additionsRes.error || distributionsRes.error || centralSalesRes.error || withdrawalsRes.error) {
-            console.warn(`[Admin Stock Calc] History query failed for ${item.item_name} - using stored totals, skipping sync`);
+          // CRITICAL: if ANY history query failed, use the stored item as-is.
+          // A failed query reads as an empty list (sum 0); recomputing from
+          // partial data would show garbage totals.
+          if (historyError) {
             return item;
           }
 
-          const additions = additionsRes.data || [];
-          const distributions = distributionsRes.data || [];
-          const centralSales = centralSalesRes.data || [];
-          const withdrawals = withdrawalsRes.data || [];
+          const additions = additionsByItem.get(item.item_id) || [];
+          const distributions = distributionsByItem.get(item.item_id) || [];
+          const centralSales = salesByItem.get(item.item_id) || [];
+          const withdrawals = withdrawalsByItem.get(item.item_id) || [];
 
           const totalAdded = additions.reduce(
             (sum: number, a: any) => sum + (a.quantity_added || 0), 0);
@@ -832,7 +917,7 @@ export const dbApi = {
             total_allocated: totalDistributed
           };
         }
-      }));
+      });
 
       return { items };
     } catch (error) {
