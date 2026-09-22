@@ -117,8 +117,20 @@ const RecordSale: React.FC = () => {
       return;
     }
 
-    if (parseInt(formData.quantity_sold) <= 0 || parseFloat(formData.unit_price) <= 0) {
-      setError('Quantity and price must be greater than 0.');
+    // Parsed up front and checked for being real numbers. A comparison against
+    // NaN is always false, so "abc" used to slip past a bare `<= 0` check, and
+    // parseInt silently turned 2.9 into 2 without telling the seller.
+    const quantity = Number(formData.quantity_sold);
+    const unitPrice = Number(formData.unit_price);
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setError('Quantity must be a whole number greater than 0.');
+      setLoading(false);
+      return;
+    }
+
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      setError('Price must be a number greater than 0.');
       setLoading(false);
       return;
     }
@@ -135,8 +147,8 @@ const RecordSale: React.FC = () => {
 
     try {
       const selectedItem = items.find(item => item.item_id === parseInt(formData.item_id));
-      if (selectedItem && selectedItem.current_stock < parseInt(formData.quantity_sold)) {
-        setError('Insufficient stock available.');
+      if (selectedItem && selectedItem.current_stock < quantity) {
+        setError(`Only ${selectedItem.current_stock} left in stock. Refresh the page if you expected more.`);
         setLoading(false);
         return;
       }
@@ -148,7 +160,7 @@ const RecordSale: React.FC = () => {
         : (user?.user_id || 0);
 
       // Calculate total amount
-      const totalAmount = parseInt(formData.quantity_sold) * parseFloat(formData.unit_price);
+      const totalAmount = quantity * unitPrice;
 
       if (formData.sale_type === 'split') {
         const cash = parseFloat(formData.cash_amount);
@@ -186,8 +198,8 @@ const RecordSale: React.FC = () => {
       await dataApi.createSale({
         item_id: formData.item_id,
         stall_id: formData.stall_id ? parseInt(formData.stall_id) : null, // Optional for admin - use null instead of undefined
-        quantity_sold: parseInt(formData.quantity_sold),
-        unit_price: parseFloat(formData.unit_price),
+        quantity_sold: quantity,
+        unit_price: unitPrice,
         total_amount: totalAmount, // Add total_amount calculation
         sale_type: formData.sale_type,
         recorded_by: recordedBy,

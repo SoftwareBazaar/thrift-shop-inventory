@@ -176,11 +176,34 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     throw new Error('Item not found.');
   }
 
+  // Paged reads. A plain select stops at 1000 rows without reporting an error,
+  // so a long-lived item's history would look complete while missing its
+  // newest rows, and this function writes that result straight into items.
   const [additionsRes, distributionsRes, centralSalesRes, withdrawalsRes] = await Promise.all([
-    (supabase as any).from('stock_additions').select('quantity_added, date_added, addition_id').eq('item_id', itemId),
-    (supabase as any).from('stock_distribution').select('quantity_allocated, date_distributed, distribution_id, stall_id').eq('item_id', itemId),
-    (supabase as any).from('sales').select('quantity_sold, date_time, sale_id').eq('item_id', itemId).is('stall_id', null),
-    (supabase as any).from('stock_withdrawals').select('quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id').eq('item_id', itemId)
+    fetchAllRows(
+      'stock_additions',
+      'quantity_added, date_added, addition_id',
+      'addition_id',
+      (q: any) => q.eq('item_id', itemId)
+    ),
+    fetchAllRows(
+      'stock_distribution',
+      'quantity_allocated, date_distributed, distribution_id, stall_id',
+      'distribution_id',
+      (q: any) => q.eq('item_id', itemId)
+    ),
+    fetchAllRows(
+      'sales',
+      'quantity_sold, date_time, sale_id',
+      'sale_id',
+      (q: any) => q.eq('item_id', itemId).is('stall_id', null)
+    ),
+    fetchAllRows(
+      'stock_withdrawals',
+      'quantity_withdrawn, date_withdrawn, withdrawal_id, stall_id, distribution_id',
+      'withdrawal_id',
+      (q: any) => q.eq('item_id', itemId)
+    )
   ]);
 
   // CRITICAL: never recompute from partial history. A failed query would read
@@ -217,6 +240,17 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
 
   if (updateError) throw updateError;
   return updated as Item;
+};
+
+// A failed read must never fall back to mock data. Returning the empty mock
+// inventory made a dropped request look like the shop had lost every item, and
+// the mock stall/user lists are stale, so a blip could hide a real stall. The
+// caller shows this message and keeps the last good numbers on screen.
+const readFailed = (what: string, cause: unknown): Error => {
+  const detail = cause instanceof Error ? cause.message : String(cause ?? 'unknown error');
+  return new Error(
+    `Couldn't load ${what}. Check your connection and try again. (${detail})`
+  );
 };
 
 // Supabase caps a single response at 1000 rows, so anything that could exceed
@@ -353,7 +387,7 @@ export const dbApi = {
       return { users: data as User[] };
     } catch (error) {
       console.error('Error fetching users:', error);
-      return mockApi.getUsers(); // Fallback
+      throw readFailed('users', error);
     }
   },
 
@@ -600,7 +634,7 @@ export const dbApi = {
       return { withdrawals: withdrawals || [] };
     } catch (error) {
       console.error('Error fetching stock withdrawals:', error);
-      return { withdrawals: [] };
+      throw readFailed('the withdrawal history', error);
     }
   },
 
@@ -961,7 +995,7 @@ export const dbApi = {
       return { items };
     } catch (error) {
       console.error('Error fetching inventory:', error);
-      return mockApi.getInventory(numericStallId); // Fallback
+      throw readFailed('inventory', error);
     }
   },
 
@@ -1649,7 +1683,7 @@ export const dbApi = {
       return buildSalesAggregates(rows);
     } catch (error) {
       console.error('Error fetching sales aggregates:', error);
-      return mockApi.getSalesAggregates();
+      throw readFailed('sales totals', error);
     }
   },
 
@@ -1689,7 +1723,7 @@ export const dbApi = {
       return { sales: sales as Sale[] };
     } catch (error) {
       console.error('Error fetching sales:', error);
-      return mockApi.getSales(); // Fallback
+      throw readFailed('sales', error);
     }
   },
 
@@ -1765,7 +1799,15 @@ export const dbApi = {
             notes: saleData.notes || null
           }]);
 
-        if (creditError) throw creditError;
+        if (creditError) {
+          // The sale row is already in. Leaving it would create a credit sale
+          // with no customer or balance attached to it, which then never shows
+          // up for collection. Undo the sale so the operator can simply retry.
+          await (supabase as any).from('sales').delete().eq('sale_id', data.sale_id);
+          throw new Error(
+            `Couldn't save the customer's credit details, so the sale was not recorded. Please enter it again. (${creditError.message || creditError})`
+          );
+        }
       }
 
       // Central hub sales reduce "Available to distribute" immediately.
@@ -1871,9 +1913,27 @@ export const dbApi = {
       const existingCredit = Array.isArray(existingCreditRows) ? existingCreditRows[0] : null;
 
       if (saleType === 'credit') {
-        const amountPaid = saleData.amount_paid ?? existingCredit?.amount_paid ?? 0;
-        const paymentStatus = saleData.payment_status
-          ?? (amountPaid >= totalAmount ? 'fully_paid' : amountPaid > 0 ? 'partially_paid' : 'unpaid');
+        const amountPaid = Number(saleData.amount_paid ?? existingCredit?.amount_paid ?? 0);
+
+        if (!Number.isFinite(amountPaid) || amountPaid < 0) {
+          throw new Error('Amount paid must be zero or greater.');
+        }
+
+        // balance_due is computed as total - paid, so a total below what the
+        // customer already handed over would leave the shop showing a negative
+        // amount owing.
+        if (amountPaid > totalAmount) {
+          throw new Error(
+            `This customer has already paid ${amountPaid.toLocaleString()}, which is more than the new total of ${totalAmount.toLocaleString()}. ` +
+            `Lower the amount paid first, or refund the difference, before reducing the sale.`
+          );
+        }
+
+        // Status must follow the money, otherwise a sale can read "fully paid"
+        // while a balance is still outstanding.
+        const paymentStatus = amountPaid >= totalAmount
+          ? 'fully_paid'
+          : amountPaid > 0 ? 'partially_paid' : 'unpaid';
 
         const creditPayload: any = {
           customer_name: saleData.customer_name ?? existingCredit?.customer_name ?? 'Customer',
@@ -1885,21 +1945,33 @@ export const dbApi = {
           notes: saleData.notes ?? existingCredit?.notes ?? null
         };
 
-        if (existingCredit) {
-          await (supabase as any)
-            .from('credit_sales')
-            .update(creditPayload)
-            .eq('sale_id', saleId);
-        } else {
-          await (supabase as any)
-            .from('credit_sales')
-            .insert([{ sale_id: saleId, ...creditPayload }]);
+        // These writes carry the customer's balance. Swallowing an error here
+        // let the sale change while the amount owing stayed as it was.
+        const { error: creditWriteError } = existingCredit
+          ? await (supabase as any)
+              .from('credit_sales')
+              .update(creditPayload)
+              .eq('sale_id', saleId)
+          : await (supabase as any)
+              .from('credit_sales')
+              .insert([{ sale_id: saleId, ...creditPayload }]);
+
+        if (creditWriteError) {
+          throw new Error(
+            `The sale was updated but the customer's credit details could not be saved. Please reopen it and check the balance. (${creditWriteError.message || creditWriteError})`
+          );
         }
       } else if (existingCredit) {
-        await (supabase as any)
+        const { error: creditRemoveError } = await (supabase as any)
           .from('credit_sales')
           .delete()
           .eq('sale_id', saleId);
+
+        if (creditRemoveError) {
+          throw new Error(
+            `The sale was changed to ${saleType} but its old credit record could not be cleared, so it may still show as owing. (${creditRemoveError.message || creditRemoveError})`
+          );
+        }
       }
 
       // Re-sync central stock for any item whose central-hub sales changed
@@ -1936,13 +2008,9 @@ export const dbApi = {
         .eq('sale_id', saleId)
         .single();
 
-      // Explicitly delete from credit_sales first if it exists
-      // though CASCADE should handle it if set up in DB
-      await (supabase as any)
-        .from('credit_sales')
-        .delete()
-        .eq('sale_id', saleId);
-
+      // credit_sales cascades from sales. Clearing it by hand first meant a
+      // failure on the sales delete left a credit sale with no customer or
+      // balance, so it vanished from collections while still counting as a sale.
       const { error } = await (supabase as any)
         .from('sales')
         .delete()
@@ -1978,17 +2046,19 @@ export const dbApi = {
     try {
       console.log(`[Bulk Delete Sales] Deleting sale IDs:`, saleIds);
 
-      // Track which items had central-hub sales so their stock can be restored
-      const { data: saleRows } = await (supabase as any)
-        .from('sales')
-        .select('item_id, stall_id')
-        .in('sale_id', saleIds);
+      // Track which items had central-hub sales so their stock can be restored.
+      // Paged, because a single response stops at 1000 rows and any item past
+      // that point would silently keep its stock unrestored.
+      const { data: saleRows, error: lookupError } = await fetchAllRows(
+        'sales',
+        'sale_id, item_id, stall_id',
+        'sale_id',
+        (q: any) => q.in('sale_id', saleIds)
+      );
+      if (lookupError) throw lookupError;
 
-      await (supabase as any)
-        .from('credit_sales')
-        .delete()
-        .in('sale_id', saleIds);
-
+      // credit_sales cascades from sales; deleting it separately risked leaving
+      // credit sales stripped of their balances if the sales delete then failed.
       const { error } = await (supabase as any)
         .from('sales')
         .delete()
@@ -2119,7 +2189,7 @@ export const dbApi = {
       return { stalls: data as Stall[] };
     } catch (error) {
       console.error('Error fetching stalls:', error);
-      return mockApi.getStalls(); // Fallback
+      throw readFailed('stalls', error);
     }
   },
 

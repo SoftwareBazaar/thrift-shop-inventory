@@ -6,6 +6,29 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
+// The shop trades in Nairobi (UTC+3) but timestamps are stored in UTC. Slicing
+// the ISO string put an early-morning sale on the previous day, so reports and
+// the day filter disagreed with what the shop actually sold that day.
+const SHOP_TIME_ZONE = 'Africa/Nairobi';
+const shopDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: SHOP_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+
+/** Business day of a sale, as YYYY-MM-DD in shop time. */
+const shopDateKey = (rawDate?: string | null): string | null => {
+  if (!rawDate) return null;
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return shopDateFormatter.format(parsed);
+};
+
+/** Units on a sale row, tolerating either column name. */
+const saleQuantity = (sale: any): number =>
+  Number(sale?.quantity_sold ?? sale?.quantity ?? 0) || 0;
+
 const Reports: React.FC = () => {
   const { user } = useAuth();
   const reportRef = useRef<HTMLDivElement>(null);
@@ -23,6 +46,22 @@ const Reports: React.FC = () => {
   const [topSellersData, setTopSellersData] = useState<any[]>([]);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
+
+  // Applies whichever end of the range has been filled in. It previously only
+  // filtered when both dates were set, so a half-filled range silently showed
+  // every sale ever recorded.
+  const filterByDateRange = useCallback((sales: any[]) => {
+    const { start_date, end_date } = dateRange;
+    if (!start_date && !end_date) return sales;
+
+    return sales.filter((sale: any) => {
+      const date = shopDateKey(sale.date_time || sale.sale_date);
+      if (!date) return false;
+      if (start_date && date < start_date) return false;
+      if (end_date && date > end_date) return false;
+      return true;
+    });
+  }, [dateRange]);
 
   const tabs = [
     { id: 'inventory', name: 'Inventory Report', icon: '📦' },
@@ -86,32 +125,27 @@ const Reports: React.FC = () => {
           };
         });
         
-        if (dateRange.start_date && dateRange.end_date) {
-          sales = sales.filter((s: any) => {
-            const rawDate = s.date_time || s.sale_date;
-            if (!rawDate) return false;
-            const date = rawDate.split('T')[0];
-            return date >= dateRange.start_date && date <= dateRange.end_date;
-          });
-        }
-        
+        sales = filterByDateRange(sales);
+
         const dates: any = {};
         sales.forEach((sale: any) => {
-          const rawDate = sale.date_time || sale.sale_date;
-          if (!rawDate) return;
-          const date = rawDate.split('T')[0];
-          
-          // Calculate profit: (unit_price - buying_price) * quantity_sold
+          const date = shopDateKey(sale.date_time || sale.sale_date);
+          if (!date) return;
+
+          // Quantity must come from the same helper the other tabs use. Reading
+          // only quantity_sold here meant a row carrying `quantity` instead
+          // counted its revenue but recorded no cost, inflating the margin.
+          const quantity = saleQuantity(sale);
           const itemInfo = itemsMap[sale.item_id] || { buying_price: 0 };
-          const profit_per_unit = (sale.unit_price || 0) - (itemInfo.buying_price || 0);
-          const total_profit = profit_per_unit * (sale.quantity_sold || 0);
-          
+          const cost = (Number(itemInfo.buying_price) || 0) * quantity;
+          const revenue = Number(sale.total_amount) || 0;
+
           if (!dates[date]) {
             dates[date] = { revenue: 0, profit: 0, cost: 0 };
           }
-          dates[date].revenue += (sale.total_amount || 0);
-          dates[date].profit += total_profit;
-          dates[date].cost += (itemInfo.buying_price || 0) * (sale.quantity_sold || 0);
+          dates[date].revenue += revenue;
+          dates[date].profit += revenue - cost;
+          dates[date].cost += cost;
         });
         
         setSalesTrends(Object.entries(dates)
@@ -125,38 +159,24 @@ const Reports: React.FC = () => {
           .sort((a, b) => a.date.localeCompare(b.date)));
       } else if (activeTab === 'stall-performance') {
         const response = await dataApi.getSales();
-        let sales = response.sales || [];
-        if (dateRange.start_date && dateRange.end_date) {
-          sales = sales.filter((s: any) => {
-            const rawDate = s.date_time || s.sale_date;
-            if (!rawDate) return false;
-            const date = rawDate.split('T')[0];
-            return date >= dateRange.start_date && date <= dateRange.end_date;
-          });
-        }
+        const sales = filterByDateRange(response.sales || []);
         const stalls: any = {};
         sales.forEach((sale: any) => {
-          const stall = sale.stall_name || 'Unknown';
+          // Central-hub sales have no stall, so label them for what they are
+          // rather than lumping them under "Unknown" beside the real stalls.
+          const stall = sale.stall_id == null ? 'Central hub' : (sale.stall_name || 'Unknown');
           if (!stalls[stall]) stalls[stall] = { name: stall, revenue: 0 };
           stalls[stall].revenue += Number(sale.total_amount) || 0;
         });
         setStallStatsData(Object.values(stalls).sort((a: any, b: any) => b.revenue - a.revenue));
       } else if (activeTab === 'top-sellers') {
         const response = await dataApi.getSales();
-        let sales = response.sales || [];
-        if (dateRange.start_date && dateRange.end_date) {
-          sales = sales.filter((s: any) => {
-            const rawDate = s.date_time || s.sale_date;
-            if (!rawDate) return false;
-            const date = rawDate.split('T')[0];
-            return date >= dateRange.start_date && date <= dateRange.end_date;
-          });
-        }
+        const sales = filterByDateRange(response.sales || []);
         const itemsMap: any = {};
         sales.forEach((sale: any) => {
           const name = sale.item_name || 'Unknown';
           if (!itemsMap[name]) itemsMap[name] = { name, quantity: 0 };
-          itemsMap[name].quantity += Number(sale.quantity_sold || sale.quantity) || 0;
+          itemsMap[name].quantity += saleQuantity(sale);
         });
         setTopSellersData(Object.values(itemsMap)
           .sort((a: any, b: any) => b.quantity - a.quantity)
@@ -167,7 +187,7 @@ const Reports: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, dateRange]);
+  }, [activeTab, filterByDateRange]);
 
   useEffect(() => {
     fetchReportData();
@@ -229,8 +249,11 @@ const Reports: React.FC = () => {
         });
       } else if (reportType === 'sales') {
         const response = await dataApi.getSales();
-        let sales = response.sales || [];
-        
+        // Honour the date filter shown on screen. The export used to write
+        // every sale ever recorded, so its totals didn't match the report the
+        // user was looking at when they pressed the button.
+        const sales = filterByDateRange(response.sales || []);
+
         // Fetch items to get buying prices for profit calculation
         const invResponse = await dataApi.getInventory();
         const items = invResponse.items || [];
@@ -241,13 +264,15 @@ const Reports: React.FC = () => {
             item_name: item.item_name
           };
         });
-        
+
         csvContent = 'Date,Item Name,Quantity,Unit Price,Total Amount,Buying Price,Profit,Payment Method,Stall\n';
         sales.forEach((s: any) => {
           const itemInfo = itemsMap[s.item_id] || { buying_price: 0 };
-          const profit_per_unit = (s.unit_price || 0) - (itemInfo.buying_price || 0);
-          const total_profit = profit_per_unit * (s.quantity_sold || 0);
-          csvContent += `"${s.date_time || s.sale_date}","${s.item_name}",${s.quantity_sold || s.quantity},${s.unit_price},${s.total_amount},${itemInfo.buying_price},${total_profit.toFixed(2)},"${s.payment_method}","${s.stall_name}"\n`;
+          const quantity = saleQuantity(s);
+          const revenue = Number(s.total_amount) || 0;
+          const totalProfit = revenue - (Number(itemInfo.buying_price) || 0) * quantity;
+          const stallName = s.stall_id == null ? 'Central hub' : (s.stall_name || 'Unknown');
+          csvContent += `"${shopDateKey(s.date_time || s.sale_date) || ''}","${s.item_name}",${quantity},${s.unit_price},${revenue},${itemInfo.buying_price},${totalProfit.toFixed(2)},"${s.payment_method || ''}","${stallName}"\n`;
         });
       }
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -284,16 +309,19 @@ const Reports: React.FC = () => {
   };
 
   const setDateRangePreset = (preset: string) => {
-    const today = new Date();
-    let start = '';
-    const end = today.toISOString().split('T')[0];
-    if (preset === 'today') start = end;
-    else if (preset === 'week') {
-      const d = new Date(); d.setDate(d.getDate() - 7); start = d.toISOString().split('T')[0];
-    } else if (preset === 'month') {
-      const d = new Date(); d.setDate(d.getDate() - 30); start = d.toISOString().split('T')[0];
-    }
-    setDateRange({ start_date: start, end_date: end });
+    if (!preset) return;
+
+    // Anchor the presets to the shop's own day. Using the UTC date meant that
+    // before 3am local, "Today" selected yesterday and today's sales vanished
+    // from the report.
+    const now = new Date();
+    const end = shopDateKey(now.toISOString())!;
+
+    const daysBack = preset === 'today' ? 0 : preset === 'week' ? 7 : preset === 'month' ? 30 : null;
+    if (daysBack === null) return;
+
+    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+    setDateRange({ start_date: shopDateKey(startDate.toISOString())!, end_date: end });
   };
 
   return (
@@ -400,7 +428,14 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl">
                     <p className="text-purple-600 text-sm font-medium">Profit Margin</p>
-                    <p className="text-2xl font-bold text-purple-900">{salesTrends.length > 0 ? ((salesTrends.reduce((a, b) => a + (b.profit || 0), 0) / salesTrends.reduce((a, b) => a + (b.revenue || 0), 0)) * 100).toFixed(1) : 0}%</p>
+                    <p className="text-2xl font-bold text-purple-900">{(() => {
+                      // Guard on revenue, not row count: rows that total zero
+                      // revenue used to divide by zero and render "NaN%".
+                      const totalRevenue = salesTrends.reduce((a, b) => a + (b.revenue || 0), 0);
+                      if (totalRevenue <= 0) return '0.0';
+                      const totalProfit = salesTrends.reduce((a, b) => a + (b.profit || 0), 0);
+                      return ((totalProfit / totalRevenue) * 100).toFixed(1);
+                    })()}%</p>
                   </div>
                 </div>
               </div>

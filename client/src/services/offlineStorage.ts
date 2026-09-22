@@ -287,6 +287,20 @@ class OfflineStorageService {
     });
   }
 
+  // Drop a queued operation outright. Used when an offline action is undone
+  // before it ever reached the server, so the undo doesn't have to chase a
+  // record the server was never told about.
+  async removeOperation(operationId: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offline_queue'], 'readwrite');
+      const request = transaction.objectStore('offline_queue').delete(operationId);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Delete synced operations (cleanup)
   async deleteSyncedOperations(): Promise<void> {
     if (!this.db) await this.init();

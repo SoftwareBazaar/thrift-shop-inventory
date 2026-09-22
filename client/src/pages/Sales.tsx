@@ -44,10 +44,13 @@ interface InventoryItem {
   current_stock: number;
 }
 
+/** Sentinel for a hub sale, which has no stall but is still a valid choice. */
+const CENTRAL_HUB = 'central' as const;
+
 interface EditFormState {
   sale_id: number;
   item_id: number | '';
-  stall_id: number | '';
+  stall_id: number | '' | typeof CENTRAL_HUB;
   quantity_sold: string;
   unit_price: string;
   sale_type: 'cash' | 'credit' | 'mobile' | 'split';
@@ -254,7 +257,9 @@ const Sales: React.FC = () => {
     setEditForm({
       sale_id: sale.sale_id,
       item_id: sale.item_id ?? '',
-      stall_id: sale.stall_id ?? '',
+      // A hub sale has no stall. Defaulting it to blank made the form demand a
+      // stall, so admins could not edit hub sales without converting them.
+      stall_id: sale.stall_id ?? CENTRAL_HUB,
       quantity_sold: sale.quantity_sold.toString(),
       unit_price: sale.unit_price.toString(),
       sale_type: sale.sale_type,
@@ -275,7 +280,7 @@ const Sales: React.FC = () => {
     setEditError('');
   };
 
-  const updateEditForm = (field: keyof EditFormState, value: string | number | '') => {
+  const updateEditForm = (field: keyof EditFormState, value: string | number | '' | typeof CENTRAL_HUB) => {
     setEditForm(prev => prev ? { ...prev, [field]: value } : prev);
   };
 
@@ -301,17 +306,32 @@ const Sales: React.FC = () => {
       setSavingEdit(true);
       setEditError('');
 
-      if (!editForm.item_id || !editForm.stall_id) {
-        setEditError('Please select both an item and stall.');
+      if (!editForm.item_id || editForm.stall_id === '') {
+        setEditError('Please choose an item and where the sale was made.');
+        setSavingEdit(false);
+        return;
+      }
+
+      const quantity = Number(editForm.quantity_sold);
+      const unitPrice = Number(editForm.unit_price);
+
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        setEditError('Quantity must be a whole number greater than zero.');
+        setSavingEdit(false);
+        return;
+      }
+
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+        setEditError('Selling price must be greater than zero.');
         setSavingEdit(false);
         return;
       }
 
       const payload: any = {
         item_id: Number(editForm.item_id),
-        stall_id: Number(editForm.stall_id),
-        quantity_sold: Number(editForm.quantity_sold),
-        unit_price: Number(editForm.unit_price),
+        stall_id: editForm.stall_id === CENTRAL_HUB ? null : Number(editForm.stall_id),
+        quantity_sold: quantity,
+        unit_price: unitPrice,
         sale_type: editForm.sale_type
       };
 
@@ -685,19 +705,26 @@ const Sales: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stall</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sold from</label>
                   <select
-                    value={editForm.stall_id ? String(editForm.stall_id) : ''}
-                    onChange={(e) => updateEditForm('stall_id', e.target.value ? Number(e.target.value) : '')}
+                    value={editForm.stall_id === '' ? '' : String(editForm.stall_id)}
+                    onChange={(e) => updateEditForm(
+                      'stall_id',
+                      e.target.value === '' ? '' : e.target.value === CENTRAL_HUB ? CENTRAL_HUB : Number(e.target.value)
+                    )}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                     disabled={savingEdit}
                   >
-                    <option value="">Select stall</option>
+                    <option value="">Select where it was sold</option>
+                    <option value={CENTRAL_HUB}>Central hub (no stall)</option>
                     {stalls.map(stall => (
                       <option key={stall.stall_id} value={stall.stall_id}>{stall.stall_name}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Moving a sale between the hub and a stall also moves the stock it came out of.
+                  </p>
                 </div>
 
                 <div>

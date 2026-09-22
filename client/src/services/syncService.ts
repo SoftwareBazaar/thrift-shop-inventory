@@ -102,13 +102,20 @@ class SyncService {
 
       console.log(`[SyncService] Syncing ${pendingOperations.length} operations...`);
 
-      // Sync each operation
-      for (const operation of pendingOperations) {
+      // Sync each operation, oldest first, so a sale never lands before the
+      // item or stock movement it depends on.
+      const ordered = [...pendingOperations].sort(
+        (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+      );
+
+      const failures: string[] = [];
+      for (const operation of ordered) {
         try {
           await this.syncOperation(operation);
           await offlineStorage.markOperationSynced(operation.id);
         } catch (error) {
           console.error(`[SyncService] Failed to sync operation ${operation.id}:`, error);
+          failures.push(`${operation.type} ${operation.table}`);
           // Keep operation in queue for retry
         }
       }
@@ -119,49 +126,87 @@ class SyncService {
       // Refresh data from server
       await this.refreshData();
 
+      // Report what is genuinely still queued. Forcing this to zero showed a
+      // green "all synced" badge while changes were still sitting on the device.
+      const stillPending = await offlineStorage.getPendingOperations();
+
       this.updateStatus({
         isSyncing: false,
         lastSyncTime: Date.now(),
-        pendingOperations: 0
+        pendingOperations: stillPending.length
       });
 
-      console.log('[SyncService] Sync completed successfully');
+      if (failures.length > 0) {
+        console.warn(
+          `[SyncService] ${failures.length} operation(s) could not be saved and are still queued: ${failures.join(', ')}`
+        );
+        window.dispatchEvent(
+          new CustomEvent('sync-incomplete', { detail: { pending: stillPending.length, failures } })
+        );
+      } else {
+        console.log('[SyncService] Sync completed successfully');
+      }
     } catch (error) {
       console.error('[SyncService] Sync error:', error);
       this.updateStatus({ isSyncing: false });
     }
   }
 
-  // Sync a single operation
+  // Apply a single queued operation to the server.
+  //
+  // Anything this cannot apply MUST throw. The caller only marks an operation
+  // as synced when this returns, so a silent fall-through used to drop the
+  // operation from the queue while the server never received it — the shop saw
+  // "synced" and the record simply did not exist.
   private async syncOperation(operation: any): Promise<void> {
-    switch (operation.type) {
-      case 'CREATE':
-        if (operation.table === 'sales') {
-          await dbApi.createSale(operation.data);
-        } else if (operation.table === 'items') {
-          await dbApi.createItem(operation.data);
-        } else if (operation.table === 'withdrawals') {
-          await dbApi.createWithdrawal(operation.data);
-        } else if (operation.table === 'stock_additions') {
-          await dbApi.addStock(operation.data.item_id, operation.data.quantity);
+    const { type, table, data } = operation;
+
+    if (type === 'CREATE') {
+      switch (table) {
+        case 'sales': {
+          const result = await dbApi.createSale(data);
+          // The offline copy was keyed by a placeholder id. Now that the server
+          // has issued a real one, drop the placeholder or the device counts
+          // the same sale twice the next time it reads from its own cache.
+          if (data.__tempSaleId != null) {
+            await offlineStorage.deleteSale(Number(data.__tempSaleId));
+          }
+          return result as unknown as void;
         }
-        break;
-
-      case 'UPDATE':
-        if (operation.table === 'items') {
-          await dbApi.updateItem(operation.data.item_id, operation.data);
-        } else if (operation.table === 'sales') {
-          await dbApi.updateSale(operation.data.sale_id, operation.data);
-        }
-        break;
-
-      case 'DELETE':
-        // Handle delete if needed
-        break;
-
-      default:
-        console.warn(`[SyncService] Unknown operation type: ${operation.type}`);
+        case 'items':
+          await dbApi.createItem(data);
+          return;
+        case 'withdrawals':
+          await dbApi.createWithdrawal(data);
+          return;
+        case 'stock_additions':
+          await dbApi.addStock(data.item_id, data.quantity);
+          return;
+      }
     }
+
+    if (type === 'UPDATE') {
+      switch (table) {
+        case 'items':
+          await dbApi.updateItem(data.item_id, data);
+          return;
+        case 'sales':
+          await dbApi.updateSale(data.sale_id, data);
+          return;
+      }
+    }
+
+    if (type === 'DELETE' && table === 'sales') {
+      const ids: number[] = Array.isArray(data.sale_ids)
+        ? data.sale_ids.map(Number)
+        : [Number(data.sale_id)];
+      await dbApi.bulkDeleteSales(ids);
+      return;
+    }
+
+    throw new Error(
+      `[SyncService] No handler for ${type} on "${table}" — refusing to discard this change.`
+    );
   }
 
   // Refresh data from server
@@ -186,7 +231,7 @@ class SyncService {
   // Queue an operation for offline sync
   async queueOperation(
     type: 'CREATE' | 'UPDATE' | 'DELETE',
-    table: 'items' | 'sales' | 'distributions' | 'withdrawals' | 'stock_additions',
+    table: 'items' | 'sales' | 'withdrawals' | 'stock_additions',
     data: any
   ): Promise<void> {
     const operation = {
@@ -209,6 +254,39 @@ class SyncService {
       await this.sync();
     } else {
       console.log('[SyncService] Operation queued for later sync');
+    }
+  }
+
+  // Remove sales that were deleted while offline.
+  //
+  // A sale that was also created offline has never reached the server, so the
+  // honest undo is to drop its queued insert. Queueing a delete instead would
+  // race: the insert would run first and leave a sale on the server that the
+  // operator had already deleted.
+  async cancelOrQueueSaleDeletion(saleIds: number[]): Promise<void> {
+    const pending = await offlineStorage.getPendingOperations();
+    const remaining: number[] = [];
+
+    for (const saleId of saleIds) {
+      const queuedInsert = pending.find(
+        (op: any) =>
+          op.type === 'CREATE' &&
+          op.table === 'sales' &&
+          Number(op.data?.__tempSaleId) === Number(saleId)
+      );
+
+      if (queuedInsert) {
+        await offlineStorage.removeOperation(queuedInsert.id);
+      } else {
+        remaining.push(saleId);
+      }
+    }
+
+    if (remaining.length > 0) {
+      await this.queueOperation('DELETE', 'sales', { sale_ids: remaining });
+    } else {
+      const stillPending = await offlineStorage.getPendingOperations();
+      this.updateStatus({ pendingOperations: stillPending.length });
     }
   }
 

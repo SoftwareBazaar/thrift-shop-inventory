@@ -31,6 +31,8 @@ interface Sale {
 interface Analytics {
   totalRevenue: number;
   cumulativeRevenue: number;
+  /** Revenue minus what the goods sold in this period cost to buy. */
+  grossProfit: number;
   totalSales: number;
   totalUnits: number;
   averageSale: number;
@@ -44,6 +46,9 @@ const AdminDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
+  // Sales inside the selected period. The stall tiles read this so they agree
+  // with the headline cards instead of always showing lifetime totals.
+  const [periodSales, setPeriodSales] = useState<Sale[]>([]);
   const [inventoryResponse, setInventoryResponse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('today');
@@ -83,7 +88,6 @@ const AdminDashboard: React.FC = () => {
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       let filteredSales = allSales;
-      let runningTotalEnd = new Date();
 
       if (selectedPeriod === 'today') {
         filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
@@ -107,23 +111,41 @@ const AdminDashboard: React.FC = () => {
           const saleDate = new Date(sale.date_time);
           return saleDate >= start && saleDate <= end;
         });
-        runningTotalEnd = end;
       }
 
-      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0);
-      const cumulativeRevenue = allSales.reduce((sum: number, sale: any) => {
-        if (new Date(sale.date_time) <= runningTotalEnd) {
-          return sum + (sale.total_amount || 0);
-        }
-        return sum;
+      setPeriodSales(filteredSales);
+
+      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + (Number(sale.total_amount) || 0), 0);
+      // Revenue for every sale ever recorded. This used to be shown as "Total
+      // Revenue" next to period-filtered cards, so the headline number barely
+      // moved when the period changed. It is now a clearly labelled all-time
+      // total alongside the period figure.
+      const cumulativeRevenue = allSales.reduce(
+        (sum: number, sale: any) => sum + (Number(sale.total_amount) || 0),
+        0
+      );
+
+      // Gross profit for the selected period: what the goods sold actually
+      // fetched, minus what those same goods cost to buy. The old figure
+      // subtracted the value of unsold stock still on the shelves from
+      // all-time revenue, which is not a profit for any period.
+      const buyingPriceByItem = new Map<number, number>();
+      sortedItems.forEach((item: any) => {
+        buyingPriceByItem.set(Number(item.item_id), Number(item.buying_price) || 0);
+      });
+
+      const costOfGoodsSold = filteredSales.reduce((sum: number, sale: any) => {
+        const qty = Number(sale.quantity_sold) || 0;
+        return sum + qty * (buyingPriceByItem.get(Number(sale.item_id)) || 0);
       }, 0);
+      const grossProfit = totalRevenue - costOfGoodsSold;
 
       const itemSalesMap = new Map<string, { total_sold: number; revenue: number }>();
       filteredSales.forEach((sale: any) => {
         const existing = itemSalesMap.get(sale.item_name) || { total_sold: 0, revenue: 0 };
         itemSalesMap.set(sale.item_name, {
-          total_sold: existing.total_sold + sale.quantity_sold,
-          revenue: existing.revenue + sale.total_amount
+          total_sold: existing.total_sold + (Number(sale.quantity_sold) || 0),
+          revenue: existing.revenue + (Number(sale.total_amount) || 0)
         });
       });
 
@@ -149,13 +171,15 @@ const AdminDashboard: React.FC = () => {
       const analyticsData: Analytics = {
         totalRevenue: totalRevenue,
         cumulativeRevenue: cumulativeRevenue,
+        grossProfit: grossProfit,
         totalSales: filteredSales.length,
-        totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0),
+        // Guarded: one row with a missing quantity used to turn this card into NaN.
+        totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + (Number(sale.quantity_sold) || 0), 0),
         averageSale: filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0,
         topSellingItems: topSellingItems,
         userPerformance: userPerformance,
         dailySales: [],
-        commissionData: userPerformance.map(user => ({
+        commissionData:         userPerformance.map(user => ({
           user_name: user.user_name,
           sales: user.sales,
           commission: user.revenue * 0.05
@@ -211,15 +235,15 @@ const AdminDashboard: React.FC = () => {
   };
 
   const getStallSalesSummary = (stallName: string) => {
-    const stallSales = allSales.filter(sale => sale.stall_name === stallName);
-    const revenue = stallSales.reduce((sum, sale) => sum + sale.total_amount, 0);
+    const stallSales = periodSales.filter(sale => sale.stall_name === stallName);
+    const revenue = stallSales.reduce((sum, sale) => sum + (Number(sale.total_amount) || 0), 0);
     const count = stallSales.length;
 
     const contributorMap = new Map<string, number>();
     stallSales.forEach(sale => {
       if (sale.recorded_by_name) {
         const currentAmount = contributorMap.get(sale.recorded_by_name) || 0;
-        contributorMap.set(sale.recorded_by_name, currentAmount + sale.total_amount);
+        contributorMap.set(sale.recorded_by_name, currentAmount + (Number(sale.total_amount) || 0));
       }
     });
 
@@ -251,9 +275,20 @@ const AdminDashboard: React.FC = () => {
     return sum + (unsoldStock * (Number(item.buying_price) || 0));
   }, 0);
 
-  const revenue = analytics?.cumulativeRevenue || 0;
-  const grossProfit = revenue - totalStockValue;
+  const grossProfit = analytics?.grossProfit || 0;
   const profitTone = grossProfit > 0 ? 'text-green-600' : grossProfit < 0 ? 'text-red-600' : 'text-orange-500';
+
+  // The revenue and profit cards follow the period selector, so say which
+  // period they are showing rather than leaving them looking like all-time.
+  const periodLabel = selectedPeriod === 'today'
+    ? 'Today'
+    : selectedPeriod === 'week'
+      ? 'This Week'
+      : selectedPeriod === 'month'
+        ? 'This Month'
+        : selectedPeriod === 'year'
+          ? 'This Year'
+          : startDate && endDate ? 'Selected Dates' : 'All Time';
 
   if (loading) {
     return (
@@ -335,15 +370,18 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-blue-500 relative overflow-hidden">
           <div className="absolute left-2 bottom-2 text-4xl opacity-100">💰</div>
           <div className="flex flex-col relative z-10 pl-12">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</h3>
-            <p className="text-lg font-bold text-blue-600 break-words">{formatCurrency(analytics?.cumulativeRevenue || 0)}</p>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue · {periodLabel}</h3>
+            <p className="text-lg font-bold text-blue-600 break-words">{formatCurrency(analytics?.totalRevenue || 0)}</p>
+            <p className="text-[10px] text-gray-400 break-words">
+              All time: {formatCurrency(analytics?.cumulativeRevenue || 0)}
+            </p>
           </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-purple-500 relative overflow-hidden">
           <div className="absolute left-2 bottom-2 text-4xl opacity-100">📦</div>
           <div className="flex flex-col relative z-10 pl-12">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold</h3>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Units Sold · {periodLabel}</h3>
             <p className="text-lg font-bold text-purple-600 break-words">{analytics?.totalUnits || 0}</p>
           </div>
         </div>
@@ -359,7 +397,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-4 sm:p-5 rounded-lg shadow-lg border-l-4 border-orange-500 relative overflow-hidden">
           <div className="absolute left-2 bottom-2 text-4xl opacity-100">📈</div>
           <div className="flex flex-col relative z-10 pl-12">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit</h3>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Profit · {periodLabel}</h3>
             <p className={`text-lg font-bold ${profitTone} break-words`}>{formatCurrency(grossProfit)}</p>
           </div>
         </div>
@@ -431,8 +469,8 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="pt-3 border-t border-gray-200">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Recent Sales</span>
-                      <span>{summary.count} items</span>
+                      <span>Sales · {periodLabel}</span>
+                      <span>{summary.count} sales</span>
                     </div>
                     <p className="text-lg font-bold text-blue-600 mb-2">{formatCurrency(summary.revenue)}</p>
                     {summary.contributors.length > 0 && (

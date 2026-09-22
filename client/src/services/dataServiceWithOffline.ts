@@ -4,6 +4,15 @@ import { dataApi } from './baseDataService';
 import { offlineStorage } from './offlineStorage';
 import { syncService } from './syncService';
 
+// Rows created offline need a local id until the server issues a real one.
+// Real ids are small serial integers, so staying above this floor keeps the two
+// kinds impossible to confuse, and the counter avoids two sales made in the same
+// millisecond sharing an id.
+const TEMP_ID_FLOOR = 1_000_000_000_000;
+let tempIdCounter = 0;
+const nextTempId = (): number => TEMP_ID_FLOOR + Date.now() % TEMP_ID_FLOOR + tempIdCounter++;
+const isTempId = (id: number): boolean => Number(id) >= TEMP_ID_FLOOR;
+
 // Enhanced API with offline support
 export const offlineDataApi = {
   // Get inventory - try online first, fallback to offline
@@ -17,6 +26,20 @@ export const offlineDataApi = {
             await offlineStorage.saveItem(item);
           }
         }
+
+        // Refresh the cached allocations too. They only used to be written when
+        // this device did the distributing, so a stall whose stock was sent from
+        // another phone kept working off old allocations once it went offline
+        // and could show — and sell — stock it no longer had.
+        try {
+          const { distributions } = await dataApi.getDistributions();
+          for (const dist of distributions || []) {
+            await offlineStorage.saveDistribution(dist);
+          }
+        } catch (cacheError) {
+          console.warn('[OfflineDataApi] Could not refresh cached allocations:', cacheError);
+        }
+
         return result;
       } else {
         // Offline: get from IndexedDB and calculate stock from distributions
@@ -86,9 +109,13 @@ export const offlineDataApi = {
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting inventory:', error);
-      // Fallback to simple offline storage
+      // The online read failed. Serve the last synced copy so the shop can keep
+      // trading, but flag it as stale so the screen can say the numbers may be
+      // behind. With nothing cached there is nothing honest to show: an empty
+      // list would read as "every item is gone", so surface the error instead.
       const items = await offlineStorage.getItems();
-      return { items };
+      if (items.length === 0) throw error;
+      return { items, stale: true };
     }
   },
 
@@ -165,8 +192,13 @@ export const offlineDataApi = {
           item_id: itemId
         };
 
+        // Cache the merged row for display, but queue only the fields the user
+        // actually edited. Sending the whole cached row replayed stale values
+        // over newer server ones, and because offline "add stock" bumps the
+        // cached total_added, it also made the server bank that stock a second
+        // time on top of the queued addition.
         await offlineStorage.saveItem(updatedItem);
-        await syncService.queueOperation('UPDATE', 'items', updatedItem);
+        await syncService.queueOperation('UPDATE', 'items', { ...itemData, item_id: itemId });
         return { item: updatedItem };
       }
     } catch (error) {
@@ -185,14 +217,16 @@ export const offlineDataApi = {
       } else {
         // Offline: save to IndexedDB and queue for sync
         console.log('[OfflineDataApi] Creating sale offline, queuing for sync');
-        const tempId = Date.now(); // Temporary ID
+        const tempId = nextTempId();
         const offlineSale = {
           ...saleData,
           sale_id: tempId,
           date_time: new Date().toISOString()
         };
         await offlineStorage.saveSale(offlineSale);
-        await syncService.queueOperation('CREATE', 'sales', saleData);
+        // Carry the placeholder id so the sync can clear this local row once the
+        // server issues a real one; otherwise the device counts the sale twice.
+        await syncService.queueOperation('CREATE', 'sales', { ...saleData, __tempSaleId: tempId });
         return { sale: offlineSale };
       }
     } catch (error) {
@@ -211,6 +245,15 @@ export const offlineDataApi = {
       } else {
         // Offline: update in IndexedDB and queue for sync
         console.log('[OfflineDataApi] Updating sale offline, queuing for sync');
+
+        // A sale made offline has no server id yet, so an update queued against
+        // its placeholder id would never match a row and would retry forever.
+        if (isTempId(saleId)) {
+          throw new Error(
+            'This sale hasn\'t reached the server yet. Delete it and record it again, or reconnect first.'
+          );
+        }
+
         // Retrieve existing sale to ensure we don't lose data
         const styles = await offlineStorage.getSales();
         const existingSale = styles.find((s: any) => s.sale_id === saleId) || {};
@@ -221,8 +264,10 @@ export const offlineDataApi = {
           sale_id: saleId
         };
 
+        // As with items: cache the merged row for display, but queue only the
+        // edited fields so stale cached values can't overwrite newer ones.
         await offlineStorage.saveSale(updatedSale);
-        await syncService.queueOperation('UPDATE', 'sales', updatedSale);
+        await syncService.queueOperation('UPDATE', 'sales', { ...saleData, sale_id: saleId });
         return { sale: updatedSale };
       }
     } catch (error) {
@@ -253,7 +298,11 @@ export const offlineDataApi = {
       return buildFromSales(sales);
     } catch (error) {
       console.error('[OfflineDataApi] Error getting sales aggregates:', error);
+      // These totals are the "sold" column and the withdraw limit. Empty totals
+      // would silently overstate what is still available, so refuse rather than
+      // guess when there is no cached sales history to fall back on.
       const sales = await offlineStorage.getSales();
+      if (sales.length === 0) throw error;
       return buildFromSales(sales);
     }
   },
@@ -278,9 +327,9 @@ export const offlineDataApi = {
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error getting sales:', error);
-      // Fallback to offline storage
       const sales = await offlineStorage.getSales();
-      return { sales };
+      if (sales.length === 0) throw error;
+      return { sales, stale: true };
     }
   },
 
@@ -311,26 +360,14 @@ export const offlineDataApi = {
 
         return result;
       } else {
-        // Offline: queue for sync
-        console.log('[OfflineDataApi] Distributing stock offline, queuing for sync');
-        await syncService.queueOperation('CREATE', 'distributions', distributionData);
-
-        // Create temporary distribution records
-        const tempDistributions = distributionData.distributions.map(d => ({
-          distribution_id: Date.now() + Math.random(),
-          item_id: distributionData.item_id,
-          stall_id: d.stall_id,
-          quantity_allocated: d.quantity,
-          date_distributed: new Date().toISOString(),
-          distributed_by: 1
-        }));
-
-        // Save to offline storage
-        for (const dist of tempDistributions) {
-          await offlineStorage.saveDistribution(dist);
-        }
-
-        return { distributions: tempDistributions };
+        // Distributing offline used to report success and write placeholder
+        // rows, but nothing ever sent them to the server, so the allocation was
+        // lost while the device showed it as done. Moving stock between the hub
+        // and the stalls has to be confirmed by the server, so ask for a
+        // connection rather than accepting work we cannot keep.
+        throw new Error(
+          'Distributing stock needs an internet connection so the stall totals stay correct on every device. Reconnect and try again.'
+        );
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error distributing stock:', error);
@@ -393,7 +430,7 @@ export const offlineDataApi = {
         // Offline: delete from IndexedDB and queue for sync
         console.log('[OfflineDataApi] Deleting sale offline, queuing for sync');
         await offlineStorage.deleteSale(saleId);
-        await syncService.queueOperation('DELETE', 'sales', { sale_id: saleId });
+        await syncService.cancelOrQueueSaleDeletion([saleId]);
         return { success: true };
       }
     } catch (error) {
@@ -413,10 +450,7 @@ export const offlineDataApi = {
         // Offline: delete from IndexedDB and queue for sync
         console.log('[OfflineDataApi] Bulk deleting sales offline, queuing for sync');
         await offlineStorage.bulkDeleteSales(saleIds);
-        // Queue individual operations for sync to simplify sync logic
-        for (const id of saleIds) {
-          await syncService.queueOperation('DELETE', 'sales', { sale_id: id });
-        }
+        await syncService.cancelOrQueueSaleDeletion(saleIds);
         return { success: true };
       }
     } catch (error) {
@@ -466,19 +500,13 @@ export const offlineDataApi = {
         // the modal closes, which will get the fresh value from Supabase.
         return result;
       } else {
-        // Offline: queue for sync
-        console.log('[OfflineDataApi] Withdrawing from distribution offline, queuing for sync');
-        await syncService.queueOperation('UPDATE', 'distributions', {
-          distribution_id: distributionId,
-          quantity_to_withdraw: quantityToWithdraw
-        });
-
-        // Return success for offline operation
-        return {
-          success: true,
-          withdrawnQuantity: quantityToWithdraw,
-          remainingDistribution: 0 // We don't know the exact value offline
-        };
+        // This used to report a confident success while nothing was ever sent
+        // to the server, so the stock came back on the screen but not in the
+        // records. A withdrawal has to be checked against the live batch size,
+        // which is only knowable online.
+        throw new Error(
+          'Withdrawing stock needs an internet connection so it can be checked against the stall\'s current balance. Reconnect and try again.'
+        );
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error withdrawing from distribution:', error);

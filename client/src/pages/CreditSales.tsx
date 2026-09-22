@@ -9,10 +9,10 @@ const CreditSales: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
-  const [editData, setEditData] = useState({
-    payment_status: 'unpaid',
-    balance_due: 0
-  });
+  // The balance is derived in the database as total - amount paid, so it can
+  // only be moved by recording what the customer has actually paid.
+  const [editData, setEditData] = useState({ amount_paid: 0 });
+  const [saving, setSaving] = useState(false);
 
   const fetchCreditSales = useCallback(async () => {
     try {
@@ -200,15 +200,12 @@ const CreditSales: React.FC = () => {
                     <button
                       onClick={() => {
                         setEditingSale(sale);
-                        setEditData({
-                          payment_status: sale.payment_status || 'unpaid',
-                          balance_due: sale.balance_due || sale.total_amount
-                        });
+                        setEditData({ amount_paid: Number(sale.amount_paid) || 0 });
                         setShowEditModal(true);
                       }}
                       className="text-blue-600 hover:text-blue-900"
                     >
-                      Edit Status
+                      Record Payment
                     </button>
                   </td>
                 </tr>
@@ -222,58 +219,59 @@ const CreditSales: React.FC = () => {
       {showEditModal && editingSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Payment Status</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Record Payment</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {editingSale.customer_name || 'Customer'} — {formatCurrency(editingSale.total_amount)} owed in total
+            </p>
             <form onSubmit={async (e) => {
               e.preventDefault();
+              if (saving) return;
+
+              const paid = Number(editData.amount_paid);
+              if (!Number.isFinite(paid) || paid < 0) {
+                alert('Enter how much the customer has paid, as a number.');
+                return;
+              }
+              if (paid > editingSale.total_amount) {
+                alert(`That is more than the ${formatCurrency(editingSale.total_amount)} owed. Enter the total paid so far, not an extra payment on top.`);
+                return;
+              }
+
+              setSaving(true);
               try {
-                await dataApi.updateSale(editingSale.sale_id, {
-                  payment_status: editData.payment_status,
-                  balance_due: editData.balance_due
-                });
-                const updatedSales = creditSales.map(sale =>
-                  sale.sale_id === editingSale.sale_id
-                    ? { ...sale, payment_status: editData.payment_status, balance_due: editData.balance_due }
-                    : sale
-                );
-                setCreditSales(updatedSales);
+                // Send amount_paid: the status and the remaining balance are both
+                // worked out from it, so they can never disagree with the money.
+                await dataApi.updateSale(editingSale.sale_id, { amount_paid: paid });
                 setShowEditModal(false);
                 setEditingSale(null);
-                alert('Payment status updated successfully!');
+                await fetchCreditSales();
               } catch (error: any) {
-                alert(error.message || 'Failed to update payment status');
+                alert(error?.message || 'Could not save the payment. Please try again.');
+              } finally {
+                setSaving(false);
               }
             }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Status *
-                </label>
-                <select
-                  value={editData.payment_status}
-                  onChange={(e) => setEditData(prev => ({ ...prev, payment_status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partially_paid">Partially Paid</option>
-                  <option value="fully_paid">Fully Paid</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Balance Due (KES)
+                  Total paid so far (KES) *
                 </label>
                 <input
                   type="number"
-                  value={editData.balance_due}
-                  onChange={(e) => setEditData(prev => ({ ...prev, balance_due: parseFloat(e.target.value) || 0 }))}
+                  value={editData.amount_paid}
+                  onChange={(e) => setEditData({ amount_paid: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   min="0"
+                  max={editingSale.total_amount}
                   step="0.01"
                   required
+                  autoFocus
                 />
+                <p className="mt-2 text-sm font-medium text-gray-700">
+                  Balance after saving: {formatCurrency(Math.max(0, editingSale.total_amount - (Number(editData.amount_paid) || 0)))}
+                </p>
                 <p className="mt-1 text-xs text-gray-500">
-                  Original Amount: {formatCurrency(editingSale.total_amount)}
+                  Enter the running total the customer has paid, not just today's instalment.
+                  The status updates itself from this amount.
                 </p>
               </div>
 
@@ -289,8 +287,9 @@ const CreditSales: React.FC = () => {
                 <button
                   type="submit"
                   className="btn-primary"
+                  disabled={saving}
                 >
-                  Save Changes
+                  {saving ? 'Saving…' : 'Save Payment'}
                 </button>
               </div>
             </form>

@@ -43,6 +43,22 @@ const Inventory: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
+  // Keyed by source so the concurrent fetches on mount don't clear each other's
+  // warning. A stale or failed read must stay visible until it actually succeeds.
+  const [loadWarnings, setLoadWarnings] = useState<Record<string, string>>({});
+  const noteLoad = useCallback((source: string, message: string | null) => {
+    setLoadWarnings(prev => {
+      if (!message) {
+        if (!(source in prev)) return prev;
+        const next = { ...prev };
+        delete next[source];
+        return next;
+      }
+      if (prev[source] === message) return prev;
+      return { ...prev, [source]: message };
+    });
+  }, []);
+  const loadWarning = Object.values(loadWarnings)[0] ?? null;
   const [salesAggregates, setSalesAggregates] = useState<{
     byItem: Record<number, number>;
     byItemStall: Record<string, number>;
@@ -101,13 +117,28 @@ const Inventory: React.FC = () => {
   const fetchAllStallAllocations = useCallback(async (itemList: any[], options?: { merge?: boolean }) => {
     if (user?.role !== 'admin' || itemList.length === 0) return;
     try {
-      const results = await Promise.all(
-        itemList.map(item =>
-          dataApi.getDistributions(item.item_id)
-            .then(res => ({ item_id: item.item_id, distributions: res.distributions || [] }))
-            .catch(() => ({ item_id: item.item_id, distributions: [] }))
-        )
-      );
+      // One request for the whole list instead of one per item. Refreshing a
+      // single item after a withdrawal still asks for just that item.
+      let results: { item_id: number; distributions: any[] }[];
+
+      if (itemList.length === 1) {
+        const item = itemList[0];
+        const res = await dataApi.getDistributions(item.item_id).catch(() => ({ distributions: [] }));
+        results = [{ item_id: item.item_id, distributions: res.distributions || [] }];
+      } else {
+        const res = await dataApi.getDistributions();
+        const grouped = new Map<number, any[]>();
+        for (const dist of res.distributions || []) {
+          const bucket = grouped.get(dist.item_id);
+          if (bucket) bucket.push(dist);
+          else grouped.set(dist.item_id, [dist]);
+        }
+        results = itemList.map(item => ({
+          item_id: item.item_id,
+          distributions: grouped.get(item.item_id) || []
+        }));
+      }
+
       setStallAllocMap(prev => {
         const map = options?.merge
           ? new Map(prev)
@@ -135,30 +166,57 @@ const Inventory: React.FC = () => {
         a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' })
       );
       setItems(sortedItems);
+      noteLoad(
+        'items',
+        (response as any).stale
+          ? 'Showing the last synced copy — these numbers may be behind. Reconnect and refresh before distributing or withdrawing.'
+          : null
+      );
       if (user?.role === 'admin' && !options?.skipStallAllocations) {
         fetchAllStallAllocations(sortedItems);
       }
       return sortedItems;
     } catch (error) {
+      // Keep whatever is already on screen rather than blanking the list, and
+      // say so, so a dropped request is never mistaken for missing stock.
       console.error('Error fetching items:', error);
+      noteLoad('items', error instanceof Error ? error.message : 'Couldn\'t refresh the inventory. Check your connection and try again.');
       return [];
     } finally {
       setLoading(false);
     }
-  }, [user?.role, user?.stall_id, fetchAllStallAllocations]);
+  }, [user?.role, user?.stall_id, fetchAllStallAllocations, noteLoad]);
 
   const fetchSales = useCallback(async () => {
+    // Admins read sold counts from the aggregates; the full sales list is only
+    // needed to filter by the signed-in seller, so don't pull it for them.
+    const isAdmin = user?.role === 'admin';
     try {
       const [salesResponse, aggregates] = await Promise.all([
-        dataApi.getSales(),
+        isAdmin ? Promise.resolve({ sales: [] as any[] }) : dataApi.getSales(),
         dataApi.getSalesAggregates()
       ]);
       setSalesData(salesResponse.sales);
       setSalesAggregates(aggregates);
+      noteLoad('sales', null);
     } catch (error) {
       console.error('Error fetching sales:', error);
+      noteLoad('sales', error instanceof Error ? error.message : 'Couldn\'t load sales totals, so the sold figures below may be incomplete.');
     }
-  }, []);
+  }, [user?.role, noteLoad]);
+
+  const fetchStalls = useCallback(async () => {
+    try {
+      const response = await dataApi.getStalls();
+      setStalls(response.stalls);
+      noteLoad('stalls', null);
+    } catch (error) {
+      // An incomplete stall list would quietly hide a stall from the distribute
+      // and withdraw pickers, so say it out loud instead of showing a short list.
+      console.error('Error fetching stalls:', error);
+      noteLoad('stalls', error instanceof Error ? error.message : 'Couldn\'t load the stall list, so some stalls may be missing from the distribute and withdraw options.');
+    }
+  }, [noteLoad]);
 
   useEffect(() => {
     fetchItems();
@@ -192,7 +250,7 @@ const Inventory: React.FC = () => {
       window.removeEventListener('inventory-updated', handleInventoryUpdate);
       window.removeEventListener('sales-updated', handleSalesUpdate);
     };
-  }, [fetchItems, fetchSales]);
+  }, [fetchItems, fetchSales, fetchStalls]);
 
   const fetchItemDistributions = useCallback(async (itemId: number) => {
     if (user?.role !== 'admin') return;
@@ -212,24 +270,32 @@ const Inventory: React.FC = () => {
     try {
       const response = await dataApi.getStockAdditions(itemId);
       setItemStockAdditions(response.additions || []);
+      noteLoad('additions', null);
     } catch (error) {
+      // Clear the panel rather than leave the previous item's rows under this
+      // item's name, and say why it's empty so it doesn't look like lost history.
       console.error('Error fetching stock additions:', error);
+      setItemStockAdditions([]);
+      noteLoad('additions', error instanceof Error ? error.message : 'Couldn\'t load the stock addition history for this item.');
     } finally {
       setIsRefreshingAdditions(false);
     }
-  }, []);
+  }, [noteLoad]);
 
   const fetchItemStockWithdrawals = useCallback(async (itemId: number) => {
     setIsRefreshingWithdrawals(true);
     try {
       const response = await dataApi.getStockWithdrawals(itemId);
       setItemStockWithdrawals(response.withdrawals || []);
+      noteLoad('withdrawals', null);
     } catch (error) {
       console.error('Error fetching stock withdrawals:', error);
+      setItemStockWithdrawals([]);
+      noteLoad('withdrawals', error instanceof Error ? error.message : 'Couldn\'t load the withdrawal history for this item.');
     } finally {
       setIsRefreshingWithdrawals(false);
     }
-  }, []);
+  }, [noteLoad]);
 
   const notifyServiceWorkerToClearSupabaseCache = () => {
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -302,15 +368,6 @@ const Inventory: React.FC = () => {
       setCategories(categories);
     } catch (error) {
       console.error('Error fetching categories:', error);
-    }
-  };
-
-  const fetchStalls = async () => {
-    try {
-      const response = await dataApi.getStalls();
-      setStalls(response.stalls);
-    } catch (error) {
-      console.error('Error fetching stalls:', error);
     }
   };
 
@@ -907,6 +964,19 @@ const Inventory: React.FC = () => {
           </button>
         )}
       </div>
+
+      {loadWarning && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <p className="flex-1 text-sm text-amber-900">{loadWarning}</p>
+          <button
+            type="button"
+            onClick={() => { fetchItems(); fetchSales(); fetchStalls(); }}
+            className="self-start rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
