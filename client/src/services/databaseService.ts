@@ -256,6 +256,57 @@ const groupByItemId = (rows: any[]): Map<number, any[]> => {
   return grouped;
 };
 
+// Referenced records block a delete at the database level. Counting them first
+// lets us say which records are in the way instead of surfacing a raw foreign
+// key error to the user.
+const countRows = async (table: string, column: string, value: number): Promise<number> => {
+  const { count, error } = await (supabase as any)
+    .from(table)
+    .select('*', { count: 'exact', head: true })
+    .eq(column, value);
+  if (error) throw error;
+  return count || 0;
+};
+
+const describeCounts = (parts: Array<{ label: string; count: number }>): string => {
+  const present = parts.filter((p) => p.count > 0).map((p) => `${p.count} ${p.label}`);
+  if (present.length === 0) return 'no records';
+  if (present.length === 1) return present[0];
+  return `${present.slice(0, -1).join(', ')} and ${present[present.length - 1]}`;
+};
+
+const countUserActivity = async (userId: number) => {
+  const [sales, distributions, withdrawals, additions] = await Promise.all([
+    countRows('sales', 'recorded_by', userId),
+    countRows('stock_distribution', 'distributed_by', userId),
+    countRows('stock_withdrawals', 'withdrawn_by', userId),
+    countRows('stock_additions', 'added_by', userId)
+  ]);
+  const parts = [
+    { label: 'sale(s)', count: sales },
+    { label: 'distribution(s)', count: distributions },
+    { label: 'withdrawal(s)', count: withdrawals },
+    { label: 'stock addition(s)', count: additions }
+  ];
+  return { parts, total: sales + distributions + withdrawals + additions };
+};
+
+const countStallActivity = async (stallId: number) => {
+  const [sales, distributions, withdrawals, staff] = await Promise.all([
+    countRows('sales', 'stall_id', stallId),
+    countRows('stock_distribution', 'stall_id', stallId),
+    countRows('stock_withdrawals', 'stall_id', stallId),
+    countRows('users', 'stall_id', stallId)
+  ]);
+  const parts = [
+    { label: 'sale(s)', count: sales },
+    { label: 'distribution(s)', count: distributions },
+    { label: 'withdrawal(s)', count: withdrawals },
+    { label: 'assigned user(s)', count: staff }
+  ];
+  return { parts, total: sales + distributions + withdrawals + staff };
+};
+
 const getCurrentUserId = (): number => {
   try {
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -418,6 +469,17 @@ export const dbApi = {
     }
 
     try {
+      // Sales, distributions and withdrawals all record who performed them and
+      // the database will not release a user who appears in any of them. Say so
+      // plainly instead of surfacing a foreign key error.
+      const activity = await countUserActivity(userId);
+      if (activity.total > 0) {
+        throw new Error(
+          `This user can't be deleted because their name is attached to ${describeCounts(activity.parts)}. ` +
+          `Removing them would break those records. Set their status to inactive instead — they keep their history but can no longer sign in.`
+        );
+      }
+
       const { error } = await (supabase as any)
         .from('users')
         .delete()
@@ -437,6 +499,22 @@ export const dbApi = {
     }
 
     try {
+      // Deleting an item cascades through its sales, so it would silently erase
+      // recorded revenue. Items that were never sold can still be removed.
+      const { count: soldCount, error: soldError } = await (supabase as any)
+        .from('sales')
+        .select('*', { count: 'exact', head: true })
+        .eq('item_id', itemId);
+
+      if (soldError) throw soldError;
+
+      if (soldCount && soldCount > 0) {
+        throw new Error(
+          `This item can't be deleted because it has ${soldCount} recorded sale(s). ` +
+          `Deleting it would erase that revenue from your reports. Withdraw the remaining stock instead so the item shows zero.`
+        );
+      }
+
       const { error } = await (supabase as any)
         .from('items')
         .delete()
@@ -2100,6 +2178,16 @@ export const dbApi = {
     }
 
     try {
+      // Withdrawal records hold onto their stall and the database will not
+      // release it, so this delete always fails once a stall has been used.
+      const activity = await countStallActivity(stallId);
+      if (activity.total > 0) {
+        throw new Error(
+          `This stall can't be deleted because it has ${describeCounts(activity.parts)} on record. ` +
+          `Deleting it would break that history. Set its status to inactive instead — it stays out of the way but the records survive.`
+        );
+      }
+
       const { error } = await (supabase as any)
         .from('stalls')
         .delete()
