@@ -1352,66 +1352,73 @@ export const dbApi = {
     try {
       const withdrawnBy = getCurrentUserId();
 
-      const { data: distBefore } = await (supabase as any)
+      const { data: batch, error: batchError } = await (supabase as any)
         .from('stock_distribution')
-        .select('item_id, stall_id')
+        .select('distribution_id, item_id, stall_id, quantity_allocated, stalls:stall_id(stall_name)')
         .eq('distribution_id', distributionId)
         .maybeSingle();
 
-      const itemId = distBefore?.item_id;
-      let stockBefore = 0;
-      if (itemId) {
-        const { data: itemBefore } = await (supabase as any)
-          .from('items')
-          .select('current_stock')
-          .eq('item_id', itemId)
-          .single();
-        stockBefore = Number(itemBefore?.current_stock) || 0;
+      if (batchError) throw batchError;
+      if (!batch) throw new Error('Distribution batch not found. Please refresh and try again.');
+
+      const allocated = Number(batch.quantity_allocated) || 0;
+      if (quantityToWithdraw <= 0) throw new Error('Quantity must be greater than 0.');
+      if (quantityToWithdraw > allocated) {
+        throw new Error(`Only ${allocated} unit(s) left in this batch.`);
       }
 
-      // Call the server-side RPC which atomically:
-      // 1. Reduces/deletes the distribution row
-      // 2. Inserts the withdrawal history record
-      // 3. Recomputes central stock via compute_central_stock_replay (may stay 0)
-      const { data, error } = await (supabase as any).rpc('withdraw_from_stall', {
-        p_distribution_id: distributionId,
-        p_quantity: quantityToWithdraw,
-        p_withdrawn_by: withdrawnBy
-      });
+      const remaining = allocated - quantityToWithdraw;
 
-      if (error) throw new Error(`withdraw_from_stall RPC failed: ${error.message}`);
+      // Shrink the batch rather than deleting it when it empties. A withdrawal
+      // record points back at its batch, so deleting the row is rejected by the
+      // foreign key, and the ledger needs the row to rebuild how much originally
+      // left the hub. Matching on the quantity we just read also means two
+      // people withdrawing at once cannot both spend the same units - the
+      // second update matches no row and is rejected.
+      const { data: updatedRows, error: updateError } = await (supabase as any)
+        .from('stock_distribution')
+        .update({ quantity_allocated: remaining })
+        .eq('distribution_id', distributionId)
+        .eq('quantity_allocated', allocated)
+        .select('distribution_id');
 
-      console.log('[WFD] RPC result:', data);
-
-      const resolvedItemId = itemId ?? data?.item_id;
-      if (resolvedItemId) {
-        const { data: itemAfter } = await (supabase as any)
-          .from('items')
-          .select('current_stock')
-          .eq('item_id', resolvedItemId)
-          .single();
-        const stockAfter = Number(itemAfter?.current_stock) || 0;
-        if (stockAfter <= stockBefore) {
-          const credited = stockBefore + quantityToWithdraw;
-          const { error: creditError } = await (supabase as any)
-            .from('items')
-            .update({ current_stock: credited })
-            .eq('item_id', resolvedItemId);
-          if (creditError) {
-            console.warn('[WFD] Failed to credit central stock:', creditError);
-          } else {
-            console.log(`[WFD] Credited stall return: item ${resolvedItemId} ${stockBefore} -> ${credited}`);
-          }
-        }
+      if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error('This stock was just changed by someone else. Please refresh and try again.');
       }
+
+      const { data: withdrawal, error: insertError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .insert([{
+          item_id: batch.item_id,
+          stall_id: batch.stall_id,
+          distribution_id: distributionId,
+          quantity_withdrawn: quantityToWithdraw,
+          reason: 'Returned to central hub',
+          notes: `↩️ Returned ${quantityToWithdraw} units from stall to central hub.`,
+          withdrawn_by: withdrawnBy
+        }])
+        .select('withdrawal_id')
+        .single();
+
+      if (insertError) {
+        // Put the units back so a failed audit write cannot silently lose stock.
+        await (supabase as any)
+          .from('stock_distribution')
+          .update({ quantity_allocated: allocated })
+          .eq('distribution_id', distributionId);
+        throw insertError;
+      }
+
+      const item = await recomputeItemTotals(batch.item_id);
 
       return {
         success: true,
         withdrawnQuantity: quantityToWithdraw,
-        withdrawalId: data?.withdrawal_id ?? null,
-        stallName: data?.stall_name ?? null,
-        itemId: resolvedItemId,
-        newCentralStock: data?.new_central_stock ?? null
+        withdrawalId: withdrawal?.withdrawal_id ?? null,
+        stallName: (batch as any).stalls?.stall_name ?? null,
+        itemId: batch.item_id,
+        newCentralStock: Number((item as any)?.current_stock) || 0
       };
     } catch (error) {
       console.error('[WFD] Error:', error);
