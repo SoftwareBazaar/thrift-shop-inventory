@@ -10,6 +10,9 @@
  * Deductions are floored at 0 at the moment they happen, so a historical
  * over-withdrawal is absorbed on the day it occurred instead of leaving a
  * deficit that silently swallows later additions.
+ *
+ * The live database function `compute_hub_stock` in
+ * server/migrations/004_airtight_stock.sql must stay identical to this file.
  */
 
 export interface AdditionRow {

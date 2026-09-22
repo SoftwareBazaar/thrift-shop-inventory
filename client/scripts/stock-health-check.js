@@ -153,7 +153,7 @@ function auditItem(item, history) {
 
   const drift = hub - (item.current_stock || 0);
 
-  return { name: item.item_name, hub, stored: item.current_stock || 0, drift, received, stallReturned, netAtHub, failures };
+  return { name: item.item_name, itemId: item.item_id, hub, stored: item.current_stock || 0, drift, received, stallReturned, netAtHub, failures };
 }
 
 (async () => {
@@ -193,6 +193,36 @@ function auditItem(item, history) {
   console.log(`\nItems checked: ${results.length}`);
   console.log(`Items with returns sitting at the hub: ${results.filter((r) => r.netAtHub > 0).length}`);
 
+  const { data: rpcProbe, error: rpcError } = await supabase.rpc('compute_hub_stock', {
+    p_item_id: items[0] && items[0].item_id
+  });
+
+  if (rpcError) {
+    console.log('\nDatabase ledger function is not installed yet (compute_hub_stock).');
+    console.log('Run: npm run stock:airtight');
+  } else {
+    let rpcMismatch = 0;
+    for (const r of results) {
+      const { data, error } = await supabase.rpc('compute_hub_stock', { p_item_id: r.itemId });
+      if (error) {
+        console.log(`  ${r.name}: RPC error ${error.message}`);
+        rpcMismatch += 1;
+        continue;
+      }
+      const dbHub = Number(data);
+      if (dbHub !== r.hub) {
+        console.log(`  ${r.name}: app hub ${r.hub}, database hub ${dbHub}`);
+        rpcMismatch += 1;
+      }
+    }
+    if (rpcMismatch === 0) {
+      console.log('Database compute_hub_stock matches the app ledger on every item.');
+    } else {
+      console.log(`Database ledger disagrees with the app on ${rpcMismatch} item(s).`);
+      process.exitCode = 1;
+    }
+  }
+
   if (drifted.length) {
     console.log(`\nStored current_stock is behind the live figure on ${drifted.length} item(s).`);
     console.log('This is expected between mutations and corrects itself on the next stock action:');
@@ -201,7 +231,7 @@ function auditItem(item, history) {
     }
   }
 
-  if (broken.length || incomplete.length) {
+  if (broken.length || incomplete.length || process.exitCode === 1) {
     console.log('\nPROBLEMS FOUND:');
     for (const r of broken) {
       for (const failure of r.failures) console.log(`  ${r.name}: ${failure}`);

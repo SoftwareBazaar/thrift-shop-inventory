@@ -155,6 +155,16 @@ const isMissingFunctionError = (error: any): boolean => {
   );
 };
 
+// Postgres / PostgREST wrap the useful sentence in "ERROR: ...". The shop
+// should see "Only 4 left at this stall", not a stack of SQLSTATE codes.
+const friendlyDbError = (error: unknown): string => {
+  const raw = error && typeof error === 'object' && 'message' in (error as any)
+    ? String((error as any).message || '')
+    : String(error ?? '');
+  const cleaned = raw.replace(/^.*ERROR:\s*/i, '').split('\n')[0].trim();
+  return cleaned || 'The database rejected this change.';
+};
+
 // Recompute an item's denormalized totals from the history tables and persist
 // them. Single source of truth for stock math:
 //   total_added     = SUM(stock_additions)
@@ -1180,7 +1190,7 @@ export const dbApi = {
       }
 
       if (error && !isMissingFunctionError(error)) {
-        throw error;
+        throw new Error(friendlyDbError(error));
       }
 
       // Fallback (atomic function not installed yet): insert the history row
@@ -1256,15 +1266,13 @@ export const dbApi = {
         return { distributions: rpcData || [] };
       }
 
-      const insufficientOnServer = /insufficient|available|over-alloc|not enough/i.test(rpcError.message || '');
-      if (!isMissingFunctionError(rpcError) && !insufficientOnServer) {
-        console.error('[Distribute Stock] Atomic RPC error:', rpcError);
-        throw new Error(rpcError.message || 'Failed to distribute stock.');
+      if (!isMissingFunctionError(rpcError)) {
+        throw new Error(friendlyDbError(rpcError));
       }
 
-      // Fallback: server replay can report 0 hub stock on over-allocated items
-      // even when stall→hub returns are sitting in the UI as available.
-      console.warn('[Distribute Stock] Using client availability path:', rpcError.message);
+      // Function not installed yet. Still check the live hub figure here so
+      // we never write an over-allocation while waiting for the migration.
+      console.warn('[Distribute Stock] distribute_stock_atomic_v2 not installed, using fallback path');
 
       const { data: itemRow, error: itemErr } = await (supabase as any)
         .from('items')
@@ -1291,15 +1299,7 @@ export const dbApi = {
         centralSales: centralSalesRes.data || []
       });
       if (available < totalToDistribute) {
-        throw new Error(`Insufficient stock! Available: ${available}, Requested: ${totalToDistribute}`);
-      }
-
-      const { error: creditError } = await (supabase as any)
-        .from('items')
-        .update({ current_stock: available })
-        .eq('item_id', distributionData.item_id);
-      if (creditError) {
-        console.warn('[Distribute Stock] Could not stage hub stock before insert:', creditError);
+        throw new Error(`Only ${available} left at the central hub. You asked to send ${totalToDistribute}.`);
       }
 
       const distributions = validDistributions.map(dist => ({
@@ -1485,6 +1485,31 @@ export const dbApi = {
     try {
       const withdrawnBy = getCurrentUserId();
 
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+        'withdraw_from_distribution_atomic',
+        {
+          p_distribution_id: distributionId,
+          p_quantity: quantityToWithdraw,
+          p_withdrawn_by: withdrawnBy
+        }
+      );
+
+      if (!rpcError && rpcData) {
+        const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+        return {
+          success: true,
+          withdrawnQuantity: Number(row.withdrawnQuantity) || quantityToWithdraw,
+          withdrawalId: row.withdrawalId ?? null,
+          stallName: row.stallName ?? null,
+          itemId: row.itemId,
+          newCentralStock: Number(row.newCentralStock) || 0
+        };
+      }
+
+      if (rpcError && !isMissingFunctionError(rpcError)) {
+        throw new Error(friendlyDbError(rpcError));
+      }
+
       const { data: batch, error: batchError } = await (supabase as any)
         .from('stock_distribution')
         .select('distribution_id, item_id, stall_id, quantity_allocated, stalls:stall_id(stall_name)')
@@ -1584,6 +1609,35 @@ export const dbApi = {
     try {
       const itemId = params.item_id;
       const stallId = params.stall_id;
+      const withdrawnBy = getCurrentUserId();
+
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+        'withdraw_from_stall_atomic',
+        {
+          p_item_id: itemId,
+          p_stall_id: stallId,
+          p_quantity: quantity,
+          p_withdrawn_by: withdrawnBy,
+          p_reason: params.reason || 'Returned to central hub',
+          p_notes: params.notes || 'Moved from stall back to central hub'
+        }
+      );
+
+      if (!rpcError && rpcData) {
+        const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+        return {
+          success: true,
+          withdrawnQuantity: Number(row.withdrawnQuantity) || quantity,
+          withdrawalId: row.withdrawalId ?? null,
+          stallName: row.stallName ?? `Stall #${stallId}`,
+          itemId,
+          newCentralStock: Number(row.newCentralStock) || 0
+        };
+      }
+
+      if (rpcError && !isMissingFunctionError(rpcError)) {
+        throw new Error(friendlyDbError(rpcError));
+      }
 
       const { data: batches, error: batchError } = await (supabase as any)
         .from('stock_distribution')
@@ -1622,45 +1676,12 @@ export const dbApi = {
         remaining -= take;
       }
 
-      // Collapse multi-batch audit rows into a single history entry.
-      let primaryWithdrawalId = withdrawalIds[0] ?? null;
-      if (withdrawalIds.length > 1) {
-        const extras = withdrawalIds.slice(1);
-        const { error: mergeError } = await (supabase as any)
-          .from('stock_withdrawals')
-          .update({
-            quantity_withdrawn: quantity,
-            reason: params.reason || 'Returned to central hub',
-            notes: params.notes || 'Moved from stall back to central hub'
-          })
-          .eq('withdrawal_id', primaryWithdrawalId);
-        if (mergeError) {
-          console.warn('[WithdrawFromStall] Could not merge primary withdrawal row:', mergeError);
-        } else {
-          const { error: deleteExtrasError } = await (supabase as any)
-            .from('stock_withdrawals')
-            .delete()
-            .in('withdrawal_id', extras);
-          if (deleteExtrasError) {
-            console.warn('[WithdrawFromStall] Could not remove split withdrawal rows:', deleteExtrasError);
-          }
-        }
-      } else if (primaryWithdrawalId && (params.reason || params.notes)) {
-        await (supabase as any)
-          .from('stock_withdrawals')
-          .update({
-            reason: params.reason || 'Returned to central hub',
-            notes: params.notes || 'Moved from stall back to central hub'
-          })
-          .eq('withdrawal_id', primaryWithdrawalId);
-      }
-
       const recomputed = await recomputeItemTotals(itemId);
 
       return {
         success: true,
         withdrawnQuantity: quantity,
-        withdrawalId: primaryWithdrawalId,
+        withdrawalId: withdrawalIds[0] ?? null,
         stallName,
         itemId,
         newCentralStock: Number((recomputed as any)?.current_stock) || 0
@@ -1761,6 +1782,32 @@ export const dbApi = {
         }
       }
 
+      const { data: rpcSale, error: rpcError } = await (supabase as any).rpc('create_sale_atomic', {
+        p_item_id: itemId,
+        p_stall_id: stallId,
+        p_quantity_sold: saleData.quantity_sold,
+        p_unit_price: saleData.unit_price,
+        p_total_amount: totalAmount,
+        p_sale_type: saleData.sale_type,
+        p_recorded_by: saleData.recorded_by,
+        p_cash_amount: saleData.sale_type === 'split' ? (saleData.cash_amount ?? null) : null,
+        p_mobile_amount: saleData.sale_type === 'split' ? (saleData.mobile_amount ?? null) : null,
+        p_customer_name: saleData.customer_name || null,
+        p_customer_contact: saleData.customer_contact || null,
+        p_amount_paid: saleData.amount_paid ?? null,
+        p_due_date: saleData.due_date || null,
+        p_notes: saleData.notes || null
+      });
+
+      if (!rpcError && rpcSale) {
+        const sale = Array.isArray(rpcSale) ? rpcSale[0] : rpcSale;
+        return { sale: sale as Sale };
+      }
+
+      if (rpcError && !isMissingFunctionError(rpcError)) {
+        throw new Error(friendlyDbError(rpcError));
+      }
+
       const saleToInsert = {
         item_id: itemId,
         stall_id: stallId,
@@ -1779,7 +1826,7 @@ export const dbApi = {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new Error(friendlyDbError(error));
 
       if (saleData.sale_type === 'credit') {
         const amountPaid = saleData.amount_paid ?? 0;
@@ -1900,7 +1947,7 @@ export const dbApi = {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new Error(friendlyDbError(error));
 
       const { data: existingCreditRows, error: existingCreditError } = await (supabase as any)
         .from('credit_sales')
@@ -2108,15 +2155,20 @@ export const dbApi = {
 
       const withdrawnBy = withdrawalData.withdrawn_by || getCurrentUserId();
 
+      if (withdrawalData.stall_id != null || withdrawalData.distribution_id != null) {
+        if (!withdrawalData.distribution_id) {
+          throw new Error('Returning stock from a stall needs the distribution batch it came from.');
+        }
+        return dbApi.withdrawFromDistribution(withdrawalData.distribution_id, quantity);
+      }
+
       // Preferred path: atomic, row-locked DB function
       const { data: rpcData, error: rpcError } = await (supabase as any).rpc('withdraw_stock_atomic', {
         p_item_id: withdrawalData.item_id,
         p_quantity: quantity,
         p_reason: withdrawalData.reason || 'General withdrawal',
         p_withdrawn_by: withdrawnBy,
-        p_notes: withdrawalData.notes || null,
-        p_stall_id: withdrawalData.stall_id ?? null,
-        p_distribution_id: withdrawalData.distribution_id ?? null
+        p_notes: withdrawalData.notes || null
       });
 
       if (!rpcError) {
@@ -2138,7 +2190,7 @@ export const dbApi = {
 
       if (!isMissingFunctionError(rpcError)) {
         console.error('[Create Withdrawal] Atomic RPC error:', rpcError);
-        throw new Error(rpcError.message || 'Failed to create withdrawal');
+        throw new Error(friendlyDbError(rpcError));
       }
 
       // Fallback (atomic function not installed yet): validate against

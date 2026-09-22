@@ -9,6 +9,7 @@
     "server": "nodemon server/index.js",
     "client": "cd client && npm start",
     "stock:check": "cd client && npm run stock:check",
+    "stock:airtight": "node scripts/apply-airtight-stock.js",
     "build": "cd client && npm install && npm run build && cd .. && rm -rf build && mv client/build build",
     "vercel-build": "cd client && npm install && npm run build && cd .. && rm -rf build && mv client/build build",
     "install-all": "npm install && cd client && npm install"
