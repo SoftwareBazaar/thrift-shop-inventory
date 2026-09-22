@@ -63,7 +63,11 @@ const Feedback: React.FC = () => {
         }
       ];
       
-      setFeedbacks(mockFeedbacks);
+      setFeedbacks(
+        filter === 'all'
+          ? mockFeedbacks
+          : mockFeedbacks.filter((f) => f.status === filter)
+      );
     } catch (error) {
       console.error('Error fetching feedbacks:', error);
     } finally {

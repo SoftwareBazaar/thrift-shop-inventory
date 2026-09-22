@@ -5,29 +5,7 @@ import {
   BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-
-// The shop trades in Nairobi (UTC+3) but timestamps are stored in UTC. Slicing
-// the ISO string put an early-morning sale on the previous day, so reports and
-// the day filter disagreed with what the shop actually sold that day.
-const SHOP_TIME_ZONE = 'Africa/Nairobi';
-const shopDateFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: SHOP_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit'
-});
-
-/** Business day of a sale, as YYYY-MM-DD in shop time. */
-const shopDateKey = (rawDate?: string | null): string | null => {
-  if (!rawDate) return null;
-  const parsed = new Date(rawDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return shopDateFormatter.format(parsed);
-};
-
-/** Units on a sale row, tolerating either column name. */
-const saleQuantity = (sale: any): number =>
-  Number(sale?.quantity_sold ?? sale?.quantity ?? 0) || 0;
+import { shopDateKey, shopTodayKey, shopDateKeyPlusDays, saleQuantity } from '../utils/shopDate';
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
@@ -314,14 +292,15 @@ const Reports: React.FC = () => {
     // Anchor the presets to the shop's own day. Using the UTC date meant that
     // before 3am local, "Today" selected yesterday and today's sales vanished
     // from the report.
-    const now = new Date();
-    const end = shopDateKey(now.toISOString())!;
-
-    const daysBack = preset === 'today' ? 0 : preset === 'week' ? 7 : preset === 'month' ? 30 : null;
+    const end = shopTodayKey();
+    if (preset === 'today') {
+      setDateRange({ start_date: end, end_date: end });
+      return;
+    }
+    // Inclusive window: today and the previous 6 / 29 days.
+    const daysBack = preset === 'week' ? 6 : preset === 'month' ? 29 : null;
     if (daysBack === null) return;
-
-    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
-    setDateRange({ start_date: shopDateKey(startDate.toISOString())!, end_date: end });
+    setDateRange({ start_date: shopDateKeyPlusDays(end, -daysBack), end_date: end });
   };
 
   return (

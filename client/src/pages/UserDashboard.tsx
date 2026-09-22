@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/MockAuthContext';
 import { dataApi } from '../services/dataService';
+import {
+  shopTodayKey,
+  shopDateKeyPlusDays,
+  saleOnOrAfter,
+  saleInDateRange,
+  saleQuantity,
+  saleAmount
+} from '../utils/shopDate';
 
 interface SaleItem {
   item_id: number;
@@ -52,47 +60,40 @@ const UserDashboard: React.FC = () => {
       const salesResponse = await dataApi.getSales();
       const allSales = salesResponse.sales || [];
 
-      // Filter sales for this user based on selected period
-      const now = new Date();
-      const periodStart = new Date();
-      if (selectedPeriod === 'week') {
-        periodStart.setDate(now.getDate() - 7);
-      } else if (selectedPeriod === 'month') {
-        periodStart.setDate(now.getDate() - 30);
-      }
-
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
+      // Filter by Nairobi business day so "Today" matches Reports / Admin.
+      const todayKey = shopTodayKey();
+      const periodStartKey = selectedPeriod === 'week'
+        ? shopDateKeyPlusDays(todayKey, -6)
+        : shopDateKeyPlusDays(todayKey, -29);
 
       const periodSalesData = allSales.filter((sale: any) => {
-        const saleDate = new Date(sale.date_time);
-        // Filter out credit sales for non-admin users
         if (sale.sale_type === 'credit') return false;
-        return saleDate >= periodStart && sale.recorded_by === user?.user_id;
+        if (sale.recorded_by !== user?.user_id) return false;
+        return saleOnOrAfter(sale.date_time, periodStartKey);
       });
 
       const dailySalesData = allSales.filter((sale: any) => {
-        const saleDate = new Date(sale.date_time);
         if (sale.sale_type === 'credit') return false;
-        return saleDate >= startOfToday && sale.recorded_by === user?.user_id;
+        if (sale.recorded_by !== user?.user_id) return false;
+        return saleInDateRange(sale.date_time, todayKey, todayKey);
       });
 
       setSales(periodSalesData);
 
       // Calculate totals
-      const pUnits = periodSalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
+      const pUnits = periodSalesData.reduce((sum: number, sale: any) => sum + saleQuantity(sale), 0);
 
       setPeriodUnits(pUnits);
 
-      const tSales = dailySalesData.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
-      const tUnits = dailySalesData.reduce((sum: number, sale: any) => sum + sale.quantity_sold, 0);
+      const tSales = dailySalesData.reduce((sum: number, sale: any) => sum + saleAmount(sale), 0);
+      const tUnits = dailySalesData.reduce((sum: number, sale: any) => sum + saleQuantity(sale), 0);
 
       setTodaySales(tSales);
       setTodayUnits(tUnits);
 
       // Calculate cumulative sales for this user
       const userFullSales = allSales.filter((sale: any) => sale.recorded_by === user?.user_id && sale.sale_type !== 'credit');
-      const cSales = userFullSales.reduce((sum: number, sale: any) => sum + sale.total_amount, 0);
+      const cSales = userFullSales.reduce((sum: number, sale: any) => sum + saleAmount(sale), 0);
       setCumulativeSales(cSales);
 
     } catch (error) {

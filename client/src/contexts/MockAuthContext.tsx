@@ -7,8 +7,6 @@ import React, {
   ReactNode,
 } from 'react';
 import type { User } from '../services/dataService';
-import bcrypt from 'bcryptjs';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   PASSWORD_REQUIREMENTS,
   validatePasswordStrength,
@@ -159,56 +157,74 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   useEffect(() => {
-    // Check for existing session
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
 
     const initialise = async () => {
-      await ensureOfflineCredentialSeeds();
+      try {
+        await ensureOfflineCredentialSeeds();
 
-      if (savedToken && savedUser) {
-        const parsedUser = JSON.parse(savedUser) as User;
-        setToken(savedToken);
-        setUser(parsedUser);
-        syncOfflineUserProfile(toOfflineUser(parsedUser));
-
-        if (authMode === 'server') {
+        if (savedToken && savedUser) {
+          let parsedUser: User;
           try {
-            const response = await fetch('/api/auth/profile', {
-              headers: {
-                Authorization: `Bearer ${savedToken}`,
-              },
-            });
+            parsedUser = JSON.parse(savedUser) as User;
+          } catch {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setLoading(false);
+            return;
+          }
 
-            if (response.ok) {
-              const data = await response.json();
-              setUser(data.user);
-              localStorage.setItem('user', JSON.stringify(data.user));
-              persistAuthMode('server');
-            } else if (response.status === 401 || response.status === 403) {
-              // Check if session was invalidated due to password change
-              try {
-                const errorData = await response.json();
-                if (errorData.passwordChanged || errorData.sessionInvalidated) {
-                  console.log('Session invalidated - password was changed on another device');
+          setToken(savedToken);
+          setUser(parsedUser);
+          syncOfflineUserProfile(toOfflineUser(parsedUser));
+
+          // Fake / offline tokens cannot pass jwt.verify — skip the profile
+          // round-trip so we do not wipe a valid offline session.
+          const looksLikeJwt = savedToken.split('.').length === 3;
+
+          if (authMode === 'server' && looksLikeJwt) {
+            try {
+              const response = await fetch('/api/auth/profile', {
+                headers: {
+                  Authorization: `Bearer ${savedToken}`,
+                },
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                setUser(data.user);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                persistAuthMode('server');
+              } else if (response.status === 401 || response.status === 403) {
+                try {
+                  const errorData = await response.json();
+                  if (errorData.passwordChanged || errorData.sessionInvalidated) {
+                    console.log('Session invalidated - password was changed on another device');
+                  }
+                } catch {
+                  // ignore body parse errors
                 }
-              } catch (e) {
-                // Ignore JSON parse errors
-              }
 
-              // Clear invalid session
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              setToken(null);
-              setUser(null);
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                setToken(null);
+                setUser(null);
+              }
+            } catch (error) {
+              console.warn('Auth profile check failed, continuing with cached session.', error);
             }
-          } catch (error) {
-            console.warn('Auth profile check failed, continuing with cached session.', error);
+          } else if (authMode === 'server' && !looksLikeJwt) {
+            // Legacy invented tokens — clear so the operator signs in for a real JWT.
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setToken(null);
+            setUser(null);
           }
         }
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     initialise();
@@ -238,109 +254,63 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       await ensureOfflineCredentialSeeds();
 
       const online = typeof navigator === 'undefined' ? true : navigator.onLine;
-      const canUseServer = isSupabaseConfigured() && online;
 
-      if (canUseServer) {
+      if (online) {
         try {
-          const { data: userRow, error: fetchError } = await (supabase as any)
-            .from('users')
-            .select('user_id, username, password_hash, full_name, role, stall_id, status, phone_number, email')
-            .or(`username.eq."${username}",email.eq."${username.toLowerCase()}"`)
-            .single();
-
-          if (fetchError || !userRow) {
-            const errorMessage = (fetchError?.message || '').toLowerCase();
-            const statusCode = (fetchError as any)?.status || (fetchError as any)?.code;
-            // Treat 406 (Not Acceptable) and other non-auth errors as availability issues, not invalid credentials
-            if (statusCode === 406 || statusCode === '406') {
-              availabilityError = new Error('Server configuration issue. Using offline mode.');
-            } else if (errorMessage.includes('invalid') || fetchError?.code === 'PGRST116') {
-              serverReportedInvalid = true;
-            } else {
-              availabilityError = new Error(fetchError?.message || 'Unable to reach authentication server');
-            }
-            throw availabilityError ?? new Error('Unable to reach authentication server');
-          }
-
-          if (userRow.status && userRow.status !== 'active') {
-            throw new Error('Account is inactive');
-          }
-
-
-          // Robust Hashing Logic (matches changePassword implementation)
-          const dbUsername = userRow.username;
-          const currentHashInDb = (userRow.password_hash || '').trim();
-
-          const expectedHash = await derivePasswordHash(dbUsername, password);
-          let matches = expectedHash === currentHashInDb;
-
-          console.log('[Login] Verifying credentials:', {
-            attemptedUser: username,
-            dbUser: dbUsername,
-            match: matches
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
           });
 
-          if (!matches) {
-            // Check if context username derivation works (handle casing mismatch edge case)
-            const alternateHash = await derivePasswordHash(username, password);
-            if (alternateHash === currentHashInDb) {
-              console.log('[Login] Matched via alternate username casing');
-              matches = true;
-            }
-          }
-
-          if (!matches) {
-            // Fallback: try bcrypt in case some users still have old hashes
-            const bcryptMatches = await bcrypt.compare(password, currentHashInDb);
-            if (bcryptMatches) {
-              console.log('[Login] Matched via bcrypt fallback');
-              matches = true;
-            }
-          }
-
-          if (!matches) {
-            console.warn('[Login] Password mismatch - all verifiers failed');
+          if (response.status === 401) {
             serverReportedInvalid = true;
             throw new Error('Invalid credentials');
           }
 
-          const { password_hash, ...authUser } = userRow;
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            availabilityError = new Error(
+              (body as any)?.message || `Login server error (${response.status})`
+            );
+            throw availabilityError;
+          }
 
-          const authToken = `supabase_token_${Date.now()}_${normalised}`;
+          const data = await response.json();
+          const authUser = data.user as User;
+          const authToken = data.token as string;
+
+          if (!authToken || !authUser) {
+            availabilityError = new Error('Login server returned an incomplete response');
+            throw availabilityError;
+          }
+
           localStorage.setItem('token', authToken);
           localStorage.setItem('user', JSON.stringify(authUser));
           setToken(authToken);
           setUser(authUser);
           persistAuthMode('server');
-          const passwordVersion = await derivePasswordHash(username, password);
-          persistPasswordVersion(passwordVersion);
-          await cacheCredentials(authUser, password, passwordVersion);
+          const localVersion =
+            (data.passwordVersion as string | undefined) ||
+            (await derivePasswordHash(authUser.username || username, password));
+          persistPasswordVersion(localVersion);
+          await cacheCredentials(authUser, password, localVersion);
           return;
         } catch (serverError: any) {
-          const statusCode = serverError?.status || serverError?.code;
-          // 406 errors should fall back to offline, not be treated as invalid credentials
-          if (statusCode === 406 || statusCode === '406') {
-            availabilityError = new Error('Server configuration issue. Using offline mode.');
-          } else if (serverError instanceof Error && serverError.message === 'Invalid credentials') {
+          if (serverError instanceof Error && serverError.message === 'Invalid credentials') {
             serverReportedInvalid = true;
-          }
-          console.warn('Server login failed, trying offline credentials', serverError);
-          if (!availabilityError) {
+          } else if (!availabilityError) {
             availabilityError =
               serverError instanceof Error
                 ? serverError
                 : new Error('Unable to reach authentication server');
           }
+          console.warn('Server login failed, trying offline credentials', serverError);
         }
       }
 
-
-
-      // CRITICAL SECURITY FIX:
-      // If the server was reachable and explicitly rejected the password, 
-      // do NOT fall back to offline credentials (which might be stale).
+      // Server rejected the password — never fall back to a stale offline copy.
       if (serverReportedInvalid) {
-        console.warn('Server explicitly rejected credentials. Skipping offline fallback.');
         throw new Error('Invalid credentials');
       }
 
@@ -373,17 +343,17 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
       }
 
-      if (availabilityError) {
-        throw new Error('Unable to reach the server. Connect to the internet to sign in for the first time.');
+      if (availabilityError || !online) {
+        throw new Error(
+          'Unable to reach the server. Connect once while signing in to enable offline login on this device.'
+        );
       }
 
       const offlineRecord = getOfflineCredential(username);
       if (!offlineRecord) {
-        throw new Error('This account has not been synced for offline access yet. Connect to the internet once while signing in to enable offline login.');
-      }
-
-      if (serverReportedInvalid) {
-        throw new Error('Invalid credentials');
+        throw new Error(
+          'This account has not been synced for offline access yet. Connect to the internet once while signing in.'
+        );
       }
 
       throw new Error('Login failed');
@@ -413,113 +383,38 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
 
     const online = typeof navigator === 'undefined' ? true : navigator.onLine;
-    const supabaseReady = isSupabaseConfigured();
+    const looksLikeJwt = token.split('.').length === 3;
+
+    if (!online || !looksLikeJwt) {
+      throw new Error(
+        'Password changes require an internet connection so every device stays in sync. Reconnect and try again.'
+      );
+    }
 
     try {
-      if (supabaseReady && online) {
-        const { data: existingUser, error: fetchError } = await (supabase as any)
-          .from('users')
-          .select('password_hash, username')
-          .eq('user_id', user.user_id)
-          .single();
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
 
-        if (fetchError || !existingUser) {
-          console.error('[ChangePassword] Fetch error:', fetchError);
-          throw new Error('Unable to verify your account. Please try again.');
-        }
-
-        const dbUsername = existingUser.username || user.username;
-        const currentHashInDb = (existingUser.password_hash || '').trim();
-
-        // Step 1: Check against the local session's password version
-        // This is the most reliable check if they were able to log in
-        const enteredVersion = await derivePasswordHash(user.username, oldPassword);
-        let matches = enteredVersion === passwordVersion;
-
-        if (matches) {
-          console.log('[ChangePassword] Verified via session password version');
-        } else {
-          // Step 2: Fallback to DB hash check (custom derivation)
-          const expectedFromDb = await derivePasswordHash(dbUsername, oldPassword);
-          matches = expectedFromDb === currentHashInDb;
-
-          if (matches) {
-            console.log('[ChangePassword] Verified via DB custom hash');
-          } else {
-            // Step 3: Fallback to bcrypt for legacy hashes
-            try {
-              matches = await bcrypt.compare(oldPassword, currentHashInDb);
-              if (matches) console.log('[ChangePassword] Verified via bcrypt fallback');
-            } catch (e) {
-              console.warn('[ChangePassword] Bcrypt comparison failed:', e);
-            }
-          }
-        }
-
-        if (!matches) {
-          console.warn('[ChangePassword] Debug Final Failure:', {
-            dbUsername,
-            sessionUsername: user.username,
-            hasPasswordVersion: !!passwordVersion,
-            passwordVersionPrefix: passwordVersion?.substring(0, 8),
-            enteredVersionPrefix: enteredVersion.substring(0, 8),
-            dbHashPrefix: currentHashInDb.substring(0, 8)
-          });
-          return false;
-        }
-
-        const newHash = await derivePasswordHash(dbUsername, newPassword);
-        const { error: updateError } = await (supabase as any)
-          .from('users')
-          .update({ password_hash: newHash })
-          .eq('user_id', user.user_id);
-
-        if (updateError) {
-          throw new Error(updateError.message || 'Failed to update password.');
-        }
-
-        // Password changed successfully - all sessions are now invalidated
-        const newPasswordVersion = newHash;
-
-        // CRITICAL: Clear the old credential cache to prevent stale password usage
-        if (typeof window !== 'undefined') {
-          const cache = readCredentialCache();
-          const key = normaliseUsername(username);
-          if (cache[key]) {
-            delete cache[key];
-            writeCredentialCache(cache);
-          }
-        }
-
-        // Update offline credentials immediately with proper source marking
-        await updateOfflinePasswordStore(username, newPassword);
-        await upsertOfflineCredentialFromPassword(
-          toOfflineUser(user),
-          newPassword,
-          {
-            phone: (user as any)?.phone_number ?? undefined,
-            email: (user as any)?.email ?? undefined
-          },
-          'manual' // Mark as manual to prevent seed logic from overwriting
-        );
-
-        // Update the credential cache with new password
-        await cacheCredentials(user, newPassword, newPasswordVersion);
-        persistPasswordVersion(newPasswordVersion);
-
-        // Force logout immediately - session is now invalid on server
-        logout();
-
-        return true;
-      }
-
-      // Offline fallback - password change without server
-      const offlineAuth = await attemptOfflineLogin(username, oldPassword);
-      if (!offlineAuth) {
+      if (response.status === 401) {
         return false;
       }
 
-      // Clear old credential cache
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error((body as any)?.message || 'Failed to update password.');
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const newPasswordVersion =
+        (data as any)?.passwordVersion ||
+        (await derivePasswordHash(user.username || username, newPassword));
+
       if (typeof window !== 'undefined') {
         const cache = readCredentialCache();
         const key = normaliseUsername(username);
@@ -529,19 +424,28 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
       }
 
-      // Update offline password with manual source marking
-      await updateOfflinePasswordStore(username, newPassword);
+      await updateOfflinePasswordStore(username, newPassword).catch(async () => {
+        await upsertOfflineCredentialFromPassword(
+          toOfflineUser(user),
+          newPassword,
+          {
+            phone: (user as any)?.phone_number ?? undefined,
+            email: (user as any)?.email ?? undefined,
+          },
+          'manual'
+        );
+      });
+
       await upsertOfflineCredentialFromPassword(
         toOfflineUser(user),
         newPassword,
         {
           phone: (user as any)?.phone_number ?? undefined,
-          email: (user as any)?.email ?? undefined
+          email: (user as any)?.email ?? undefined,
         },
         'manual'
       );
 
-      const newPasswordVersion = await derivePasswordHash(username, newPassword);
       await cacheCredentials(user, newPassword, newPasswordVersion);
       persistPasswordVersion(newPasswordVersion);
       logout();

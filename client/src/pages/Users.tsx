@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dataApi } from '../services/dataService';
+import { validatePasswordStrength } from '../utils/passwordUtils';
 
 interface User {
   user_id: number;
@@ -81,6 +82,11 @@ const Users: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const passwordError = validatePasswordStrength(newUser.password);
+      if (passwordError) {
+        alert(passwordError);
+        return;
+      }
       const stallId = newUser.stall_id ? parseInt(newUser.stall_id as any) : undefined;
       await dataApi.createUser({
         username: newUser.username,
@@ -158,6 +164,11 @@ const Users: React.FC = () => {
       };
 
       if ((editingUser as any).password) {
+        const passwordError = validatePasswordStrength((editingUser as any).password);
+        if (passwordError) {
+          alert(passwordError);
+          return;
+        }
         updatePayload.password = (editingUser as any).password;
       }
 
@@ -180,11 +191,15 @@ const Users: React.FC = () => {
         status: editingStall.status
       };
 
-      // Find assigned user if exists
+      // Find assigned user if exists — clearing the picker must clear the stall
+      // too, otherwise the old assignment silently stays.
       const assignedUser = users.find(u => u.full_name === editingStall.assigned_user);
       if (assignedUser) {
         stallData.user_id = assignedUser.user_id;
         stallData.manager = assignedUser.full_name;
+      } else {
+        stallData.user_id = null;
+        stallData.manager = null;
       }
 
       await dataApi.updateStall(editingStall.stall_id, stallData);

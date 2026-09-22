@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { dataApi } from '../services/dataService';
+import {
+  shopTodayKey,
+  shopWeekStartKey,
+  shopMonthStartKey,
+  shopYearStartKey,
+  saleOnOrAfter,
+  saleInDateRange,
+  saleQuantity,
+  saleAmount
+} from '../utils/shopDate';
 
 interface Stall {
   stall_id: number;
@@ -83,45 +93,35 @@ const AdminDashboard: React.FC = () => {
 
       setAllSales(sortedSales);
 
-      // Filter sales based on selected period
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
+      // Filter by Nairobi business day so "Today" matches what the shop sold
+      // that calendar day, not the browser's midnight or the UTC date.
+      const todayKey = shopTodayKey();
       let filteredSales = allSales;
 
       if (selectedPeriod === 'today') {
-        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
+        filteredSales = allSales.filter(sale => saleInDateRange(sale.date_time, todayKey, todayKey));
       } else if (selectedPeriod === 'week') {
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
-        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfWeek);
+        const startKey = shopWeekStartKey(todayKey);
+        filteredSales = allSales.filter(sale => saleOnOrAfter(sale.date_time, startKey));
       } else if (selectedPeriod === 'month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfMonth);
+        const startKey = shopMonthStartKey(todayKey);
+        filteredSales = allSales.filter(sale => saleOnOrAfter(sale.date_time, startKey));
       } else if (selectedPeriod === 'year') {
-        const startOfYear = new Date(now.getFullYear(), 0, 1);
-        filteredSales = allSales.filter(sale => new Date(sale.date_time) >= startOfYear);
+        const startKey = shopYearStartKey(todayKey);
+        filteredSales = allSales.filter(sale => saleOnOrAfter(sale.date_time, startKey));
       } else if (selectedPeriod === 'custom' && startDate && endDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filteredSales = allSales.filter(sale => {
-          const saleDate = new Date(sale.date_time);
-          return saleDate >= start && saleDate <= end;
-        });
+        filteredSales = allSales.filter(sale => saleInDateRange(sale.date_time, startDate, endDate));
       }
 
       setPeriodSales(filteredSales);
 
-      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + (Number(sale.total_amount) || 0), 0);
+      const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + saleAmount(sale), 0);
       // Revenue for every sale ever recorded. This used to be shown as "Total
       // Revenue" next to period-filtered cards, so the headline number barely
       // moved when the period changed. It is now a clearly labelled all-time
       // total alongside the period figure.
       const cumulativeRevenue = allSales.reduce(
-        (sum: number, sale: any) => sum + (Number(sale.total_amount) || 0),
+        (sum: number, sale: any) => sum + saleAmount(sale),
         0
       );
 
@@ -135,7 +135,7 @@ const AdminDashboard: React.FC = () => {
       });
 
       const costOfGoodsSold = filteredSales.reduce((sum: number, sale: any) => {
-        const qty = Number(sale.quantity_sold) || 0;
+        const qty = saleQuantity(sale);
         return sum + qty * (buyingPriceByItem.get(Number(sale.item_id)) || 0);
       }, 0);
       const grossProfit = totalRevenue - costOfGoodsSold;
@@ -144,8 +144,8 @@ const AdminDashboard: React.FC = () => {
       filteredSales.forEach((sale: any) => {
         const existing = itemSalesMap.get(sale.item_name) || { total_sold: 0, revenue: 0 };
         itemSalesMap.set(sale.item_name, {
-          total_sold: existing.total_sold + (Number(sale.quantity_sold) || 0),
-          revenue: existing.revenue + (Number(sale.total_amount) || 0)
+          total_sold: existing.total_sold + saleQuantity(sale),
+          revenue: existing.revenue + saleAmount(sale)
         });
       });
 
@@ -160,7 +160,7 @@ const AdminDashboard: React.FC = () => {
         const existing = userSalesMap.get(userName) || { sales: 0, revenue: 0 };
         userSalesMap.set(userName, {
           sales: existing.sales + 1,
-          revenue: existing.revenue + sale.total_amount
+          revenue: existing.revenue + saleAmount(sale)
         });
       });
 
@@ -174,7 +174,7 @@ const AdminDashboard: React.FC = () => {
         grossProfit: grossProfit,
         totalSales: filteredSales.length,
         // Guarded: one row with a missing quantity used to turn this card into NaN.
-        totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + (Number(sale.quantity_sold) || 0), 0),
+        totalUnits: filteredSales.reduce((sum: number, sale: any) => sum + saleQuantity(sale), 0),
         averageSale: filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0,
         topSellingItems: topSellingItems,
         userPerformance: userPerformance,
@@ -187,8 +187,8 @@ const AdminDashboard: React.FC = () => {
       };
 
       setAnalytics(analyticsData);
-      const todaySalesData = allSales.filter(sale => new Date(sale.date_time) >= startOfToday);
-      setTodaySales(todaySalesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0));
+      const todaySalesData = allSales.filter(sale => saleInDateRange(sale.date_time, todayKey, todayKey));
+      setTodaySales(todaySalesData.reduce((sum, sale) => sum + saleAmount(sale), 0));
 
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -234,16 +234,21 @@ const AdminDashboard: React.FC = () => {
     }).format(amount);
   };
 
-  const getStallSalesSummary = (stallName: string) => {
-    const stallSales = periodSales.filter(sale => sale.stall_name === stallName);
-    const revenue = stallSales.reduce((sum, sale) => sum + (Number(sale.total_amount) || 0), 0);
+  const getStallSalesSummary = (stall: Stall) => {
+    // Prefer stall_id so a missing/mismatched display name cannot hide revenue.
+    const stallSales = periodSales.filter(sale =>
+      sale.stall_id != null
+        ? Number(sale.stall_id) === Number(stall.stall_id)
+        : sale.stall_name === stall.stall_name
+    );
+    const revenue = stallSales.reduce((sum, sale) => sum + saleAmount(sale), 0);
     const count = stallSales.length;
 
     const contributorMap = new Map<string, number>();
     stallSales.forEach(sale => {
       if (sale.recorded_by_name) {
         const currentAmount = contributorMap.get(sale.recorded_by_name) || 0;
-        contributorMap.set(sale.recorded_by_name, currentAmount + (Number(sale.total_amount) || 0));
+        contributorMap.set(sale.recorded_by_name, currentAmount + saleAmount(sale));
       }
     });
 
@@ -454,7 +459,7 @@ const AdminDashboard: React.FC = () => {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stalls.map((stall) => {
-              const summary = getStallSalesSummary(stall.stall_name);
+              const summary = getStallSalesSummary(stall);
               return (
                 <div key={stall.stall_id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-start mb-2">

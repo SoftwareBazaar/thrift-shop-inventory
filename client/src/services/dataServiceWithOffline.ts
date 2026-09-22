@@ -129,10 +129,10 @@ export const offlineDataApi = {
       } else {
         // Offline: save to IndexedDB and queue for sync
         console.log('[OfflineDataApi] Creating item offline, queuing for sync');
-        const tempId = Date.now(); // Temporary ID
+        const tempId = Date.now();
         const offlineItem = { ...itemData, item_id: tempId, date_added: new Date().toISOString() };
         await offlineStorage.saveItem(offlineItem);
-        await syncService.queueOperation('CREATE', 'items', itemData);
+        await syncService.queueOperation('CREATE', 'items', { ...itemData, __tempItemId: tempId });
         return { item: offlineItem };
       }
     } catch (error) {
@@ -387,17 +387,9 @@ export const offlineDataApi = {
         }
         return result;
       } else {
-        // Offline: save to IndexedDB and queue for sync
-        console.log('[OfflineDataApi] Creating withdrawal offline, queuing for sync');
-        const tempId = Date.now();
-        const offlineWithdrawal = {
-          ...withdrawalData,
-          withdrawal_id: tempId,
-          date_withdrawn: new Date().toISOString()
-        };
-        await offlineStorage.saveWithdrawal(offlineWithdrawal);
-        await syncService.queueOperation('CREATE', 'withdrawals', withdrawalData);
-        return { withdrawal: offlineWithdrawal };
+        throw new Error(
+          'Withdrawing stock from the central hub needs an internet connection so every device stays consistent. Reconnect and try again.'
+        );
       }
     } catch (error) {
       console.error('[OfflineDataApi] Error creating withdrawal:', error);

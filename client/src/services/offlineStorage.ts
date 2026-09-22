@@ -101,6 +101,19 @@ class OfflineStorageService {
     });
   }
 
+  async deleteItem(itemId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['items'], 'readwrite');
+      const store = transaction.objectStore('items');
+      const request = store.delete(itemId);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Get all items from offline storage
   async getItems(): Promise<any[]> {
     if (!this.db) await this.init();

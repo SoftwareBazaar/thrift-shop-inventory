@@ -459,15 +459,15 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     if (!editingDist) return;
 
-    const quantity = parseInt(editDistQty);
-    const stallId = parseInt(editDistStallId);
+    const quantity = parseInt(editDistQty, 10);
+    const stallId = parseInt(editDistStallId, 10);
 
-    if (isNaN(quantity) || quantity <= 0) {
-      alert('Quantity must be greater than 0');
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      alert('Quantity must be a whole number greater than 0');
       return;
     }
 
-    if (isNaN(stallId)) {
+    if (!Number.isInteger(stallId)) {
       alert('Please select a stall');
       return;
     }
@@ -518,14 +518,34 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     if (!withdrawFromDist || !withdrawFromDistQty || isSubmitting) return;
 
-    const quantityToWithdraw = parseInt(withdrawFromDistQty);
-    if (quantityToWithdraw <= 0) {
-      alert('Withdrawal quantity must be greater than 0');
+    const quantityToWithdraw = parseInt(withdrawFromDistQty, 10);
+    if (!Number.isInteger(quantityToWithdraw) || quantityToWithdraw <= 0) {
+      alert('Withdrawal quantity must be a whole number greater than 0');
       return;
     }
 
-    if (quantityToWithdraw > withdrawFromDist.quantity_allocated) {
-      alert(`Cannot withdraw ${quantityToWithdraw} items. Only ${withdrawFromDist.quantity_allocated} items are distributed to ${withdrawFromDist.stall_name}.`);
+    // Cap at unsold on this stall and this batch — sales do not shrink quantity_allocated.
+    const stallSold =
+      salesAggregates.byItemStall[`${withdrawFromDist.item_id}-${withdrawFromDist.stall_id}`] ?? 0;
+    const sameStallBatches = itemDistributions.filter(
+      (d: any) =>
+        Number(d.item_id) === Number(withdrawFromDist.item_id) &&
+        Number(d.stall_id) === Number(withdrawFromDist.stall_id)
+    );
+    const totalAllocated = sameStallBatches.reduce(
+      (sum: number, d: any) => sum + (Number(d.quantity_allocated) || 0),
+      0
+    );
+    const stallLeft = Math.max(0, totalAllocated - stallSold);
+    const maxReturnable = Math.min(
+      Number(withdrawFromDist.quantity_allocated) || 0,
+      stallLeft
+    );
+
+    if (quantityToWithdraw > maxReturnable) {
+      alert(
+        `Cannot withdraw ${quantityToWithdraw} items. Only ${maxReturnable} unsold unit(s) can be returned from ${withdrawFromDist.stall_name}.`
+      );
       return;
     }
 
@@ -576,9 +596,9 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     if (!selectedItem || !addStockQuantity || isSubmitting) return;
 
-    const quantityToAdd = parseInt(addStockQuantity);
-    if (quantityToAdd <= 0) {
-      alert('Quantity must be greater than 0');
+    const quantityToAdd = parseInt(addStockQuantity, 10);
+    if (!Number.isInteger(quantityToAdd) || quantityToAdd <= 0) {
+      alert('Quantity must be a whole number greater than 0');
       return;
     }
 
@@ -605,8 +625,8 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     if (!selectedItem || !withdrawQuantity || !user || isSubmitting) return;
 
-    const quantityToWithdraw = parseInt(withdrawQuantity);
-    if (quantityToWithdraw <= 0) {
+    const quantityToWithdraw = parseInt(withdrawQuantity, 10);
+    if (!Number.isInteger(quantityToWithdraw) || quantityToWithdraw <= 0) {
       alert('Quantity must be greater than 0');
       return;
     }
@@ -2221,24 +2241,47 @@ const Inventory: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quantity to Withdraw *
-                  </label>
-                  <input
-                    type="number"
-                    value={withdrawFromDistQty}
-                    onChange={(e) => setWithdrawFromDistQty(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    min="1"
-                    max={withdrawFromDist.quantity_allocated}
-                    required
-                    placeholder="Enter quantity to withdraw"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Items will be returned to central inventory for redistribution
-                  </p>
-                </div>
+                {(() => {
+                  const stallSold =
+                    salesAggregates.byItemStall[
+                      `${withdrawFromDist.item_id}-${withdrawFromDist.stall_id}`
+                    ] ?? 0;
+                  const sameStallBatches = itemDistributions.filter(
+                    (d: any) =>
+                      Number(d.item_id) === Number(withdrawFromDist.item_id) &&
+                      Number(d.stall_id) === Number(withdrawFromDist.stall_id)
+                  );
+                  const totalAllocated = sameStallBatches.reduce(
+                    (sum: number, d: any) => sum + (Number(d.quantity_allocated) || 0),
+                    0
+                  );
+                  const stallLeft = Math.max(0, totalAllocated - stallSold);
+                  const maxReturnable = Math.min(
+                    Number(withdrawFromDist.quantity_allocated) || 0,
+                    stallLeft
+                  );
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Quantity to Withdraw *
+                      </label>
+                      <input
+                        type="number"
+                        value={withdrawFromDistQty}
+                        onChange={(e) => setWithdrawFromDistQty(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        min="1"
+                        max={maxReturnable}
+                        required
+                        placeholder="Enter quantity to withdraw"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Max returnable: {maxReturnable} (unsold at stall). Distributed batch shows{' '}
+                        {withdrawFromDist.quantity_allocated}.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-xs text-yellow-800">

@@ -71,14 +71,31 @@ const AddItem: React.FC = () => {
       return;
     }
 
+    const initialStock = Number(formData.initial_stock);
+    const buyingPrice = Number(formData.buying_price);
+    const unitPrice = Number(formData.unit_price);
+
+    // NaN comparisons are always false, so "abc" used to slip past the checks
+    // above and be written as NaN into the database.
+    if (!Number.isInteger(initialStock) || initialStock <= 0) {
+      setError('Initial stock must be a whole number greater than 0.');
+      setLoading(false);
+      return;
+    }
+    if (!Number.isFinite(buyingPrice) || buyingPrice <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+      setError('Buying and selling prices must be numbers greater than 0.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await dataApi.createItem({
         item_name: formData.item_name,
         category: formData.category,
-        initial_stock: parseInt(formData.initial_stock),
-        current_stock: parseInt(formData.initial_stock),
-        buying_price: parseFloat(formData.buying_price),
-        unit_price: parseFloat(formData.unit_price),
+        initial_stock: initialStock,
+        current_stock: initialStock,
+        buying_price: buyingPrice,
+        unit_price: unitPrice,
         created_by: user?.user_id || 1
       });
 
@@ -87,10 +104,10 @@ const AddItem: React.FC = () => {
         try {
           await dataApi.distributeStock({
             item_id: result.item.item_id,
-            distributions: [{ stall_id: parseInt(formData.selectedStall), quantity: parseInt(formData.initial_stock) }],
+            distributions: [{ stall_id: parseInt(formData.selectedStall), quantity: initialStock }],
             notes: `Auto-distributed on item creation`
           });
-          setSuccessMessage(`✅ Item added and ${formData.initial_stock} unit(s) distributed to the selected stall!`);
+          setSuccessMessage(`✅ Item added and ${initialStock} unit(s) distributed to the selected stall!`);
         } catch (distErr) {
           console.error('Distribution after item creation failed:', distErr);
           setSuccessMessage(`✅ Item added! ⚠️ Stock distribution failed — please distribute manually from Inventory.`);

@@ -1,7 +1,7 @@
 // Database Service - Uses Supabase with real-time sync, falls back to mockData
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { mockApi, type User, type Sale, type Stall, type SaleInput, type InventoryItem as Item } from './mockData';
-import { syncOfflineUserProfile } from '../utils/offlineCredentials';
+import { syncOfflineUserProfile, upsertOfflineCredentialFromPassword, removeOfflineCredential } from '../utils/offlineCredentials';
 import { derivePasswordHash } from '../utils/passwordUtils';
 import { computeHubStock, summarizeStallReturnLedger } from '../utils/stockReplay';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -35,6 +35,30 @@ const buildSalesAggregates = (rows: SalesQuantityRow[]): SalesAggregates => {
   }
 
   return { byItem, byItemStall };
+};
+
+/** Units sold at one stall for one item (paginated — avoids the 1000-row default). */
+const sumSoldAtStall = async (itemId: number, stallId: number): Promise<number> => {
+  let total = 0;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await (supabase as any)
+      .from('sales')
+      .select('quantity_sold')
+      .eq('item_id', itemId)
+      .eq('stall_id', stallId)
+      .order('sale_id', { ascending: true })
+      .range(from, from + SALES_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const page = data || [];
+    for (const row of page) total += Number(row.quantity_sold) || 0;
+    if (page.length < SALES_PAGE_SIZE) break;
+    from += SALES_PAGE_SIZE;
+  }
+
+  return total;
 };
 
 const fetchAllSalesQuantityRows = async (): Promise<SalesQuantityRow[]> => {
@@ -371,12 +395,14 @@ export const dbApi = {
     try {
       const { data, error } = await (supabase as any)
         .from('users')
-        .select('*')
+        .select(
+          'user_id, username, full_name, role, stall_id, status, created_date, phone_number, email, recovery_hint, secret_word'
+        )
         .order('created_date', { ascending: false });
 
       if (error) throw error;
 
-      // Sync offline profiles for all users to ensure password changes are propagated
+      // Profile-only offline sync — never copy password_hash into localStorage.
       if (data) {
         data.forEach((user: any) => {
           syncOfflineUserProfile({
@@ -389,7 +415,8 @@ export const dbApi = {
             created_date: user.created_date,
             phone_number: user.phone_number ?? null,
             email: user.email ?? null,
-            password_hash: user.password_hash
+            secret_word: user.secret_word ?? null,
+            recovery_hint: user.recovery_hint ?? null,
           });
         });
       }
@@ -439,8 +466,26 @@ export const dbApi = {
           created_date: data.created_date,
           phone_number: data.phone_number ?? null,
           email: data.email ?? null,
-          password_hash: data.password_hash // Include hash for sync
+          secret_word: data.secret_word ?? null,
         });
+        if (userData.password) {
+          await upsertOfflineCredentialFromPassword(
+            {
+              user_id: data.user_id,
+              username: data.username,
+              full_name: data.full_name,
+              role: data.role,
+              stall_id: data.stall_id,
+              status: data.status,
+              created_date: data.created_date,
+              phone_number: data.phone_number ?? null,
+              email: data.email ?? null,
+            },
+            userData.password,
+            undefined,
+            'server'
+          );
+        }
       }
 
       return { user: data as User };
@@ -456,6 +501,7 @@ export const dbApi = {
     }
 
     try {
+      const plaintextPassword = (userData as any).password as string | undefined;
       const updateData = { ...userData };
 
       // Handle password update if provided
@@ -496,8 +542,26 @@ export const dbApi = {
           created_date: data.created_date,
           phone_number: data.phone_number ?? null,
           email: data.email ?? null,
-          password_hash: data.password_hash // Include hash for sync
+          secret_word: data.secret_word ?? null,
         });
+        if (plaintextPassword) {
+          await upsertOfflineCredentialFromPassword(
+            {
+              user_id: data.user_id,
+              username: data.username,
+              full_name: data.full_name,
+              role: data.role,
+              stall_id: data.stall_id,
+              status: data.status,
+              created_date: data.created_date,
+              phone_number: data.phone_number ?? null,
+              email: data.email ?? null,
+            },
+            plaintextPassword,
+            undefined,
+            'server'
+          );
+        }
       }
 
       return { user: data as User };
@@ -513,6 +577,17 @@ export const dbApi = {
     }
 
     try {
+      const { data: target, error: targetError } = await (supabase as any)
+        .from('users')
+        .select('user_id, username, role')
+        .eq('user_id', userId)
+        .single();
+
+      if (targetError || !target) throw new Error('User not found');
+      if (target.role === 'admin') {
+        throw new Error('Admin accounts cannot be deleted. Set the account inactive instead.');
+      }
+
       // Sales, distributions and withdrawals all record who performed them and
       // the database will not release a user who appears in any of them. Say so
       // plainly instead of surfacing a foreign key error.
@@ -530,6 +605,7 @@ export const dbApi = {
         .eq('user_id', userId);
 
       if (error) throw error;
+      if (target.username) removeOfflineCredential(target.username);
       return { success: true };
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -828,6 +904,11 @@ export const dbApi = {
       const historyError =
         additionsRes.error || distributionsRes.error || salesRes.error || withdrawalsRes.error;
       if (historyError) {
+        // Stall stock is allocated − sold. Empty failed sales would look like
+        // zero sold and invent availability. Fail closed for stall views.
+        if (!isAdminView) {
+          throw readFailed('stall inventory history', historyError);
+        }
         console.warn('[Get Inventory] History query failed - falling back to stored totals:', historyError);
       }
 
@@ -1386,23 +1467,72 @@ export const dbApi = {
       if (fetchError || !existingDist) throw new Error('Distribution not found');
 
       const itemId = existingDist.item_id;
-      const oldQuantity = existingDist.quantity_allocated;
+      const oldStallId = Number(existingDist.stall_id);
+      const oldQuantity = Number(existingDist.quantity_allocated) || 0;
       const quantityDiff = quantity - oldQuantity;
+      const stallChanged = Number(stallId) !== oldStallId;
 
-      // 2. Validate against freshly recomputed stock (not a stale cached value)
-      const freshItem = await recomputeItemTotals(itemId);
-
-      if (quantityDiff > Number((freshItem as any).current_stock || 0)) {
-        throw new Error(`Insufficient stock! Available: ${(freshItem as any).current_stock}, Requested additional: ${quantityDiff}`);
+      // Sold units stay on the stall ledger. Shrinking or moving a batch must
+      // leave enough other allocated stock to cover what's already sold there.
+      const soldOnOldStall = await sumSoldAtStall(itemId, oldStallId);
+      const { data: otherOnOld, error: otherOldErr } = await (supabase as any)
+        .from('stock_distribution')
+        .select('quantity_allocated')
+        .eq('item_id', itemId)
+        .eq('stall_id', oldStallId)
+        .neq('distribution_id', distributionId);
+      if (otherOldErr) throw otherOldErr;
+      const otherAllocatedOld = (otherOnOld || []).reduce(
+        (sum: number, row: any) => sum + (Number(row.quantity_allocated) || 0),
+        0
+      );
+      const remainingOnOldAfter = stallChanged
+        ? otherAllocatedOld
+        : otherAllocatedOld + quantity;
+      if (remainingOnOldAfter < soldOnOldStall) {
+        throw new Error(
+          `Cannot change this distribution: ${soldOnOldStall} unit(s) already sold at this stall. ` +
+          `At least that many must stay allocated (would leave ${remainingOnOldAfter}).`
+        );
       }
 
-      // 3. Update distribution
+      if (stallChanged) {
+        const soldOnNewStall = await sumSoldAtStall(itemId, Number(stallId));
+        const { data: otherOnNew, error: otherNewErr } = await (supabase as any)
+          .from('stock_distribution')
+          .select('quantity_allocated')
+          .eq('item_id', itemId)
+          .eq('stall_id', stallId)
+          .neq('distribution_id', distributionId);
+        if (otherNewErr) throw otherNewErr;
+        const otherAllocatedNew = (otherOnNew || []).reduce(
+          (sum: number, row: any) => sum + (Number(row.quantity_allocated) || 0),
+          0
+        );
+        if (otherAllocatedNew + quantity < soldOnNewStall) {
+          throw new Error(
+            `Cannot move this batch: destination stall already sold ${soldOnNewStall} unit(s) ` +
+            `and would only have ${otherAllocatedNew + quantity} allocated.`
+          );
+        }
+      }
+
+      // Validate hub stock when increasing the batch size
+      if (quantityDiff > 0) {
+        const freshItem = await recomputeItemTotals(itemId);
+        if (quantityDiff > Number((freshItem as any).current_stock || 0)) {
+          throw new Error(
+            `Insufficient stock! Available: ${(freshItem as any).current_stock}, Requested additional: ${quantityDiff}`
+          );
+        }
+      }
+
       const { data, error: updateDistError } = await (supabase as any)
         .from('stock_distribution')
         .update({
           quantity_allocated: quantity,
           stall_id: stallId,
-          date_distributed: new Date().toISOString() // Update date to reflect edit
+          date_distributed: new Date().toISOString()
         })
         .eq('distribution_id', distributionId)
         .select()
@@ -1410,7 +1540,6 @@ export const dbApi = {
 
       if (updateDistError) throw updateDistError;
 
-      // 4. Recompute item totals from history
       await recomputeItemTotals(itemId);
 
       return { distribution: data };
@@ -1456,6 +1585,31 @@ export const dbApi = {
           `This distribution can't be deleted because ${units} unit(s) were already returned from it to the central hub. ` +
           `Delete those ${linkedWithdrawals.length} withdrawal record(s) first — that puts the stock back on this batch — then delete the distribution.`
         );
+      }
+
+      // Deleting the row credits the hub for the original allocation. If units
+      // were sold at this stall, other batches must still cover those sales —
+      // otherwise the delete invents hub stock that was already sold.
+      const stallId = Number(existingDist.stall_id);
+      const soldAtStall = await sumSoldAtStall(itemId, stallId);
+      if (soldAtStall > 0) {
+        const { data: otherBatches, error: otherErr } = await (supabase as any)
+          .from('stock_distribution')
+          .select('quantity_allocated')
+          .eq('item_id', itemId)
+          .eq('stall_id', stallId)
+          .neq('distribution_id', distributionId);
+        if (otherErr) throw otherErr;
+        const otherAllocated = (otherBatches || []).reduce(
+          (sum: number, row: any) => sum + (Number(row.quantity_allocated) || 0),
+          0
+        );
+        if (otherAllocated < soldAtStall) {
+          throw new Error(
+            `Cannot delete this distribution: ${soldAtStall} unit(s) already sold at this stall. ` +
+            `Other batches only cover ${otherAllocated}. Withdraw unsold units instead, or leave enough allocated to cover sales.`
+          );
+        }
       }
 
       // 2. Delete the distribution
@@ -1521,8 +1675,27 @@ export const dbApi = {
 
       const allocated = Number(batch.quantity_allocated) || 0;
       if (quantityToWithdraw <= 0) throw new Error('Quantity must be greater than 0.');
-      if (quantityToWithdraw > allocated) {
-        throw new Error(`Only ${allocated} unit(s) left in this batch.`);
+
+      // Sales do not shrink quantity_allocated — only unsold units can return to hub.
+      const soldAtStall = await sumSoldAtStall(Number(batch.item_id), Number(batch.stall_id));
+      const { data: stallBatches, error: stallBatchesError } = await (supabase as any)
+        .from('stock_distribution')
+        .select('quantity_allocated')
+        .eq('item_id', batch.item_id)
+        .eq('stall_id', batch.stall_id);
+      if (stallBatchesError) throw stallBatchesError;
+      const totalAllocated = (stallBatches || []).reduce(
+        (sum: number, row: any) => sum + (Number(row.quantity_allocated) || 0),
+        0
+      );
+      const stallLeft = Math.max(0, totalAllocated - soldAtStall);
+      const maxReturnable = Math.min(allocated, stallLeft);
+
+      if (quantityToWithdraw > maxReturnable) {
+        throw new Error(
+          `Only ${maxReturnable} unit(s) left to return from this stall ` +
+          `(batch has ${allocated}, unsold at stall ${stallLeft}).`
+        );
       }
 
       const remaining = allocated - quantityToWithdraw;
@@ -1652,12 +1825,15 @@ export const dbApi = {
         (a: any, b: any) =>
           new Date(a.date_distributed).getTime() - new Date(b.date_distributed).getTime()
       );
-      const available = sorted.reduce(
-        (sum: number, b: any) => sum + (Number(b.quantity_allocated) || 0),
-        0
+      const available = Math.max(
+        0,
+        sorted.reduce(
+          (sum: number, b: any) => sum + (Number(b.quantity_allocated) || 0),
+          0
+        ) - (await sumSoldAtStall(itemId, stallId))
       );
       if (available < quantity) {
-        throw new Error(`Insufficient stock at stall. Available in distribution rows: ${available}`);
+        throw new Error(`Insufficient stock at stall. Available (allocated − sold): ${available}`);
       }
 
       let remaining = quantity;
@@ -1754,8 +1930,12 @@ export const dbApi = {
     }
 
     try {
-      if (!saleData.quantity_sold || saleData.quantity_sold <= 0) {
-        throw new Error('Quantity must be greater than zero.');
+      if (
+        saleData.quantity_sold == null ||
+        !Number.isInteger(Number(saleData.quantity_sold)) ||
+        Number(saleData.quantity_sold) <= 0
+      ) {
+        throw new Error('Quantity sold must be a whole number greater than zero.');
       }
 
       if (saleData.unit_price === undefined || saleData.unit_price === null || saleData.unit_price < 0) {
@@ -2021,11 +2201,16 @@ export const dbApi = {
         }
       }
 
-      // Re-sync central stock for any item whose central-hub sales changed
+      // Re-sync hub stock for every item this edit touched. Changing item_id on
+      // a hub sale must restore the old item as well as recompute the new one.
       try {
         const affectedItemIds = new Set<number>();
-        if (existingSale.stall_id === null) affectedItemIds.add(existingSale.item_id);
-        if (stallId === null) affectedItemIds.add(itemId);
+        if (existingSale.stall_id === null) affectedItemIds.add(Number(existingSale.item_id));
+        if (stallId === null) affectedItemIds.add(Number(itemId));
+        if (Number(existingSale.item_id) !== Number(itemId)) {
+          if (existingSale.stall_id === null) affectedItemIds.add(Number(existingSale.item_id));
+          if (stallId === null) affectedItemIds.add(Number(itemId));
+        }
         for (const affectedId of Array.from(affectedItemIds)) {
           await recomputeItemTotals(affectedId);
         }

@@ -415,7 +415,7 @@ BEGIN
     v_item_id := NEW.item_id;
   END IF;
 
-  -- Stall sales never change hub stock.
+  -- Stall sales never change hub stock (unless moving on/off the hub).
   IF TG_TABLE_NAME = 'sales' THEN
     IF TG_OP = 'DELETE' THEN
       IF OLD.stall_id IS NOT NULL THEN RETURN OLD; END IF;
@@ -427,6 +427,15 @@ BEGIN
   END IF;
 
   PERFORM recalc_item_stock(v_item_id);
+
+  -- item_id change on a hub-affecting sale: restore the previous item too.
+  IF TG_OP = 'UPDATE'
+     AND TG_TABLE_NAME = 'sales'
+     AND OLD.item_id IS DISTINCT FROM NEW.item_id
+     AND (OLD.stall_id IS NULL OR NEW.stall_id IS NULL)
+  THEN
+    PERFORM recalc_item_stock(OLD.item_id);
+  END IF;
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
@@ -585,6 +594,8 @@ DECLARE
   v_withdrawal_id INTEGER;
   v_item items;
   v_stall_name TEXT;
+  v_stall_left INTEGER;
+  v_max INTEGER;
 BEGIN
   IF p_quantity IS NULL OR p_quantity <= 0 THEN
     RAISE EXCEPTION 'Quantity must be greater than zero.';
@@ -611,8 +622,14 @@ BEGIN
     RAISE EXCEPTION 'Distribution batch not found. Please refresh and try again.';
   END IF;
 
-  IF p_quantity > v_batch.quantity_allocated THEN
-    RAISE EXCEPTION 'Only % unit(s) left in this batch.', v_batch.quantity_allocated;
+  -- Unsold left at the stall, not the raw batch size. Selling does not shrink
+  -- quantity_allocated, so the batch can look full after everything sold.
+  v_stall_left := stall_remaining(v_batch.item_id, v_batch.stall_id);
+  v_max := LEAST(v_batch.quantity_allocated, GREATEST(v_stall_left, 0));
+
+  IF p_quantity > v_max THEN
+    RAISE EXCEPTION 'Only % unit(s) left to return from this stall (batch has %, unsold at stall %).',
+      v_max, v_batch.quantity_allocated, GREATEST(v_stall_left, 0);
   END IF;
 
   UPDATE stock_distribution
@@ -682,13 +699,12 @@ BEGIN
   WHERE item_id = p_item_id AND stall_id = p_stall_id
   FOR UPDATE;
 
-  SELECT COALESCE(SUM(quantity_allocated), 0) INTO v_available
-  FROM stock_distribution
-  WHERE item_id = p_item_id AND stall_id = p_stall_id;
+  -- Unsold at the stall = allocated − sold. Never return sold units to the hub.
+  v_available := stall_remaining(p_item_id, p_stall_id);
 
   IF v_available < p_quantity THEN
     RAISE EXCEPTION 'Only % left at this stall. You asked to withdraw %.',
-      v_available, p_quantity;
+      GREATEST(v_available, 0), p_quantity;
   END IF;
 
   v_remaining := p_quantity;

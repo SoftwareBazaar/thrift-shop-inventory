@@ -9,6 +9,9 @@ interface SyncStatus {
   pendingOperations: number;
 }
 
+const SYNC_LOCK_KEY = 'thrift_shop_sync_lock';
+const SYNC_LOCK_TTL_MS = 90_000;
+
 class SyncService {
   private syncStatus: SyncStatus = {
     isOnline: navigator.onLine,
@@ -18,25 +21,22 @@ class SyncService {
   };
 
   private syncListeners: Array<(status: SyncStatus) => void> = [];
+  private lockOwner = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  /** Temp sale ids cancelled while a sync pass may still hold them in memory. */
+  private cancelledTempSaleIds = new Set<number>();
 
   constructor() {
-    // Listen for online/offline events
     window.addEventListener('online', this.handleOnline.bind(this));
     window.addEventListener('offline', this.handleOffline.bind(this));
 
-    // Initialize offline storage
     offlineStorage.init().catch(console.error);
-
-    // Start periodic sync check
     this.startPeriodicSync();
   }
 
-  // Get current sync status
   getStatus(): SyncStatus {
     return { ...this.syncStatus };
   }
 
-  // Subscribe to sync status changes
   subscribe(listener: (status: SyncStatus) => void): () => void {
     this.syncListeners.push(listener);
     return () => {
@@ -44,26 +44,22 @@ class SyncService {
     };
   }
 
-  // Update and notify listeners
   private updateStatus(updates: Partial<SyncStatus>) {
     this.syncStatus = { ...this.syncStatus, ...updates };
     this.syncListeners.forEach(listener => listener(this.syncStatus));
   }
 
-  // Handle online event
   private async handleOnline() {
     console.log('[SyncService] Back online, starting sync...');
     this.updateStatus({ isOnline: true });
     await this.sync();
   }
 
-  // Handle offline event
   private handleOffline() {
     console.log('[SyncService] Gone offline');
     this.updateStatus({ isOnline: false });
   }
 
-  // Start periodic sync check (every 30 seconds when online)
   private startPeriodicSync() {
     setInterval(async () => {
       if (navigator.onLine && !this.syncStatus.isSyncing) {
@@ -73,10 +69,47 @@ class SyncService {
           await this.sync();
         }
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
   }
 
-  // Main sync function
+  private tryAcquireCrossTabLock(): boolean {
+    try {
+      const now = Date.now();
+      const raw = localStorage.getItem(SYNC_LOCK_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { owner?: string; until?: number };
+        if (
+          parsed.until &&
+          parsed.until > now &&
+          parsed.owner &&
+          parsed.owner !== this.lockOwner
+        ) {
+          return false;
+        }
+      }
+      localStorage.setItem(
+        SYNC_LOCK_KEY,
+        JSON.stringify({ owner: this.lockOwner, until: now + SYNC_LOCK_TTL_MS })
+      );
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  private releaseCrossTabLock() {
+    try {
+      const raw = localStorage.getItem(SYNC_LOCK_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { owner?: string };
+      if (parsed.owner === this.lockOwner) {
+        localStorage.removeItem(SYNC_LOCK_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   async sync(): Promise<void> {
     if (!navigator.onLine) {
       console.log('[SyncService] Offline, cannot sync');
@@ -88,94 +121,151 @@ class SyncService {
       return;
     }
 
-    this.updateStatus({ isSyncing: true });
-
-    try {
-      const pendingOperations = await offlineStorage.getPendingOperations();
-      this.updateStatus({ pendingOperations: pendingOperations.length });
-
-      if (pendingOperations.length === 0) {
-        console.log('[SyncService] No pending operations');
-        this.updateStatus({ isSyncing: false, lastSyncTime: Date.now() });
+    const run = async () => {
+      if (!this.tryAcquireCrossTabLock()) {
+        console.log('[SyncService] Another tab is syncing — skipping this pass');
         return;
       }
 
-      console.log(`[SyncService] Syncing ${pendingOperations.length} operations...`);
+      this.updateStatus({ isSyncing: true });
 
-      // Sync each operation, oldest first, so a sale never lands before the
-      // item or stock movement it depends on.
-      const ordered = [...pendingOperations].sort(
-        (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
-      );
+      try {
+        const pendingOperations = await offlineStorage.getPendingOperations();
+        this.updateStatus({ pendingOperations: pendingOperations.length });
 
-      const failures: string[] = [];
-      for (const operation of ordered) {
-        try {
-          await this.syncOperation(operation);
-          await offlineStorage.markOperationSynced(operation.id);
-        } catch (error) {
-          console.error(`[SyncService] Failed to sync operation ${operation.id}:`, error);
-          failures.push(`${operation.type} ${operation.table}`);
-          // Keep operation in queue for retry
+        if (pendingOperations.length === 0) {
+          console.log('[SyncService] No pending operations');
+          this.updateStatus({ isSyncing: false, lastSyncTime: Date.now() });
+          return;
         }
-      }
 
-      // Clean up synced operations
-      await offlineStorage.deleteSyncedOperations();
+        console.log(`[SyncService] Syncing ${pendingOperations.length} operations...`);
 
-      // Refresh data from server
-      await this.refreshData();
-
-      // Report what is genuinely still queued. Forcing this to zero showed a
-      // green "all synced" badge while changes were still sitting on the device.
-      const stillPending = await offlineStorage.getPendingOperations();
-
-      this.updateStatus({
-        isSyncing: false,
-        lastSyncTime: Date.now(),
-        pendingOperations: stillPending.length
-      });
-
-      if (failures.length > 0) {
-        console.warn(
-          `[SyncService] ${failures.length} operation(s) could not be saved and are still queued: ${failures.join(', ')}`
+        const ordered = [...pendingOperations].sort(
+          (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
         );
-        window.dispatchEvent(
-          new CustomEvent('sync-incomplete', { detail: { pending: stillPending.length, failures } })
-        );
-      } else {
-        console.log('[SyncService] Sync completed successfully');
+
+        const failures: string[] = [];
+        for (const operation of ordered) {
+          try {
+            await this.syncOperation(operation);
+            await offlineStorage.markOperationSynced(operation.id);
+          } catch (error) {
+            console.error(`[SyncService] Failed to sync operation ${operation.id}:`, error);
+            failures.push(`${operation.type} ${operation.table}`);
+            // Stop so later ops that depend on this one do not land first.
+            break;
+          }
+        }
+
+        await offlineStorage.deleteSyncedOperations();
+
+        // Only overwrite local cache when every queued op applied cleanly —
+        // otherwise pending add-stock bumps disappear from the UI.
+        if (failures.length === 0) {
+          await this.refreshData();
+        }
+
+        const stillPending = await offlineStorage.getPendingOperations();
+
+        this.updateStatus({
+          isSyncing: false,
+          lastSyncTime: Date.now(),
+          pendingOperations: stillPending.length
+        });
+
+        if (failures.length > 0) {
+          console.warn(
+            `[SyncService] ${failures.length} operation(s) could not be saved and are still queued: ${failures.join(', ')}`
+          );
+          window.dispatchEvent(
+            new CustomEvent('sync-incomplete', {
+              detail: { pending: stillPending.length, failures }
+            })
+          );
+        } else {
+          console.log('[SyncService] Sync completed successfully');
+        }
+      } catch (error) {
+        console.error('[SyncService] Sync error:', error);
+        this.updateStatus({ isSyncing: false });
+      } finally {
+        this.releaseCrossTabLock();
       }
-    } catch (error) {
-      console.error('[SyncService] Sync error:', error);
-      this.updateStatus({ isSyncing: false });
+    };
+
+    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
+      try {
+        await (navigator as any).locks.request(
+          'thrift-shop-sync',
+          { ifAvailable: true },
+          async (lock: Lock | null) => {
+            if (!lock) {
+              console.log('[SyncService] Web Lock held by another tab — skipping');
+              return;
+            }
+            await run();
+          }
+        );
+        return;
+      } catch (error) {
+        console.warn('[SyncService] Web Locks unavailable, using localStorage lock', error);
+      }
     }
+
+    await run();
   }
 
-  // Apply a single queued operation to the server.
-  //
-  // Anything this cannot apply MUST throw. The caller only marks an operation
-  // as synced when this returns, so a silent fall-through used to drop the
-  // operation from the queue while the server never received it — the shop saw
-  // "synced" and the record simply did not exist.
   private async syncOperation(operation: any): Promise<void> {
     const { type, table, data } = operation;
 
     if (type === 'CREATE') {
       switch (table) {
         case 'sales': {
-          const result = await dbApi.createSale(data);
-          // The offline copy was keyed by a placeholder id. Now that the server
-          // has issued a real one, drop the placeholder or the device counts
-          // the same sale twice the next time it reads from its own cache.
-          if (data.__tempSaleId != null) {
-            await offlineStorage.deleteSale(Number(data.__tempSaleId));
+          const tempId = data.__tempSaleId != null ? Number(data.__tempSaleId) : null;
+          if (tempId != null && this.cancelledTempSaleIds.has(tempId)) {
+            this.cancelledTempSaleIds.delete(tempId);
+            console.log(`[SyncService] Skipping cancelled offline sale ${tempId}`);
+            return;
           }
-          return result as unknown as void;
-        }
-        case 'items':
-          await dbApi.createItem(data);
+
+          const payload = { ...data };
+          delete payload.__tempSaleId;
+          await dbApi.createSale(payload);
+
+          // Server write already succeeded — never throw on local cleanup or
+          // the next pass would createSale again (double-apply).
+          if (tempId != null) {
+            try {
+              await offlineStorage.deleteSale(tempId);
+            } catch (cleanupError) {
+              console.warn('[SyncService] Could not drop temp sale after sync:', cleanupError);
+            }
+          }
           return;
+        }
+        case 'items': {
+          const tempItemId =
+            data.__tempItemId != null ? Number(data.__tempItemId) : null;
+          const payload = { ...data };
+          delete payload.__tempItemId;
+          const result = await dbApi.createItem(payload);
+          if (tempItemId != null) {
+            try {
+              await offlineStorage.deleteItem(tempItemId);
+            } catch (cleanupError) {
+              console.warn('[SyncService] Could not drop temp item after sync:', cleanupError);
+            }
+          }
+          if (result?.item) {
+            try {
+              await offlineStorage.saveItem(result.item);
+            } catch (saveError) {
+              console.warn('[SyncService] Could not cache created item:', saveError);
+            }
+          }
+          return;
+        }
         case 'withdrawals':
           await dbApi.createWithdrawal(data);
           return;
@@ -209,16 +299,13 @@ class SyncService {
     );
   }
 
-  // Refresh data from server
   private async refreshData(): Promise<void> {
     try {
-      // Refresh inventory
       const { items } = await dbApi.getInventory();
       for (const item of items) {
         await offlineStorage.saveItem(item);
       }
 
-      // Refresh sales
       const { sales } = await dbApi.getSales();
       for (const sale of sales) {
         await offlineStorage.saveSale(sale);
@@ -228,7 +315,6 @@ class SyncService {
     }
   }
 
-  // Queue an operation for offline sync
   async queueOperation(
     type: 'CREATE' | 'UPDATE' | 'DELETE',
     table: 'items' | 'sales' | 'withdrawals' | 'stock_additions',
@@ -245,11 +331,9 @@ class SyncService {
 
     await offlineStorage.queueOperation(operation);
 
-    // Update pending count
     const pending = await offlineStorage.getPendingOperations();
     this.updateStatus({ pendingOperations: pending.length });
 
-    // Try to sync immediately if online
     if (navigator.onLine) {
       await this.sync();
     } else {
@@ -257,12 +341,6 @@ class SyncService {
     }
   }
 
-  // Remove sales that were deleted while offline.
-  //
-  // A sale that was also created offline has never reached the server, so the
-  // honest undo is to drop its queued insert. Queueing a delete instead would
-  // race: the insert would run first and leave a sale on the server that the
-  // operator had already deleted.
   async cancelOrQueueSaleDeletion(saleIds: number[]): Promise<void> {
     const pending = await offlineStorage.getPendingOperations();
     const remaining: number[] = [];
@@ -276,6 +354,7 @@ class SyncService {
       );
 
       if (queuedInsert) {
+        this.cancelledTempSaleIds.add(Number(saleId));
         await offlineStorage.removeOperation(queuedInsert.id);
       } else {
         remaining.push(saleId);
@@ -290,11 +369,9 @@ class SyncService {
     }
   }
 
-  // Manual sync trigger
   async manualSync(): Promise<void> {
     await this.sync();
   }
 }
 
 export const syncService = new SyncService();
-

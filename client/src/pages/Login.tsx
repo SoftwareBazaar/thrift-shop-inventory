@@ -161,9 +161,33 @@ const Login: React.FC = () => {
     setRecoveryLoading(true);
 
     try {
-      const record = getOfflineCredential(recoveryForm.username);
-      if (!record || !record.secretWord) {
-        setRecoveryError('Unable to verify secret word.');
+      // Prefer the live secret word when online. Lookup already accepted a
+      // server-only word, so verifying only against the offline cache left
+      // people stuck on "Unable to verify" after a successful first step.
+      let secretWord: string | null = null;
+      const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+      if (isSupabaseConfigured() && online) {
+        try {
+          const { data, error: fetchError } = await (supabase as any)
+            .from('users')
+            .select('secret_word')
+            .eq('username', recoveryForm.username.trim())
+            .single();
+          if (!fetchError && data?.secret_word) {
+            secretWord = String(data.secret_word);
+          }
+        } catch (serverError) {
+          console.warn('Server secret word verify failed, trying offline cache:', serverError);
+        }
+      }
+
+      if (!secretWord) {
+        const record = getOfflineCredential(recoveryForm.username);
+        secretWord = record?.secretWord || null;
+      }
+
+      if (!secretWord) {
+        setRecoveryError('Unable to verify secret word. Connect once so this account can be checked, then try again.');
         setRecoveryLoading(false);
         return;
       }
@@ -171,7 +195,7 @@ const Login: React.FC = () => {
       // Verify the answers (case-insensitive)
       let isValid = true;
       for (const position of secretWordPositions) {
-        const expectedChar = record.secretWord.charAt(position - 1);
+        const expectedChar = secretWord.charAt(position - 1);
         const providedChar = recoveryForm.secretWordAnswers[position].trim();
 
         if (expectedChar.toLowerCase() !== providedChar.toLowerCase()) {

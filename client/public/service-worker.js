@@ -1,7 +1,7 @@
 // Service Worker for Offline Support and Caching
-// Version: 13.0 - UI refresh-before-alert; clear stale app shells
-const CACHE_NAME = 'thrift-shop-v19';
-const RUNTIME_CACHE = 'thrift-shop-runtime-v19';
+// Version: 20.0 - no /api auth body caching; purge seed credentials era
+const CACHE_NAME = 'thrift-shop-v20';
+const RUNTIME_CACHE = 'thrift-shop-runtime-v20';
 const OFFLINE_URL = '/index.html';
 
 function isSupabaseRequest(url) {
@@ -118,29 +118,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network first, fallback to cache
+  // API / auth: network only. Never cache response bodies — offline would
+  // otherwise serve stale profile or login-shaped JSON.
   if (url.pathname.startsWith('/api') || url.pathname.startsWith('/auth')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clonedResponse = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, clonedResponse);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) {
-              console.log('[Service Worker] Serving from cache:', request.url);
-              return cachedResponse;
-            }
-            return new Response(
-              'Offline - Unable to reach server. Some features may be limited.',
-              { status: 503, statusText: 'Service Unavailable' }
-            );
-          });
-        })
+      fetch(request).catch(() => {
+        return new Response(
+          JSON.stringify({ message: 'Offline - Unable to reach server. Some features may be limited.' }),
+          { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'application/json' } }
+        );
+      })
     );
     return;
   }

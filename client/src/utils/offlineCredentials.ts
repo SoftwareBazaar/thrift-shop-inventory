@@ -39,74 +39,8 @@ type OfflineCredentialRecord = {
 type OfflineCredentialMap = Record<string, OfflineCredentialRecord>;
 
 const STORAGE_KEY = 'thrift_shop_offline_credentials_v4';
-
-const seedUsers: Array<{
-  user: OfflineCredentialRecord['user'];
-  password: string;
-  recovery?: RecoveryInfo;
-  source?: OfflineCredentialRecord['source'];
-}> = [
-    {
-      user: {
-        user_id: 1,
-        username: 'admin',
-        full_name: 'System Administrator',
-        role: 'admin',
-        status: 'active',
-        created_date: '2024-01-01T00:00:00.000Z',
-        phone_number: '+254700000000',
-        email: 'admin@example.com',
-      },
-      password: '@Sta123$',
-      recovery: {
-        phone: '+254700000000',
-        email: 'admin@example.com',
-        hint:
-          'Default admin contact. Update to your real phone/email after first login.',
-      },
-      source: 'seed',
-    },
-    {
-      user: {
-        user_id: 4,
-        username: 'kelvin',
-        full_name: 'Kelvin',
-        role: 'user',
-        stall_id: 1,
-        status: 'active',
-        created_date: '2024-01-01T00:00:00.000Z',
-        phone_number: '+254711111111',
-        email: 'kelvin@example.com',
-      },
-      password: '@Sta123$',
-      recovery: {
-        phone: '+254711111111',
-        email: 'kelvin@example.com',
-        hint: 'Kelvin stall 1 (326,317) phone',
-      },
-      source: 'seed',
-    },
-    {
-      user: {
-        user_id: 5,
-        username: 'manuel',
-        full_name: 'Emmanuel',
-        role: 'user',
-        stall_id: 2,
-        status: 'active',
-        created_date: '2024-01-01T00:00:00.000Z',
-        phone_number: '+254722222222',
-        email: 'manuel@example.com',
-      },
-      password: '@Sta123$',
-      recovery: {
-        phone: '+254722222222',
-        email: 'manuel@example.com',
-        hint: 'Manuel stall 2 (307) phone',
-      },
-      source: 'seed',
-    },
-  ];
+const STORAGE_VERSION_KEY = 'thrift_shop_storage_version';
+const CURRENT_STORAGE_VERSION = 'v5';
 
 const safeParse = (value: string | null): OfflineCredentialMap => {
   if (!value) return {};
@@ -156,63 +90,28 @@ const extractRecoveryInfoFromUser = (
   };
 };
 
+/**
+ * Migrate offline credential storage. Formerly seeded default admin/stall
+ * passwords into every browser — those are purged and never re-written.
+ */
 export const ensureOfflineCredentialSeeds = async () => {
   if (typeof window === 'undefined') return;
 
-  // Check if we are upgrading from an older version
-  const lastVersion = window.localStorage.getItem('thrift_shop_storage_version');
-  const currentVersion = 'v4';
-
-  if (lastVersion !== currentVersion) {
-    console.log(`[OfflineAuth] Upgrading storage from ${lastVersion} to ${currentVersion}`);
-    // Clear old credential cache to prevent hash conflicts
-    window.localStorage.removeItem('thrift_shop_credentials');
-    window.localStorage.setItem('thrift_shop_storage_version', currentVersion);
-  }
-
+  const lastVersion = window.localStorage.getItem(STORAGE_VERSION_KEY);
   const map = loadCredentialMap();
   let didChange = false;
 
-  for (const seed of seedUsers) {
-    const key = normaliseUsername(seed.user.username);
-    if (!map[key]) {
-      const passwordVerifier = await derivePasswordHash(
-        seed.user.username,
-        seed.password
-      );
-      map[key] = {
-        user: seed.user,
-        passwordVerifier,
-        passwordUpdatedAt: new Date().toISOString(),
-        recovery: mergeRecoveryInfo(
-          extractRecoveryInfoFromUser(seed.user),
-          seed.recovery
-        ),
-        source: seed.source ?? 'seed',
-      };
-      didChange = true;
-    } else {
-      // CRITICAL FIX: Only update metadata, NEVER overwrite password if it has been changed
-      const record = map[key];
-      const mergedRecovery = mergeRecoveryInfo(
-        mergeRecoveryInfo(extractRecoveryInfoFromUser(record.user)),
-        seed.recovery
-      );
+  if (lastVersion !== CURRENT_STORAGE_VERSION) {
+    console.log(`[OfflineAuth] Upgrading storage from ${lastVersion} to ${CURRENT_STORAGE_VERSION}`);
+    window.localStorage.removeItem('thrift_shop_credentials');
+    window.localStorage.setItem(STORAGE_VERSION_KEY, CURRENT_STORAGE_VERSION);
+    didChange = true;
+  }
 
-      // Only update user profile fields that don't affect authentication
-      // Preserve the existing passwordVerifier and source - NEVER reset passwords!
-      map[key] = {
-        ...record,
-        user: {
-          ...record.user, // Keep existing user data first
-          // Only update metadata fields that are safe to sync from seed
-          full_name: seed.user.full_name || record.user.full_name,
-          phone_number: record.user.phone_number || seed.user.phone_number,
-          email: record.user.email || seed.user.email,
-        },
-        recovery: mergedRecovery,
-        // IMPORTANT: Never change passwordVerifier or source for existing records
-      };
+  // Strip hardcoded seed accounts (admin/@Sta123$, kelvin, manuel, …).
+  for (const key of Object.keys(map)) {
+    if (map[key]?.source === 'seed') {
+      delete map[key];
       didChange = true;
     }
   }
@@ -228,6 +127,15 @@ export const getOfflineCredential = (
   const map = loadCredentialMap();
   const key = normaliseUsername(username);
   return map[key] ?? null;
+};
+
+export const removeOfflineCredential = (username: string) => {
+  if (typeof window === 'undefined') return;
+  const map = loadCredentialMap();
+  const key = normaliseUsername(username);
+  if (!map[key]) return;
+  delete map[key];
+  persistCredentialMap(map);
 };
 
 export const upsertOfflineCredentialFromPassword = async (
@@ -247,6 +155,8 @@ export const upsertOfflineCredentialFromPassword = async (
     user: {
       ...(existing?.user ?? {}),
       ...user,
+      // Never keep a raw password_hash on the device profile blob.
+      password_hash: undefined,
     },
     passwordVerifier,
     passwordUpdatedAt: new Date().toISOString(),
@@ -254,7 +164,7 @@ export const upsertOfflineCredentialFromPassword = async (
       mergeRecoveryInfo(existing?.recovery, extractRecoveryInfoFromUser(user)),
       recovery
     ),
-    source: existing?.source === 'seed' && source !== 'seed' ? 'manual' : source,
+    source: source === 'seed' ? 'manual' : source,
     lastLoginAt: existing?.lastLoginAt ?? null,
     secretWord: existing?.secretWord ?? user.secret_word ?? null,
   };
@@ -320,6 +230,7 @@ export const attemptOfflineLogin = async (
   const key = normaliseUsername(username);
   const record = map[key];
   if (!record) return null;
+  if (record.source === 'seed') return null;
 
   const inputVerifier = await derivePasswordHash(username, password);
   if (inputVerifier !== record.passwordVerifier) {
@@ -338,33 +249,23 @@ export const attemptOfflineLogin = async (
   };
 };
 
-export const syncOfflineUserProfile = (
-  user: OfflineUser
-) => {
+/** Profile-only sync. Never copies password_hash into the offline verifier. */
+export const syncOfflineUserProfile = (user: OfflineUser) => {
   if (!user?.username) return;
   const map = loadCredentialMap();
   const key = normaliseUsername(user.username);
   const record = map[key];
   if (!record) return;
 
-  // Check if password has changed on another device
-  let passwordVerifier = record.passwordVerifier;
-  let passwordUpdatedAt = record.passwordUpdatedAt;
-
-  if (user.password_hash && user.password_hash !== record.passwordVerifier) {
-    console.log(`[OfflineAuth] Updating password for ${user.username} from server sync`);
-    passwordVerifier = user.password_hash;
-    passwordUpdatedAt = new Date().toISOString();
-  }
+  const { password_hash: _ignored, ...safeUser } = user;
 
   map[key] = {
     ...record,
-    passwordVerifier,
-    passwordUpdatedAt,
     secretWord: user.secret_word ?? record.secretWord ?? null,
     user: {
       ...record.user,
-      ...user,
+      ...safeUser,
+      password_hash: undefined,
     },
     recovery: mergeRecoveryInfo(
       record.recovery,
@@ -417,5 +318,3 @@ export const verifyRecoveryInput = (
 
 export const getRecoveryRequirementsDescription = () =>
   `Passwords must be at least ${PASSWORD_REQUIREMENTS.minLength} characters with at least ${PASSWORD_REQUIREMENTS.minSpecial} special characters.`;
-
-
