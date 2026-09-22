@@ -1325,6 +1325,27 @@ export const dbApi = {
 
       const itemId = existingDist.item_id;
 
+      // Refuse if stock was returned from this batch. The database would reject
+      // the delete anyway with a raw foreign key error, and forcing it through
+      // would credit the hub twice: once for the allocation disappearing and
+      // again for the return that is still on record.
+      const { data: linkedWithdrawals, error: linkedError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .select('withdrawal_id, quantity_withdrawn')
+        .eq('distribution_id', distributionId);
+
+      if (linkedError) throw linkedError;
+
+      if (linkedWithdrawals && linkedWithdrawals.length > 0) {
+        const units = linkedWithdrawals.reduce(
+          (sum: number, w: any) => sum + (Number(w.quantity_withdrawn) || 0), 0
+        );
+        throw new Error(
+          `This distribution can't be deleted because ${units} unit(s) were already returned from it to the central hub. ` +
+          `Delete those ${linkedWithdrawals.length} withdrawal record(s) first — that puts the stock back on this batch — then delete the distribution.`
+        );
+      }
+
       // 2. Delete the distribution
       const { error: deleteError } = await (supabase as any)
         .from('stock_distribution')
