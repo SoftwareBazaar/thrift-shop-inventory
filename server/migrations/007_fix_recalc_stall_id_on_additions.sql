@@ -1,10 +1,11 @@
--- When a hub sale's item_id changes, recompute BOTH items.
--- Previously only NEW.item_id was recalculated, leaving the old item's
--- current_stock permanently low.
+-- Fix: add_stock_atomic / stock_additions inserts were failing with
+--   record "old" has no field "stall_id"
 --
--- IMPORTANT: never reference OLD.stall_id / NEW.stall_id with dotted field
--- access in a compound boolean — this function also runs on stock_additions
--- (no stall_id column) and Postgres may evaluate those field reads anyway.
+-- recalc_hub_if_needed is shared across sales, stock_additions,
+-- stock_distribution, and stock_withdrawals. A compound AND that mentioned
+-- OLD.stall_id could be evaluated even when the firing table has no stall_id
+-- (Postgres does not guarantee boolean short-circuit for record field access).
+-- Nested IF + jsonb field reads keep stall_id logic sales-only.
 
 CREATE OR REPLACE FUNCTION recalc_hub_if_needed()
 RETURNS TRIGGER
@@ -22,6 +23,9 @@ BEGIN
     v_item_id := NEW.item_id;
   END IF;
 
+  -- Pure stall sales never change hub stock. Only the sales table has the
+  -- meaning of stall_id we care about here — read via jsonb so this function
+  -- never crashes on stock_additions / distribution / withdrawals.
   IF TG_TABLE_NAME = 'sales' THEN
     IF TG_OP = 'DELETE' THEN
       v_old_stall := to_jsonb(OLD)->>'stall_id';
@@ -35,6 +39,7 @@ BEGIN
         RETURN NEW;
       END IF;
     ELSE
+      -- INSERT
       v_new_stall := to_jsonb(NEW)->>'stall_id';
       IF v_new_stall IS NOT NULL THEN
         RETURN NEW;
@@ -44,6 +49,7 @@ BEGIN
 
   PERFORM recalc_item_stock(v_item_id);
 
+  -- Hub sale moved to a different item: restore the previous item's stock too.
   IF TG_OP = 'UPDATE' THEN
     IF TG_TABLE_NAME = 'sales' THEN
       v_old_item_id := OLD.item_id;

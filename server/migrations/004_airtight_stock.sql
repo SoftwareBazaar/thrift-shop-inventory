@@ -408,6 +408,9 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_item_id INTEGER;
+  v_old_item_id INTEGER;
+  v_old_stall TEXT;
+  v_new_stall TEXT;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     v_item_id := OLD.item_id;
@@ -415,26 +418,42 @@ BEGIN
     v_item_id := NEW.item_id;
   END IF;
 
-  -- Stall sales never change hub stock (unless moving on/off the hub).
+  -- Pure stall sales never change hub stock. Read stall_id via jsonb so this
+  -- shared trigger never crashes on stock_additions (no stall_id column).
   IF TG_TABLE_NAME = 'sales' THEN
     IF TG_OP = 'DELETE' THEN
-      IF OLD.stall_id IS NOT NULL THEN RETURN OLD; END IF;
+      v_old_stall := to_jsonb(OLD)->>'stall_id';
+      IF v_old_stall IS NOT NULL THEN
+        RETURN OLD;
+      END IF;
     ELSIF TG_OP = 'UPDATE' THEN
-      IF NEW.stall_id IS NOT NULL AND OLD.stall_id IS NOT NULL THEN RETURN NEW; END IF;
+      v_old_stall := to_jsonb(OLD)->>'stall_id';
+      v_new_stall := to_jsonb(NEW)->>'stall_id';
+      IF v_new_stall IS NOT NULL AND v_old_stall IS NOT NULL THEN
+        RETURN NEW;
+      END IF;
     ELSE
-      IF NEW.stall_id IS NOT NULL THEN RETURN NEW; END IF;
+      v_new_stall := to_jsonb(NEW)->>'stall_id';
+      IF v_new_stall IS NOT NULL THEN
+        RETURN NEW;
+      END IF;
     END IF;
   END IF;
 
   PERFORM recalc_item_stock(v_item_id);
 
-  -- item_id change on a hub-affecting sale: restore the previous item too.
-  IF TG_OP = 'UPDATE'
-     AND TG_TABLE_NAME = 'sales'
-     AND OLD.item_id IS DISTINCT FROM NEW.item_id
-     AND (OLD.stall_id IS NULL OR NEW.stall_id IS NULL)
-  THEN
-    PERFORM recalc_item_stock(OLD.item_id);
+  -- Hub sale moved to a different item: restore the previous item too.
+  IF TG_OP = 'UPDATE' THEN
+    IF TG_TABLE_NAME = 'sales' THEN
+      v_old_item_id := OLD.item_id;
+      IF v_old_item_id IS DISTINCT FROM NEW.item_id THEN
+        v_old_stall := to_jsonb(OLD)->>'stall_id';
+        v_new_stall := to_jsonb(NEW)->>'stall_id';
+        IF v_old_stall IS NULL OR v_new_stall IS NULL THEN
+          PERFORM recalc_item_stock(v_old_item_id);
+        END IF;
+      END IF;
+    END IF;
   END IF;
 
   IF TG_OP = 'DELETE' THEN
