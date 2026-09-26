@@ -36,6 +36,13 @@ export interface WithdrawalRow {
   date_withdrawn?: string | null;
 }
 
+/** Per-batch slices of a multi-batch stall→hub return (one parent withdrawal). */
+export interface WithdrawalBatchPart {
+  withdrawal_id?: number | null;
+  distribution_id?: number | null;
+  quantity_withdrawn?: number | null;
+}
+
 export interface CentralSaleRow {
   quantity_sold?: number | null;
   date_time?: string | null;
@@ -66,10 +73,14 @@ const time = (value?: string | null): number => {
  * says how much actually left the hub that day. Rebuild the original amount by
  * adding each return back onto the row it came from; returns with no linked row
  * (older history) go to that stall's earliest batch that predates the return.
+ *
+ * Multi-batch stall returns store the total on one withdrawal and the per-batch
+ * slices in withdrawalBatchParts — those slices must credit the right batches.
  */
 function originalAllocations(
   distributions: DistributionRow[],
-  stallReturns: WithdrawalRow[]
+  stallReturns: WithdrawalRow[],
+  withdrawalBatchParts: WithdrawalBatchPart[] = []
 ): Map<number, number> {
   const original = new Map<number, number>();
   distributions.forEach((d, index) => {
@@ -77,8 +88,22 @@ function originalAllocations(
     original.set(key, num(d.quantity_allocated));
   });
 
+  const withdrawalsWithParts = new Set<number>();
+  for (const part of withdrawalBatchParts) {
+    const withdrawalId = part.withdrawal_id != null ? Number(part.withdrawal_id) : null;
+    const distId = part.distribution_id != null ? Number(part.distribution_id) : null;
+    if (withdrawalId != null) withdrawalsWithParts.add(withdrawalId);
+    if (distId != null && original.has(distId)) {
+      original.set(distId, (original.get(distId) || 0) + num(part.quantity_withdrawn));
+    }
+  }
+
   const unlinked: WithdrawalRow[] = [];
   for (const w of stallReturns) {
+    const withdrawalId = w.withdrawal_id != null ? Number(w.withdrawal_id) : null;
+    if (withdrawalId != null && withdrawalsWithParts.has(withdrawalId)) {
+      continue;
+    }
     const key = w.distribution_id != null ? Number(w.distribution_id) : null;
     if (key != null && original.has(key)) {
       original.set(key, (original.get(key) || 0) + num(w.quantity_withdrawn));
@@ -111,15 +136,17 @@ export function computeHubStock(input: {
   distributions?: DistributionRow[];
   withdrawals?: WithdrawalRow[];
   centralSales?: CentralSaleRow[];
+  withdrawalBatchParts?: WithdrawalBatchPart[];
 }): number {
   const additions = input.additions || [];
   const distributions = input.distributions || [];
   const withdrawals = input.withdrawals || [];
   const centralSales = input.centralSales || [];
+  const withdrawalBatchParts = input.withdrawalBatchParts || [];
 
   const stallReturns = withdrawals.filter((w) => w.stall_id != null);
   const hubWithdrawals = withdrawals.filter((w) => w.stall_id == null);
-  const original = originalAllocations(distributions, stallReturns);
+  const original = originalAllocations(distributions, stallReturns, withdrawalBatchParts);
 
   const events: Array<{ ts: number; kind: LedgerKind; qty: number; sortId: number }> = [];
   const push = (ts: number, kind: LedgerKind, qty: number, sortId: unknown) => {

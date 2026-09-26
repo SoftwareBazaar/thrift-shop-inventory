@@ -84,6 +84,51 @@ const fetchAllSalesQuantityRows = async (): Promise<SalesQuantityRow[]> => {
   return rows;
 };
 
+/** Per-batch slices for multi-batch stall→hub returns (parent withdrawal rows). */
+const fetchWithdrawalBatchParts = async (
+  withdrawalIds: number[]
+): Promise<Array<{ withdrawal_id: number; distribution_id: number; quantity_withdrawn: number }>> => {
+  const ids = Array.from(new Set(withdrawalIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+  if (ids.length === 0) return [];
+
+  const parts: Array<{ withdrawal_id: number; distribution_id: number; quantity_withdrawn: number }> = [];
+  const CHUNK = 200;
+
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    let from = 0;
+    while (true) {
+      const { data, error } = await (supabase as any)
+        .from('stock_withdrawal_batches')
+        .select('withdrawal_id, distribution_id, quantity_withdrawn')
+        .in('withdrawal_id', chunk)
+        .order('batch_link_id', { ascending: true })
+        .range(from, from + SALES_PAGE_SIZE - 1);
+
+      if (error) {
+        // Table not installed yet — treat as no parts (legacy multi-row history).
+        if (String(error.message || '').toLowerCase().includes('stock_withdrawal_batches')) {
+          return [];
+        }
+        throw error;
+      }
+
+      const page = data || [];
+      for (const row of page) {
+        parts.push({
+          withdrawal_id: Number(row.withdrawal_id),
+          distribution_id: Number(row.distribution_id),
+          quantity_withdrawn: Number(row.quantity_withdrawn) || 0
+        });
+      }
+      if (page.length < SALES_PAGE_SIZE) break;
+      from += SALES_PAGE_SIZE;
+    }
+  }
+
+  return parts;
+};
+
 const mapSaleRow = (sale: any): Sale => {
   const credit = Array.isArray(sale.credit_sales) ? sale.credit_sales[0] : sale.credit_sales;
 
@@ -250,6 +295,9 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
   const distributions = distributionsRes.data || [];
   const centralSales = centralSalesRes.data || [];
   const withdrawals = withdrawalsRes.data || [];
+  const withdrawalBatchParts = await fetchWithdrawalBatchParts(
+    withdrawals.map((w: any) => Number(w.withdrawal_id))
+  );
 
   const totalAdded = additions.reduce((sum: number, a: any) => sum + (a.quantity_added || 0), 0);
   const totalAllocated = distributions.reduce((sum: number, d: any) => sum + (d.quantity_allocated || 0), 0);
@@ -258,7 +306,8 @@ const recomputeItemTotals = async (itemId: number): Promise<Item> => {
     additions,
     distributions,
     withdrawals,
-    centralSales
+    centralSales,
+    withdrawalBatchParts
   });
 
   const { data: updated, error: updateError } = await (supabase as any)
@@ -740,8 +789,46 @@ export const dbApi = {
 
       const { item_id, distribution_id, stall_id, quantity_withdrawn } = withdrawal;
 
-      // Reverse stall→central transfer: put quantity back on the distribution
-      if (distribution_id != null || stall_id != null) {
+      // Prefer per-batch detail rows (multi-batch stall return → one history line).
+      let parts: Array<{ distribution_id: number; quantity_withdrawn: number }> = [];
+      try {
+        parts = await fetchWithdrawalBatchParts([withdrawalId]);
+      } catch {
+        parts = [];
+      }
+
+      if (parts.length > 0) {
+        for (const part of parts) {
+          const { data: dist } = await (supabase as any)
+            .from('stock_distribution')
+            .select('distribution_id, quantity_allocated')
+            .eq('distribution_id', part.distribution_id)
+            .maybeSingle();
+
+          if (dist) {
+            const { error: restoreError } = await (supabase as any)
+              .from('stock_distribution')
+              .update({
+                quantity_allocated:
+                  (Number(dist.quantity_allocated) || 0) + (Number(part.quantity_withdrawn) || 0)
+              })
+              .eq('distribution_id', part.distribution_id);
+            if (restoreError) throw restoreError;
+          } else if (stall_id != null) {
+            const { error: recreateError } = await (supabase as any)
+              .from('stock_distribution')
+              .insert([{
+                item_id,
+                stall_id,
+                quantity_allocated: Number(part.quantity_withdrawn) || 0,
+                distributed_by: withdrawal.withdrawn_by || 1,
+                notes: 'Restored from deleted stall withdrawal record'
+              }]);
+            if (recreateError) throw recreateError;
+          }
+        }
+      } else if (distribution_id != null || stall_id != null) {
+        // Legacy single-batch stall return (distribution_id set on the withdrawal).
         if (distribution_id != null) {
           const { data: dist } = await (supabase as any)
             .from('stock_distribution')
@@ -767,6 +854,18 @@ export const dbApi = {
               }]);
             if (recreateError) throw recreateError;
           }
+        } else if (stall_id != null) {
+          // Stall return with no linked batch and no parts — put stock back as a new batch.
+          const { error: recreateError } = await (supabase as any)
+            .from('stock_distribution')
+            .insert([{
+              item_id,
+              stall_id,
+              quantity_allocated: quantity_withdrawn,
+              distributed_by: withdrawal.withdrawn_by || 1,
+              notes: 'Restored from deleted stall withdrawal record'
+            }]);
+          if (recreateError) throw recreateError;
         }
       }
 
@@ -777,7 +876,6 @@ export const dbApi = {
 
       if (deleteError) throw deleteError;
 
-      // Recompute totals from history (restores the withdrawn quantity)
       await recomputeItemTotals(item_id);
 
       return { success: true };
@@ -917,6 +1015,27 @@ export const dbApi = {
       const salesByItem = groupByItemId(salesRes.data || []);
       const withdrawalsByItem = groupByItemId(withdrawalsRes.data || []);
 
+      const batchPartsByItem = new Map<number, any[]>();
+      if (isAdminView && !historyError) {
+        const allWithdrawalIds = (withdrawalsRes.data || []).map((w: any) => Number(w.withdrawal_id));
+        const withdrawalItemById = new Map<number, number>();
+        for (const w of withdrawalsRes.data || []) {
+          withdrawalItemById.set(Number(w.withdrawal_id), Number(w.item_id));
+        }
+        try {
+          const allParts = await fetchWithdrawalBatchParts(allWithdrawalIds);
+          for (const part of allParts) {
+            const itemId = withdrawalItemById.get(Number(part.withdrawal_id));
+            if (itemId == null) continue;
+            const bucket = batchPartsByItem.get(itemId) || [];
+            bucket.push(part);
+            batchPartsByItem.set(itemId, bucket);
+          }
+        } catch (partsError) {
+          console.warn('[Get Inventory] Could not load withdrawal batch parts:', partsError);
+        }
+      }
+
       const items = itemRows.map((item: any) => {
         if (numericStallId !== undefined) {
           console.log(`[Get Inventory] Processing item ${item.item_id} (${item.item_name}) for stall ${numericStallId}`);
@@ -1032,6 +1151,7 @@ export const dbApi = {
           const distributions = distributionsByItem.get(item.item_id) || [];
           const centralSales = salesByItem.get(item.item_id) || [];
           const withdrawals = withdrawalsByItem.get(item.item_id) || [];
+          const withdrawalBatchParts = batchPartsByItem.get(item.item_id) || [];
 
           const totalAdded = additions.reduce(
             (sum: number, a: any) => sum + (a.quantity_added || 0), 0);
@@ -1053,7 +1173,8 @@ export const dbApi = {
             additions,
             distributions,
             withdrawals,
-            centralSales
+            centralSales,
+            withdrawalBatchParts
           });
 
           // Do not write replay/current_stock back to items here. A DB trigger
@@ -1377,7 +1498,10 @@ export const dbApi = {
         additions: additionsRes.data || [],
         distributions: distributionsRes.data || [],
         withdrawals: withdrawalsRes.data || [],
-        centralSales: centralSalesRes.data || []
+        centralSales: centralSalesRes.data || [],
+        withdrawalBatchParts: await fetchWithdrawalBatchParts(
+          (withdrawalsRes.data || []).map((w: any) => Number(w.withdrawal_id))
+        )
       });
       if (available < totalToDistribute) {
         throw new Error(`Only ${available} left at the central hub. You asked to send ${totalToDistribute}.`);
@@ -1759,9 +1883,8 @@ export const dbApi = {
 
   /**
    * Stall → central return for a quantity that may span multiple distribution
-   * batches. Drains batches oldest-first via the existing RPC, then merges
-   * the audit trail into ONE withdrawal history row (so typing 22 does not
-   * appear as -12 / -3 / -7).
+   * batches. Drains batches oldest-first and writes ONE withdrawal history row
+   * (plus per-batch detail rows for the hub ledger).
    */
   withdrawFromStall: async (params: {
     item_id: number;
@@ -1812,6 +1935,8 @@ export const dbApi = {
         throw new Error(friendlyDbError(rpcError));
       }
 
+      // Fallback when the atomic RPC is not installed: drain batches, then
+      // write ONE withdrawal + detail rows (same shape as the RPC).
       const { data: batches, error: batchError } = await (supabase as any)
         .from('stock_distribution')
         .select('distribution_id, quantity_allocated, date_distributed, stalls:stall_id(stall_name)')
@@ -1837,7 +1962,7 @@ export const dbApi = {
       }
 
       let remaining = quantity;
-      const withdrawalIds: number[] = [];
+      const parts: Array<{ distribution_id: number; quantity_withdrawn: number }> = [];
       let stallName = `Stall #${stallId}`;
 
       for (const batch of sorted) {
@@ -1845,11 +1970,61 @@ export const dbApi = {
         const batchQty = Number(batch.quantity_allocated) || 0;
         if (batchQty <= 0) continue;
         const take = Math.min(remaining, batchQty);
-        const result = await dbApi.withdrawFromDistribution(batch.distribution_id, take);
-        if (result?.withdrawalId) withdrawalIds.push(result.withdrawalId);
-        if (result?.stallName) stallName = result.stallName;
-        else if (batch.stalls?.stall_name) stallName = batch.stalls.stall_name;
+
+        const { data: updatedRows, error: updateError } = await (supabase as any)
+          .from('stock_distribution')
+          .update({ quantity_allocated: batchQty - take })
+          .eq('distribution_id', batch.distribution_id)
+          .eq('quantity_allocated', batchQty)
+          .select('distribution_id');
+
+        if (updateError) throw updateError;
+        if (!updatedRows || updatedRows.length === 0) {
+          throw new Error('This stock was just changed by someone else. Please refresh and try again.');
+        }
+
+        parts.push({ distribution_id: batch.distribution_id, quantity_withdrawn: take });
+        if (batch.stalls?.stall_name) stallName = batch.stalls.stall_name;
         remaining -= take;
+      }
+
+      if (remaining > 0) {
+        throw new Error(`Insufficient stock at stall. Could only withdraw ${quantity - remaining}.`);
+      }
+
+      const { data: withdrawal, error: insertError } = await (supabase as any)
+        .from('stock_withdrawals')
+        .insert([{
+          item_id: itemId,
+          stall_id: stallId,
+          distribution_id: null,
+          quantity_withdrawn: quantity,
+          reason: params.reason || 'Returned to central hub',
+          notes: params.notes || 'Moved from stall back to central hub',
+          withdrawn_by: withdrawnBy
+        }])
+        .select('withdrawal_id')
+        .single();
+
+      if (insertError) throw insertError;
+
+      const withdrawalId = withdrawal?.withdrawal_id;
+      if (withdrawalId != null && parts.length > 0) {
+        const { error: partsError } = await (supabase as any)
+          .from('stock_withdrawal_batches')
+          .insert(
+            parts.map((p) => ({
+              withdrawal_id: withdrawalId,
+              distribution_id: p.distribution_id,
+              quantity_withdrawn: p.quantity_withdrawn
+            }))
+          );
+        if (partsError) {
+          // Undo the parent row so we do not leave an unlinked return that
+          // would mis-attribute original allocations on the earliest batch.
+          await (supabase as any).from('stock_withdrawals').delete().eq('withdrawal_id', withdrawalId);
+          throw partsError;
+        }
       }
 
       const recomputed = await recomputeItemTotals(itemId);
@@ -1857,7 +2032,7 @@ export const dbApi = {
       return {
         success: true,
         withdrawnQuantity: quantity,
-        withdrawalId: withdrawalIds[0] ?? null,
+        withdrawalId: withdrawalId ?? null,
         stallName,
         itemId,
         newCentralStock: Number((recomputed as any)?.current_stock) || 0
