@@ -564,7 +564,7 @@ const Inventory: React.FC = () => {
     const stallAfter = Math.max(0, stallLeft - quantityToWithdraw);
     if (
       !window.confirm(
-        `Return ${quantityToWithdraw} from ${withdrawFromDist.stall_name} to Central Hub. Stall left: ${stallLeft} → ${stallAfter}. Continue?`
+        `Return ${quantityToWithdraw} from ${withdrawFromDist.stall_name} to Central Hub. Stock available before withdrawal: ${stallLeft} → after: ${stallAfter}. Continue?`
       )
     ) {
       return;
@@ -672,7 +672,7 @@ const Inventory: React.FC = () => {
       }
       const after = available - quantityToWithdraw;
       confirmLine =
-        `Remove ${quantityToWithdraw} from Central Hub (${comment}). Hub stock: ${available} → ${after}. Continue?`;
+        `Remove ${quantityToWithdraw} from Central Hub (${comment}). Stock available before withdrawal: ${available} → after: ${after}. Continue?`;
     } else {
       // Stall withdrawal — compute remaining using allocated - sold (same formula as table)
       const stallSold = salesAggregates.byItemStall[`${selectedItem.item_id}-${withdrawSource}`] ?? 0;
@@ -697,7 +697,7 @@ const Inventory: React.FC = () => {
       }
       const after = totalAvailable - quantityToWithdraw;
       confirmLine =
-        `Return ${quantityToWithdraw} from ${stallName} to Central Hub (${comment}). Stall left: ${totalAvailable} → ${after}. Continue?`;
+        `Return ${quantityToWithdraw} from ${stallName} to Central Hub (${comment}). Stock available before withdrawal: ${totalAvailable} → after: ${after}. Continue?`;
     }
 
     if (!window.confirm(confirmLine)) {
@@ -1463,16 +1463,16 @@ const Inventory: React.FC = () => {
                                 {itemDistributions.length > 0 ? (
                                   <div className="overflow-x-auto">
                                     <p className="text-xs text-gray-500 mb-2">
-                                      Opening / Closing = central hub stock before and after this send.
+                                      Hub stock when this send happened.
                                     </p>
                                     <table className="min-w-full divide-y divide-gray-200">
                                       <thead className="bg-[#f0f9ff]">
                                         <tr>
                                           <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
                                           <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Destination Stall</th>
-                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Opening</th>
+                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Stock available before distribution</th>
                                           <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Sent</th>
-                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Closing</th>
+                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Stock available after distribution</th>
                                           <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                         </tr>
                                       </thead>
@@ -1539,15 +1539,15 @@ const Inventory: React.FC = () => {
 
                                 <div className="overflow-x-auto">
                                   <p className="text-xs text-gray-500 mb-2">
-                                    Opening / Closing = central hub stock before and after this addition.
+                                    Hub stock when this addition happened.
                                   </p>
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-[#f0f9ff]">
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
-                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Opening</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Stock available before addition</th>
                                         <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Added</th>
-                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Closing</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Stock available after addition</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                       </tr>
                                     </thead>
@@ -1604,16 +1604,16 @@ const Inventory: React.FC = () => {
 
                                 <div className="overflow-x-auto">
                                   <p className="text-xs text-gray-500 mb-2">
-                                    Opening / Closing = stock at that location before and after the withdrawal (hub or stall).
+                                    Stock at that location (hub or stall) when this withdrawal happened.
                                   </p>
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-[#fff3cd]">
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Date</th>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Withdrawn From</th>
-                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Opening</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Stock available before withdrawal</th>
                                         <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Change</th>
-                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Closing</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Stock available after withdrawal</th>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Reason / Effect</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-amber-900 uppercase tracking-wider">Options</th>
                                       </tr>
@@ -2255,20 +2255,22 @@ const Inventory: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Live one-line preview of what will be confirmed */}
+                {/* Live preview — uses the same “stock available before/after” language */}
                 {!isInsufficient && Number(withdrawQuantity) > 0 && (
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                     <p className="text-sm text-orange-900 font-medium">
                       {withdrawSource === 'central'
-                        ? `Remove ${withdrawQuantity} from Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Hub stock: ${availableQty} → ${Math.max(0, availableQty - Number(withdrawQuantity))}.`
-                        : `Return ${withdrawQuantity} from ${selectedStall?.stall_name ?? 'stall'} to Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Stall left: ${availableQty} → ${Math.max(0, availableQty - Number(withdrawQuantity))}.`}
+                        ? `Remove ${withdrawQuantity} from Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Stock available before withdrawal: ${availableQty} → after: ${Math.max(0, availableQty - Number(withdrawQuantity))}.`
+                        : `Return ${withdrawQuantity} from ${selectedStall?.stall_name ?? 'stall'} to Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Stock available before withdrawal: ${availableQty} → after: ${Math.max(0, availableQty - Number(withdrawQuantity))}.`}
                     </p>
                   </div>
                 )}
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-xs text-yellow-800">
-                    You will be asked to confirm before this runs. Hub withdrawals permanently reduce available stock.
+                    {withdrawSource === 'central'
+                      ? 'You will be asked to confirm before this runs. Taking from Central Hub permanently removes that stock from inventory.'
+                      : 'You will be asked to confirm before this runs. This returns stock from the stall to Central Hub (it is not deleted).'}
                   </p>
                 </div>
 
@@ -2380,7 +2382,7 @@ const Inventory: React.FC = () => {
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-xs text-yellow-800">
-                    You will be asked to confirm. This reduces {withdrawFromDist.stall_name}&apos;s stock and adds the items back to central inventory.
+                    You will be asked to confirm. This returns stock from {withdrawFromDist.stall_name} to Central Hub (it is not deleted).
                   </p>
                 </div>
 

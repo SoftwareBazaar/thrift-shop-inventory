@@ -1,5 +1,5 @@
 /**
- * Opening / change / closing cells for stock history (Opening → Δ → Closing).
+ * Stock-available-before / after cells for history rows.
  * Null means the row was recorded before we started storing balances.
  */
 
