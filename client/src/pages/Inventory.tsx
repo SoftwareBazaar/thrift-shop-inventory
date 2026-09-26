@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { dataApi } from '../services/dataService';
 import UserSaleItems from '../components/UserSaleItems';
 import { formatWithdrawalSource, formatWithdrawalEffect, withdrawalSourceBadgeClass } from '../utils/withdrawalSource';
+import { formatStockBalance } from '../utils/stockFlow';
 
 interface Item {
   item_id: number;
@@ -1461,12 +1462,17 @@ const Inventory: React.FC = () => {
 
                                 {itemDistributions.length > 0 ? (
                                   <div className="overflow-x-auto">
+                                    <p className="text-xs text-gray-500 mb-2">
+                                      Opening / Closing = central hub stock before and after this send.
+                                    </p>
                                     <table className="min-w-full divide-y divide-gray-200">
                                       <thead className="bg-[#f0f9ff]">
                                         <tr>
                                           <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
                                           <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Destination Stall</th>
-                                          <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty</th>
+                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Opening</th>
+                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Sent</th>
+                                          <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Closing</th>
                                           <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                         </tr>
                                       </thead>
@@ -1479,10 +1485,16 @@ const Inventory: React.FC = () => {
                                             <td className="px-3 py-3 whitespace-nowrap font-bold text-indigo-900">
                                               {dist.stall_name}
                                             </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(dist.stock_before)}
+                                            </td>
                                             <td className="px-3 py-3 whitespace-nowrap text-center">
                                               <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-black">
-                                                {dist.quantity_allocated}
+                                                −{dist.quantity_allocated}
                                               </span>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(dist.stock_after)}
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
                                               <button
@@ -1526,26 +1538,36 @@ const Inventory: React.FC = () => {
                                 </div>
 
                                 <div className="overflow-x-auto">
+                                  <p className="text-xs text-gray-500 mb-2">
+                                    Opening / Closing = central hub stock before and after this addition.
+                                  </p>
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-[#f0f9ff]">
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider">Date</th>
-                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-blue-900 uppercase tracking-wider text-center">Qty Added</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Opening</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Added</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-blue-900 uppercase tracking-wider">Closing</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-blue-900 uppercase tracking-wider">Options</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                      {/* Show all stock additions with dates */}
                                       {itemStockAdditions && itemStockAdditions.length > 0 ? (
                                         itemStockAdditions.map((addition) => (
                                           <tr key={addition.addition_id} className="text-sm hover:bg-green-50/30 transition-colors">
                                             <td className="px-3 py-3 whitespace-nowrap text-gray-700 font-semibold">
                                               {new Date(addition.date_added).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                             </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(addition.stock_before)}
+                                            </td>
                                             <td className="px-3 py-3 whitespace-nowrap text-center">
                                               <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-green-600 text-white text-xs font-black">
                                                 +{addition.quantity_added}
                                               </span>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(addition.stock_after)}
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
                                               <button
@@ -1559,10 +1581,10 @@ const Inventory: React.FC = () => {
                                               </button>
                                             </td>
                                           </tr>
-                                        ))
+                                        ))}
                                       ) : (
                                         <tr className="text-sm text-gray-500 italic">
-                                          <td colSpan={3} className="px-3 py-3 text-center bg-gray-50">
+                                          <td colSpan={5} className="px-3 py-3 text-center bg-gray-50">
                                             No stock additions recorded yet
                                           </td>
                                         </tr>
@@ -1581,12 +1603,17 @@ const Inventory: React.FC = () => {
                                 </div>
 
                                 <div className="overflow-x-auto">
+                                  <p className="text-xs text-gray-500 mb-2">
+                                    Opening / Closing = stock at that location before and after the withdrawal (hub or stall).
+                                  </p>
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-[#fff3cd]">
                                       <tr>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Date</th>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Withdrawn From</th>
-                                        <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider text-center">Qty</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Opening</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Change</th>
+                                        <th className="px-3 py-3 text-center text-[11px] font-bold text-amber-900 uppercase tracking-wider">Closing</th>
                                         <th className="px-3 py-3 text-left text-[11px] font-bold text-amber-900 uppercase tracking-wider">Reason / Effect</th>
                                         <th className="px-4 py-3 text-right text-[11px] font-bold text-amber-900 uppercase tracking-wider">Options</th>
                                       </tr>
@@ -1603,10 +1630,16 @@ const Inventory: React.FC = () => {
                                                 {formatWithdrawalSource(withdrawal)}
                                               </span>
                                             </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(withdrawal.stock_before)}
+                                            </td>
                                             <td className="px-3 py-3 whitespace-nowrap text-center">
                                               <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-black">
-                                                -{withdrawal.quantity_withdrawn}
+                                                −{withdrawal.quantity_withdrawn}
                                               </span>
+                                            </td>
+                                            <td className="px-3 py-3 whitespace-nowrap text-center font-semibold text-gray-800">
+                                              {formatStockBalance(withdrawal.stock_after)}
                                             </td>
                                             <td className="px-3 py-3 text-gray-600 text-xs">
                                               <div className="font-medium text-gray-800">{withdrawal.reason || '—'}</div>
@@ -1646,7 +1679,7 @@ const Inventory: React.FC = () => {
                                         ))
                                       ) : (
                                         <tr className="text-sm text-gray-500 italic">
-                                          <td colSpan={5} className="px-3 py-3 text-center bg-gray-50">
+                                          <td colSpan={7} className="px-3 py-3 text-center bg-gray-50">
                                             No stock withdrawals recorded
                                           </td>
                                         </tr>

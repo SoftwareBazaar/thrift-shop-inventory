@@ -1399,12 +1399,21 @@ export const dbApi = {
       // with the user's exact quantity, then recompute totals from history.
       console.warn('[Add Stock] add_stock_atomic not installed, using fallback path');
 
+      const { data: hubRow } = await (supabase as any)
+        .from('items')
+        .select('current_stock')
+        .eq('item_id', numericItemId)
+        .maybeSingle();
+      const hubBefore = Math.max(0, Number(hubRow?.current_stock) || 0);
+
       const { error: insertError } = await (supabase as any)
         .from('stock_additions')
         .insert([{
           item_id: numericItemId,
           quantity_added: quantityToAdd,
-          added_by: addedBy
+          added_by: addedBy,
+          stock_before: hubBefore,
+          stock_after: hubBefore + quantityToAdd
         }]);
 
       if (insertError) {
@@ -1507,14 +1516,22 @@ export const dbApi = {
         throw new Error(`Only ${available} left at the central hub. You asked to send ${totalToDistribute}.`);
       }
 
-      const distributions = validDistributions.map(dist => ({
-        item_id: distributionData.item_id,
-        stall_id: dist.stall_id,
-        quantity_allocated: dist.quantity,
-        date_distributed: new Date().toISOString(),
-        distributed_by: distributedBy,
-        notes: distributionData.notes || ''
-      }));
+      let hubRunning = available;
+      const distributions = validDistributions.map(dist => {
+        const before = hubRunning;
+        const after = hubRunning - dist.quantity;
+        hubRunning = after;
+        return {
+          item_id: distributionData.item_id,
+          stall_id: dist.stall_id,
+          quantity_allocated: dist.quantity,
+          date_distributed: new Date().toISOString(),
+          distributed_by: distributedBy,
+          notes: distributionData.notes || '',
+          stock_before: before,
+          stock_after: after
+        };
+      });
 
       const { data, error } = await (supabase as any)
         .from('stock_distribution')
@@ -1842,6 +1859,9 @@ export const dbApi = {
         throw new Error('This stock was just changed by someone else. Please refresh and try again.');
       }
 
+      const stallBefore = stallLeft;
+      const stallAfter = Math.max(0, stallLeft - quantityToWithdraw);
+
       const { data: withdrawal, error: insertError } = await (supabase as any)
         .from('stock_withdrawals')
         .insert([{
@@ -1851,7 +1871,9 @@ export const dbApi = {
           quantity_withdrawn: quantityToWithdraw,
           reason: 'Returned to central hub',
           notes: `↩️ Returned ${quantityToWithdraw} units from stall to central hub.`,
-          withdrawn_by: withdrawnBy
+          withdrawn_by: withdrawnBy,
+          stock_before: stallBefore,
+          stock_after: stallAfter
         }])
         .select('withdrawal_id')
         .single();
@@ -2001,7 +2023,9 @@ export const dbApi = {
           quantity_withdrawn: quantity,
           reason: params.reason || 'Returned to central hub',
           notes: params.notes || 'Moved from stall back to central hub',
-          withdrawn_by: withdrawnBy
+          withdrawn_by: withdrawnBy,
+          stock_before: available,
+          stock_after: Math.max(0, available - quantity)
         }])
         .select('withdrawal_id')
         .single();
@@ -2557,6 +2581,13 @@ export const dbApi = {
       // freshly recomputed stock, insert the history row, recompute totals.
       console.warn('[Create Withdrawal] withdraw_stock_atomic not installed, using fallback path');
 
+      const { data: hubRow } = await (supabase as any)
+        .from('items')
+        .select('current_stock')
+        .eq('item_id', withdrawalData.item_id)
+        .maybeSingle();
+      const hubBefore = Math.max(0, Number(hubRow?.current_stock) || 0);
+
       const { data: inserted, error: insertError } = await (supabase as any)
         .from('stock_withdrawals')
         .insert([{
@@ -2566,7 +2597,9 @@ export const dbApi = {
           withdrawn_by: withdrawnBy,
           notes: withdrawalData.notes || null,
           stall_id: withdrawalData.stall_id ?? null,
-          distribution_id: withdrawalData.distribution_id ?? null
+          distribution_id: withdrawalData.distribution_id ?? null,
+          stock_before: hubBefore,
+          stock_after: Math.max(0, hubBefore - quantity)
         }])
         .select()
         .single();
