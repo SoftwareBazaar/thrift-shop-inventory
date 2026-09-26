@@ -487,7 +487,13 @@ const Inventory: React.FC = () => {
   };
 
   const handleDeleteDist = async (dist: any) => {
-    if (!window.confirm(`Are you sure you want to delete this distribution?\n\n${dist.quantity_allocated} items will be returned to the central hub.`)) {
+    const qty = Number(dist.quantity_allocated) || 0;
+    const stall = dist.stall_name || 'stall';
+    if (
+      !window.confirm(
+        `Delete distribution: return ${qty} unit(s) from ${stall} to Central Hub.\n\nThis cannot be undone. Continue?`
+      )
+    ) {
       return;
     }
 
@@ -501,7 +507,12 @@ const Inventory: React.FC = () => {
   };
 
   const handleDeleteStockAddition = async (addition: any) => {
-    if (!window.confirm(`Are you sure you want to delete this stock addition of ${addition.quantity_added} items?\n\nThis will reduce the 'Total Received' count and current stock.`)) {
+    const qty = Number(addition.quantity_added) || 0;
+    if (
+      !window.confirm(
+        `Delete stock addition of ${qty} unit(s). Total Received and hub stock will drop by ${qty}.\n\nThis cannot be undone. Continue?`
+      )
+    ) {
       return;
     }
 
@@ -546,6 +557,15 @@ const Inventory: React.FC = () => {
       alert(
         `Cannot withdraw ${quantityToWithdraw} items. Only ${maxReturnable} unsold unit(s) can be returned from ${withdrawFromDist.stall_name}.`
       );
+      return;
+    }
+
+    const stallAfter = Math.max(0, stallLeft - quantityToWithdraw);
+    if (
+      !window.confirm(
+        `Return ${quantityToWithdraw} from ${withdrawFromDist.stall_name} to Central Hub. Stall left: ${stallLeft} → ${stallAfter}. Continue?`
+      )
+    ) {
       return;
     }
 
@@ -631,7 +651,14 @@ const Inventory: React.FC = () => {
       return;
     }
 
+    const comment = withdrawReason.trim();
+    if (!comment) {
+      alert('Please add a short comment so this withdrawal is easy to recall later (e.g. Personal use, Gift).');
+      return;
+    }
+
     // --- Validate available stock per source ---
+    let confirmLine = '';
     if (withdrawSource === 'central') {
       const available = selectedItem.current_stock ?? 0;
       if (available <= 0) {
@@ -642,6 +669,9 @@ const Inventory: React.FC = () => {
         alert(`Insufficient stock in Central Hub. Available: ${available}`);
         return;
       }
+      const after = available - quantityToWithdraw;
+      confirmLine =
+        `Remove ${quantityToWithdraw} from Central Hub (${comment}). Hub stock: ${available} → ${after}. Continue?`;
     } else {
       // Stall withdrawal — compute remaining using allocated - sold (same formula as table)
       const stallSold = salesAggregates.byItemStall[`${selectedItem.item_id}-${withdrawSource}`] ?? 0;
@@ -664,6 +694,13 @@ const Inventory: React.FC = () => {
         alert(`Insufficient stock at ${stallName}. Available: ${totalAvailable}`);
         return;
       }
+      const after = totalAvailable - quantityToWithdraw;
+      confirmLine =
+        `Return ${quantityToWithdraw} from ${stallName} to Central Hub (${comment}). Stall left: ${totalAvailable} → ${after}. Continue?`;
+    }
+
+    if (!window.confirm(confirmLine)) {
+      return;
     }
 
     setIsSubmitting(true);
@@ -677,9 +714,9 @@ const Inventory: React.FC = () => {
         await dataApi.createWithdrawal({
           item_id: itemId,
           quantity_withdrawn: quantityToWithdraw,
-          reason: withdrawReason || 'General withdrawal',
+          reason: comment,
           withdrawn_by: user.user_id,
-          notes: `🏠 Owner Withdrawal: ${withdrawReason || 'Personal use'}. Tracked as stock movement.`
+          notes: `Owner withdrawal: ${comment}`
         });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from central hub.`;
 
@@ -712,8 +749,8 @@ const Inventory: React.FC = () => {
           item_id: itemId,
           stall_id: Number(sourceAtSubmit),
           quantity: quantityToWithdraw,
-          reason: withdrawReason || 'Returned to central hub',
-          notes: 'Moved from stall back to central hub'
+          reason: comment,
+          notes: `Returned to central hub: ${comment}`
         });
         successMessage = `✅ Successfully withdrew ${quantityToWithdraw} ${itemName}(s) from ${stallName} back to central hub.`;
 
@@ -830,8 +867,8 @@ const Inventory: React.FC = () => {
   const handleDeleteItem = async (itemId: number, itemName: string) => {
     const sold = getItemsSold(itemId, itemName);
     const message = sold > 0
-      ? `Are you sure you want to delete "${itemName}"?\n\nThis item has ${sold} recorded sale(s).\n\nDeleting will NOT remove historical sales data but will remove the item from active inventory.\n\nThis action cannot be undone.`
-      : `Are you sure you want to delete "${itemName}"?\n\nThis action cannot be undone.`;
+      ? `Delete item "${itemName}" from inventory (${sold} sale(s) kept in history). This cannot be undone. Continue?`
+      : `Delete item "${itemName}" from inventory. This cannot be undone. Continue?`;
 
     const confirmed = window.confirm(message);
     if (!confirmed) return;
@@ -1573,13 +1610,22 @@ const Inventory: React.FC = () => {
                                             </td>
                                             <td className="px-3 py-3 text-gray-600 text-xs">
                                               <div className="font-medium text-gray-800">{withdrawal.reason || '—'}</div>
+                                              {withdrawal.notes && (
+                                                <div className="text-gray-600 mt-0.5 italic">{withdrawal.notes}</div>
+                                              )}
                                               <div className="text-gray-500 mt-0.5">{formatWithdrawalEffect(withdrawal)}</div>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-right font-bold">
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  if (window.confirm(`Delete withdrawal of ${withdrawal.quantity_withdrawn} units?`)) {
+                                                  const source = formatWithdrawalSource(withdrawal);
+                                                  const qty = withdrawal.quantity_withdrawn;
+                                                  if (
+                                                    window.confirm(
+                                                      `Delete withdrawal of ${qty} unit(s) from ${source}${withdrawal.reason ? ` (${withdrawal.reason})` : ''}. Stock will be restored. Continue?`
+                                                    )
+                                                  ) {
                                                     dataApi.deleteStockWithdrawal(withdrawal.withdrawal_id)
                                                       .then(() => {
                                                         refreshAfterMutation(withdrawal.item_id ?? expandedItemId ?? undefined);
@@ -2156,24 +2202,40 @@ const Inventory: React.FC = () => {
                   />
                 </div>
 
-                {/* Reason */}
+                {/* Comment — required so the client can recall why stock left */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reason (Optional)
+                    Your comment *
                   </label>
                   <input
                     type="text"
                     value={withdrawReason}
                     onChange={(e) => setWithdrawReason(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="E.g., Personal use, Gift, etc."
+                    placeholder="E.g., Personal use, Gift, Damaged, Stock correction"
+                    required
+                    maxLength={200}
                     disabled={isInsufficient}
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Saved on the withdrawal record so you can see why stock left later.
+                  </p>
                 </div>
+
+                {/* Live one-line preview of what will be confirmed */}
+                {!isInsufficient && Number(withdrawQuantity) > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-sm text-orange-900 font-medium">
+                      {withdrawSource === 'central'
+                        ? `Remove ${withdrawQuantity} from Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Hub stock: ${availableQty} → ${Math.max(0, availableQty - Number(withdrawQuantity))}.`
+                        : `Return ${withdrawQuantity} from ${selectedStall?.stall_name ?? 'stall'} to Central Hub${withdrawReason.trim() ? ` (${withdrawReason.trim()})` : ''}. Stall left: ${availableQty} → ${Math.max(0, availableQty - Number(withdrawQuantity))}.`}
+                    </p>
+                  </div>
+                )}
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-xs text-yellow-800">
-                    ⚠️ This will permanently reduce the available stock by the specified quantity.
+                    You will be asked to confirm before this runs. Hub withdrawals permanently reduce available stock.
                   </p>
                 </div>
 
@@ -2193,7 +2255,7 @@ const Inventory: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting || isInsufficient}
+                    disabled={isSubmitting || isInsufficient || !withdrawReason.trim()}
                     className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? 'Processing...' : 'Confirm Withdrawal'}
@@ -2285,8 +2347,7 @@ const Inventory: React.FC = () => {
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-xs text-yellow-800">
-                    ℹ️ This will reduce {withdrawFromDist.stall_name}'s stock and add the items back to central inventory.
-                    You can then redistribute these items to other users.
+                    You will be asked to confirm. This reduces {withdrawFromDist.stall_name}&apos;s stock and adds the items back to central inventory.
                   </p>
                 </div>
 
@@ -2307,7 +2368,7 @@ const Inventory: React.FC = () => {
                     disabled={isSubmitting}
                     className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? 'Processing...' : 'Withdraw Items'}
+                    {isSubmitting ? 'Processing...' : 'Confirm return'}
                   </button>
                 </div>
               </form>
