@@ -1581,7 +1581,7 @@ const Inventory: React.FC = () => {
                                               </button>
                                             </td>
                                           </tr>
-                                        ))}
+                                        ))
                                       ) : (
                                         <tr className="text-sm text-gray-500 italic">
                                           <td colSpan={5} className="px-3 py-3 text-center bg-gray-50">
